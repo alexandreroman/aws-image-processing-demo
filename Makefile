@@ -1,5 +1,13 @@
 .DEFAULT_GOAL := dev
 
+# Load .env into Make's environment so host-mode targets (make dev,
+# make backend, make worker) see the same vars as the Docker stack.
+# Optional: missing .env is not an error.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
 ##@ Infra
 
 .PHONY: infra-up
@@ -17,12 +25,12 @@ infra-logs: ## Follow logs from infra containers
 ##@ App
 
 .PHONY: backend
-backend: ## Run the backend HTTP server on :8000
-	go run ./cmd/backend
+backend: ## Run the backend HTTP server on :8000 with hot reload
+	go tool air -c .air.backend.toml
 
 .PHONY: worker
-worker: ## Run the Temporal worker
-	go run ./cmd/worker
+worker: ## Run the Temporal worker with hot reload
+	go tool air -c .air.worker.toml
 
 .PHONY: frontend
 frontend: ## Run the Nuxt dev server on :3000
