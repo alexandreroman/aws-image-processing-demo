@@ -7,8 +7,6 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -156,12 +154,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, err := newSessionID()
-	if err != nil {
-		h.deps.Logger.Error("session id generation failed", "err", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
+	sessionID := newSessionID()
 
 	workflowIDs := make([]string, 0, len(req.Images))
 	for i, img := range req.Images {
@@ -187,14 +180,9 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, startResponse{SessionID: sessionID, WorkflowIDs: workflowIDs})
 }
 
-// newSessionID returns "b-" + 8 lowercase hex chars (32 bits of entropy,
-// plenty for demo-scale uniqueness).
-func newSessionID() (string, error) {
-	var buf [4]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return "", err
-	}
-	return "b-" + hex.EncodeToString(buf[:]), nil
+// newSessionID returns the first 8 hex chars of a UUID v4.
+func newSessionID() string {
+	return uuid.NewString()[:8]
 }
 
 // --- /api/sessions/{sessionId} ----------------------------------------------

@@ -41,7 +41,7 @@ func (s *ProcessImageSuite) TearDownTest() {
 
 func (s *ProcessImageSuite) TestHappyPath() {
 	const (
-		sessionID = "b-deadbeef"
+		sessionID = "deadbeef"
 		imageID   = "img-1"
 	)
 	original := manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"}
