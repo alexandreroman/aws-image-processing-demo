@@ -157,8 +157,9 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	sessionID := newSessionID()
 
 	workflowIDs := make([]string, 0, len(req.Images))
-	for i, img := range req.Images {
-		wfID := fmt.Sprintf("%s-%d", sessionID, i)
+	for _, img := range req.Images {
+		imageID := uuid.NewString()
+		wfID := fmt.Sprintf("session-%s-%s", sessionID, imageID)
 		opts := client.StartWorkflowOptions{
 			ID:                    wfID,
 			TaskQueue:             h.deps.TaskQueue,
@@ -166,7 +167,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 		in := manifest.ProcessImageInput{
 			SessionID: sessionID,
-			ImageID:   uuid.NewString(),
+			ImageID:   imageID,
 			Original:  img,
 		}
 		if _, err := h.deps.Temporal.ExecuteWorkflow(r.Context(), opts, workflows.ProcessImage, in); err != nil {
@@ -293,7 +294,7 @@ func (h *Handler) listWorkflows(
 	// includes both running and terminal executions in one call.
 	var out []*workflowpb.WorkflowExecutionInfo
 	var pageToken []byte
-	query := fmt.Sprintf(`WorkflowId STARTS_WITH "%s-"`, sessionID)
+	query := fmt.Sprintf(`WorkflowId STARTS_WITH "session-%s-"`, sessionID)
 	for {
 		resp, err := h.deps.Temporal.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace:     h.deps.Namespace,
