@@ -1,0 +1,41 @@
+# Local environment
+.env
+.env.local
+.env.*.local
+
+# Go
+/bin/
+/tmp/
+*.test
+*.out
+coverage.out
+
+# Node / pnpm / Nuxt
+node_modules/
+.pnpm-store/
+.nuxt/
+.output/
+.data/
+dist/
+*.log
+
+# OpenTofu / Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*
+*.tfplan
+crash.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+/cmd/**/*.bin
+/cmd/**/main
+
+BRIEF.md
