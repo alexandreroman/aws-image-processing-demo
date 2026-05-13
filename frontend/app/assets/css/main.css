@@ -5,40 +5,80 @@
 @layer base {
   html {
     @apply antialiased;
+    color-scheme: dark;
   }
 
   body {
-    @apply bg-ink-50 text-ink-800 font-sans;
+    @apply bg-bg text-ink-100 font-sans;
+    background-image:
+      radial-gradient(60rem 40rem at 80% -10%, rgb(46 181 245 / 0.08), transparent 60%),
+      radial-gradient(50rem 30rem at -10% 110%, rgb(255 153 0 / 0.06), transparent 60%);
+    background-attachment: fixed;
   }
+
+  ::selection {
+    @apply bg-primary/30 text-white;
+  }
+
+  /* Dark scrollbars (WebKit). */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(31 42 64);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(46 65 100); background-clip: padding-box; }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-lg shadow-card border border-ink-100;
+    @apply bg-surface border border-surface-border rounded-xl shadow-card;
+  }
+
+  .card-elevated {
+    @apply bg-surface-elevated border border-surface-border rounded-xl shadow-card;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md
-      font-medium transition-colors disabled:opacity-50
-      disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-md font-medium
+      transition-all disabled:opacity-50 disabled:cursor-not-allowed
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60
+      focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
   .btn-primary {
-    @apply btn bg-primary text-white hover:bg-primary-600
-      px-4 py-2 text-sm;
+    @apply btn bg-primary text-bg hover:bg-primary-300 px-4 py-2 text-sm font-semibold;
   }
 
   .btn-primary-lg {
-    @apply btn bg-primary text-white hover:bg-primary-600
-      px-6 py-3 text-base font-semibold shadow-sm;
+    @apply btn bg-primary text-bg hover:bg-primary-300 px-5 py-2.5 text-sm
+      font-semibold shadow-glow;
   }
 
   .btn-ghost {
-    @apply btn text-primary hover:bg-primary-50 px-3 py-1.5 text-sm;
+    @apply btn text-primary hover:bg-primary/10 px-3 py-1.5 text-sm
+      border border-surface-border hover:border-primary/40;
   }
 
   .chip {
-    @apply inline-flex items-center rounded-full bg-ink-100 text-ink-700
-      px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-full bg-surface-hover text-ink-200
+      px-2 py-0.5 text-[11px] font-medium border border-surface-border;
+  }
+
+  .chip-accent {
+    @apply inline-flex items-center rounded-full bg-accent/10 text-accent
+      px-2 py-0.5 text-[11px] font-medium border border-accent/30;
+  }
+
+  .chip-primary {
+    @apply inline-flex items-center rounded-full bg-primary/10 text-primary
+      px-2 py-0.5 text-[11px] font-medium border border-primary/30;
+  }
+
+  /* Tiny visual stat label used in the hero & sidebar. */
+  .stat-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-300;
   }
 }

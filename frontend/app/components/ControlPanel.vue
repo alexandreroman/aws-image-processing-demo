@@ -2,12 +2,8 @@
 import type { SessionSummary } from '~/composables/useApi';
 
 const props = defineProps<{
-  // When provided, the panel shows live counts instead of just the
-  // explainer block. Used by /sessions/[id].vue.
   summary?: SessionSummary;
-  // Optional Temporal UI link override (defaults to runtime config).
   temporalUiUrl?: string;
-  // When true, hides the slider + start button (read-only mode).
   readOnly?: boolean;
 }>();
 
@@ -22,7 +18,6 @@ const count = ref(20);
 const submitting = ref(false);
 
 function pickRandomSamples(n: number): { bucket: string; key: string }[] {
-  // Sample 1..SAMPLE_COUNT, with replacement allowed when n > SAMPLE_COUNT.
   const out: { bucket: string; key: string }[] = [];
   const pool = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
   for (let i = 0; i < n; i++) {
@@ -55,20 +50,40 @@ async function startBurst() {
 const temporalLink = computed(
   () => props.temporalUiUrl ?? config.public.temporalUiUrl,
 );
+
+const summaryRows = computed(() => {
+  if (!props.summary) return [];
+  return [
+    { label: 'Total', value: props.summary.total, color: 'text-ink-100' },
+    { label: 'Running', value: props.summary.running, color: 'text-primary' },
+    { label: 'Completed', value: props.summary.completed, color: 'text-emerald-400' },
+    { label: 'Failed', value: props.summary.failed, color: 'text-rose-400' },
+  ];
+});
 </script>
 
 <template>
-  <section class="card p-5 space-y-5">
-    <header>
-      <h2 class="text-sm font-semibold text-ink-500 uppercase tracking-wide">
-        Control panel
-      </h2>
+  <section class="card p-4 space-y-4">
+    <header class="flex items-center justify-between">
+      <h2 class="stat-label">Control panel</h2>
+      <span
+        v-if="!readOnly"
+        class="chip-primary"
+      >
+        Live
+      </span>
     </header>
 
     <div v-if="!readOnly" class="space-y-3">
       <label class="block">
-        <span class="text-sm font-medium text-ink-700">
-          Images in burst: <span class="font-mono text-primary">{{ count }}</span>
+        <span
+          class="flex items-baseline justify-between text-xs font-medium
+            text-ink-200"
+        >
+          <span>Images in burst</span>
+          <span class="font-mono text-primary text-lg font-bold tabular-nums">
+            {{ count }}
+          </span>
         </span>
         <input
           v-model.number="count"
@@ -76,9 +91,9 @@ const temporalLink = computed(
           min="1"
           max="50"
           step="1"
-          class="mt-2 w-full accent-primary"
+          class="mt-2 w-full accent-primary cursor-pointer"
         >
-        <div class="flex justify-between text-xs text-ink-400 mt-1">
+        <div class="flex justify-between text-[10px] text-ink-400 mt-0.5">
           <span>1</span>
           <span>50</span>
         </div>
@@ -91,43 +106,37 @@ const temporalLink = computed(
         @click="startBurst"
       >
         <span v-if="submitting">Starting…</span>
-        <span v-else>Start burst</span>
+        <span v-else>Start burst →</span>
       </button>
     </div>
 
-    <div v-if="summary" class="space-y-2 border-t border-ink-100 pt-4">
-      <div class="flex justify-between text-sm">
-        <span class="text-ink-500">Total</span>
-        <span class="font-mono font-semibold">{{ summary.total }}</span>
-      </div>
-      <div class="flex justify-between text-sm">
-        <span class="text-ink-500">Running</span>
-        <span class="font-mono font-semibold text-primary">
-          {{ summary.running }}
+    <dl
+      v-if="summary"
+      class="grid grid-cols-2 gap-1.5 border-t border-surface-border pt-3"
+    >
+      <div
+        v-for="row in summaryRows"
+        :key="row.label"
+        class="flex items-center justify-between rounded-md bg-surface-hover/60
+          px-2.5 py-1.5"
+      >
+        <span class="text-[11px] text-ink-300">{{ row.label }}</span>
+        <span
+          :class="['font-mono font-semibold tabular-nums text-sm', row.color]"
+        >
+          {{ row.value }}
         </span>
       </div>
-      <div class="flex justify-between text-sm">
-        <span class="text-ink-500">Completed</span>
-        <span class="font-mono font-semibold text-emerald-600">
-          {{ summary.completed }}
-        </span>
-      </div>
-      <div class="flex justify-between text-sm">
-        <span class="text-ink-500">Failed</span>
-        <span class="font-mono font-semibold text-rose-600">
-          {{ summary.failed }}
-        </span>
-      </div>
-    </div>
+    </dl>
 
     <a
       :href="temporalLink"
       target="_blank"
       rel="noopener noreferrer"
-      class="btn-ghost w-full justify-center border border-primary-100"
+      class="btn-ghost w-full justify-center"
     >
       Open in Temporal UI
-      <span aria-hidden="true">&rarr;</span>
+      <span aria-hidden="true">↗</span>
     </a>
   </section>
 </template>

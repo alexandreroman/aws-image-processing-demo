@@ -1,63 +1,77 @@
 <script setup lang="ts">
-const config = useRuntimeConfig();
-
 useHead({
   title: 'AWS Image Processing Demo — Image Processing Burst',
 });
+
+const techStack = [
+  { label: 'Orchestration', value: 'Temporal Cloud', accent: 'primary' },
+  { label: 'Compute', value: 'ECS Fargate + Lambda', accent: 'accent' },
+  { label: 'Storage', value: 'S3 + DynamoDB', accent: 'accent' },
+  { label: 'AI', value: 'Claude Haiku 4.5', accent: 'iris' },
+] as const;
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-    <section class="grid lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-1">
-        <ControlPanel />
-      </div>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+    <section class="grid lg:grid-cols-12 gap-4">
+      <div
+        class="lg:col-span-8 card relative overflow-hidden p-5 sm:p-6
+          flex flex-col gap-4"
+      >
+        <!-- subtle dotted background -->
+        <div
+          class="absolute inset-0 bg-grid opacity-40 [background-size:24px_24px]
+            pointer-events-none"
+          aria-hidden="true"
+        />
 
-      <div class="lg:col-span-2 card p-6 space-y-4">
-        <h1 class="text-2xl font-bold text-ink-900">
+        <div class="relative flex flex-wrap items-center gap-2">
+          <span class="chip-primary">Live demo</span>
+          <span class="chip">Burst pipeline</span>
+          <span class="chip">Durable execution</span>
+        </div>
+
+        <h1
+          class="relative text-2xl sm:text-3xl font-bold tracking-tight
+            text-ink-50 leading-tight"
+        >
           Image-processing burst on
-          <span class="text-primary">Temporal Cloud</span> +
+          <span
+            class="bg-gradient-to-r from-primary via-primary-300 to-iris
+              bg-clip-text text-transparent"
+          >Temporal Cloud</span>
+          +
           <span class="text-accent">AWS</span>
         </h1>
-        <p class="text-ink-700 leading-relaxed">
-          Trigger a burst of <em>N</em> images. For each one, a Temporal
-          workflow runs eight activities — six of them in parallel —
-          resizing to three sizes, generating a Claude-powered description,
-          watermarking each size, and persisting the manifest in DynamoDB.
-          Watch workflows complete live, then share the session URL with
-          anyone for the same shared view.
+
+        <p class="relative text-ink-200 text-sm sm:text-[15px] leading-relaxed">
+          Trigger a burst of <em class="text-ink-100 not-italic font-medium">N</em>
+          images. For each one, a Temporal workflow runs eight activities —
+          six of them in parallel — resizing to three sizes, generating a
+          Claude-powered description, watermarking each size, and persisting
+          the manifest in DynamoDB. Watch workflows complete live, then
+          share the session URL for the same live view.
         </p>
 
-        <dl class="grid sm:grid-cols-3 gap-4 pt-2 text-sm">
-          <div>
-            <dt class="text-ink-500 font-medium">Orchestration</dt>
-            <dd class="text-ink-800 font-semibold">Temporal Cloud</dd>
-          </div>
-          <div>
-            <dt class="text-ink-500 font-medium">Compute</dt>
-            <dd class="text-ink-800 font-semibold">
-              ECS Fargate + Lambda
+        <dl
+          class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1
+            border-t border-surface-border mt-1 pt-3"
+        >
+          <div v-for="t in techStack" :key="t.label" class="min-w-0">
+            <dt class="stat-label">{{ t.label }}</dt>
+            <dd
+              class="mt-1 text-sm font-semibold text-ink-100 truncate"
+              :title="t.value"
+            >
+              {{ t.value }}
             </dd>
-          </div>
-          <div>
-            <dt class="text-ink-500 font-medium">AI</dt>
-            <dd class="text-ink-800 font-semibold">Claude Haiku 4.5</dd>
           </div>
         </dl>
       </div>
-    </section>
 
-    <footer class="text-center text-sm text-ink-400">
-      Source on
-      <a
-        :href="config.public.githubUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="text-primary hover:underline"
-      >
-        GitHub
-      </a>
-      · Apache 2.0
-    </footer>
+      <div class="lg:col-span-4">
+        <ControlPanel />
+      </div>
+    </section>
   </div>
 </template>

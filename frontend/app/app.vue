@@ -1,42 +1,54 @@
-<script setup lang="ts">
-const config = useRuntimeConfig();
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <div class="min-h-screen flex flex-col">
     <header
-      class="sticky top-0 z-30 bg-white/85 backdrop-blur border-b
-        border-ink-100"
+      class="sticky top-0 z-30 bg-bg/80 backdrop-blur-md border-b
+        border-surface-border"
     >
       <div
-        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center
-          justify-between"
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center
+          justify-between gap-4"
       >
-        <NuxtLink to="/" class="flex items-center gap-2.5 group">
+        <NuxtLink to="/" class="flex items-center gap-2.5 group min-w-0">
           <span
-            class="inline-flex items-center justify-center h-7 w-7 rounded
-              bg-primary text-white font-bold text-sm tracking-tight
-              group-hover:bg-primary-600 transition-colors"
+            class="inline-flex items-center justify-center h-7 w-7 rounded-md
+              bg-gradient-to-br from-primary to-iris text-bg shadow-glow"
             aria-hidden="true"
           >
-            T
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-4 w-4"
+            >
+              <path d="M18 22H4a2 2 0 0 1-2-2V6" />
+              <path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18" />
+              <circle cx="12" cy="8" r="2" />
+              <rect x="6" y="2" width="16" height="16" rx="2" />
+            </svg>
           </span>
-          <span class="font-semibold text-ink-800 text-sm sm:text-base">
+          <span
+            class="font-semibold text-ink-100 text-sm sm:text-[15px] truncate"
+          >
             AWS Image Processing Demo
-            <span class="text-ink-400 font-normal hidden sm:inline">
-              — Image Processing Burst
-            </span>
           </span>
         </NuxtLink>
 
-        <a
-          :href="config.public.githubUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-sm text-ink-500 hover:text-primary transition-colors"
-        >
-          GitHub
-        </a>
+        <nav class="flex items-center gap-2">
+          <div class="flex items-center gap-2 text-xs text-ink-400 group">
+            <span class="uppercase tracking-[0.12em] font-medium">powered by</span>
+            <img
+              src="https://images.ctfassets.net/0uuz8ydxyd9p/2ctnUPEhKA75tYnrl2Kzvj/90563965bc4ea2af9442b6eb4ba43180/Temporal_LogoLockup_Horizontal_light_1_2x.png"
+              alt="Temporal"
+              class="h-8 w-auto opacity-90 transition-opacity"
+              loading="lazy"
+            >
+          </div>
+        </nav>
       </div>
     </header>
 

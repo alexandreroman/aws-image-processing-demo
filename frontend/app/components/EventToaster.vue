@@ -4,11 +4,11 @@ const { toasts, dismiss } = useToast();
 function colorFor(kind: 'info' | 'success' | 'error'): string {
   switch (kind) {
     case 'success':
-      return 'border-emerald-300 bg-emerald-50 text-emerald-900';
+      return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100';
     case 'error':
-      return 'border-rose-300 bg-rose-50 text-rose-900';
+      return 'border-rose-500/40 bg-rose-500/10 text-rose-100';
     default:
-      return 'border-primary-200 bg-primary-50 text-primary-900';
+      return 'border-primary/40 bg-primary/10 text-primary-50';
   }
 }
 </script>
@@ -25,8 +25,8 @@ function colorFor(kind: 'info' | 'success' | 'error'): string {
         v-for="t in toasts"
         :key="t.id"
         :class="[
-          'pointer-events-auto rounded-md border shadow-card px-4 py-3',
-          'animate-slide-in-right',
+          'pointer-events-auto rounded-lg border backdrop-blur-md',
+          'shadow-card px-4 py-3 animate-slide-in-right bg-surface/80',
           colorFor(t.kind),
         ]"
         role="status"
@@ -40,11 +40,11 @@ function colorFor(kind: 'info' | 'success' | 'error'): string {
           </div>
           <button
             type="button"
-            class="text-current/60 hover:text-current text-sm leading-none"
+            class="text-current/60 hover:text-current text-base leading-none"
             aria-label="Dismiss"
             @click="dismiss(t.id)"
           >
-            &times;
+            ×
           </button>
         </div>
       </div>

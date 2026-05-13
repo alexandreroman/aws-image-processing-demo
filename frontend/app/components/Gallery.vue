@@ -56,26 +56,25 @@ const failed = computed(() =>
 </script>
 
 <template>
-  <section class="card p-5 space-y-4">
+  <section class="card p-4 space-y-3">
     <header class="flex items-baseline justify-between">
-      <h2 class="text-sm font-semibold text-ink-500 uppercase tracking-wide">
-        Gallery
-      </h2>
-      <span class="text-xs text-ink-400">
-        {{ completed.length }} of {{ workflows.length }} ready
+      <h2 class="stat-label">Gallery</h2>
+      <span class="text-[11px] text-ink-400 font-mono tabular-nums">
+        {{ completed.length }} / {{ workflows.length }}
       </span>
     </header>
 
     <div
       v-if="workflows.length === 0"
-      class="text-sm text-ink-500 py-8 text-center"
+      class="text-xs text-ink-400 py-10 text-center border border-dashed
+        border-surface-border rounded-lg"
     >
       Workflows will appear here as they complete.
     </div>
 
     <div
       v-else
-      class="grid grid-cols-2 md:grid-cols-3 gap-3"
+      class="grid grid-cols-3 sm:grid-cols-4 gap-2"
     >
       <a
         v-for="item in completed"
@@ -84,34 +83,20 @@ const failed = computed(() =>
         target="_blank"
         rel="noopener noreferrer"
         class="group block animate-fade-in"
+        :title="item.description || item.imageId"
       >
         <div
-          class="aspect-square overflow-hidden rounded-md bg-ink-100 border
-            border-ink-200 group-hover:border-primary-300 transition-colors"
+          class="aspect-square overflow-hidden rounded-md bg-surface-hover
+            border border-surface-border group-hover:border-primary/60
+            transition-colors"
         >
           <img
             :src="item.thumbUrl"
             :alt="item.description || item.imageId"
             loading="lazy"
-            class="h-full w-full object-cover transition-transform
-              duration-300 group-hover:scale-105"
+            class="h-full w-full object-cover transition-transform duration-300
+              group-hover:scale-105"
           >
-        </div>
-        <p
-          v-if="item.description"
-          class="mt-1.5 text-xs text-ink-700 line-clamp-1"
-          :title="item.description"
-        >
-          {{ item.description }}
-        </p>
-        <div v-if="item.labels.length" class="mt-1 flex flex-wrap gap-1">
-          <span
-            v-for="label in item.labels.slice(0, 3)"
-            :key="label"
-            class="chip"
-          >
-            {{ label }}
-          </span>
         </div>
       </a>
 
@@ -122,36 +107,32 @@ const failed = computed(() =>
         :title="`Running: ${w.currentActivity ?? '…'}`"
       >
         <div
-          class="aspect-square rounded-md bg-gradient-to-br from-primary-50
-            to-primary-100 border border-primary-200 flex items-center
-            justify-center"
+          class="aspect-square rounded-md bg-gradient-to-br from-primary/10
+            to-iris/10 border border-primary/30 flex items-center
+            justify-center animate-pulse-glow"
         >
           <div
-            class="h-6 w-6 rounded-full border-2 border-primary-300
-              border-t-primary animate-spin"
+            class="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary
+              animate-spin"
             aria-hidden="true"
           />
         </div>
-        <p class="mt-1.5 text-xs text-ink-500 truncate">
-          {{ w.currentActivity ?? 'Processing…' }}
-        </p>
       </div>
 
       <div
         v-for="w in failed"
         :key="w.workflowId"
         class="animate-fade-in"
+        :title="w.status"
       >
         <div
-          class="aspect-square rounded-md bg-rose-50 border border-rose-200
-            flex items-center justify-center text-rose-500 text-3xl"
+          class="aspect-square rounded-md bg-rose-500/10 border
+            border-rose-500/40 flex items-center justify-center text-rose-400
+            text-2xl font-bold"
           aria-hidden="true"
         >
-          &times;
+          ×
         </div>
-        <p class="mt-1.5 text-xs text-rose-600 truncate">
-          {{ w.status }}
-        </p>
       </div>
     </div>
   </section>
