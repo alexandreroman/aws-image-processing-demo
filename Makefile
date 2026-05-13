@@ -3,16 +3,16 @@
 ##@ Infra
 
 .PHONY: infra-up
-infra-up: ## Bring up local infra (LocalStack, Temporal dev server, bucket/table init)
-	docker-compose up -d temporal localstack init
+infra-up: ## Bring up local infra (Moto, Temporal dev server, bucket/table init)
+	docker-compose up -d temporal moto init
 
 .PHONY: infra-down
 infra-down: ## Stop infra containers (keeps containers and network around)
-	docker-compose stop temporal localstack init
+	docker-compose stop temporal moto init
 
 .PHONY: infra-logs
 infra-logs: ## Follow logs from infra containers
-	docker-compose logs -f temporal localstack
+	docker-compose logs -f temporal moto
 
 ##@ App
 

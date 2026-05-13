@@ -1,0 +1,193 @@
+# --- ECS cluster + log group ----------------------------------------------
+
+resource "aws_ecs_cluster" "worker" {
+  name = "${local.name_prefix}-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "disabled"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "worker" {
+  name              = "/ecs/${local.name_prefix}-worker"
+  retention_in_days = 14
+}
+
+# --- IAM: task execution role (ECS agent pulls image + reads secrets) -----
+
+data "aws_iam_policy_document" "ecs_tasks_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "worker_execution" {
+  name               = "${local.name_prefix}-worker-execution"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "worker_execution_managed" {
+  role       = aws_iam_role.worker_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Secrets the execution role must be able to read for `secrets:` injection.
+data "aws_iam_policy_document" "worker_secrets_read" {
+  statement {
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = concat(
+      [aws_secretsmanager_secret.anthropic_api_key.arn],
+      local.temporal_tls_enabled ? [
+        aws_secretsmanager_secret.temporal_tls_cert[0].arn,
+        aws_secretsmanager_secret.temporal_tls_key[0].arn,
+      ] : [],
+    )
+  }
+}
+
+resource "aws_iam_role_policy" "worker_execution_secrets" {
+  name   = "secrets-read"
+  role   = aws_iam_role.worker_execution.id
+  policy = data.aws_iam_policy_document.worker_secrets_read.json
+}
+
+# --- IAM: task role (the worker process itself) ---------------------------
+
+resource "aws_iam_role" "worker_task" {
+  name               = "${local.name_prefix}-worker-task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+}
+
+data "aws_iam_policy_document" "worker_task" {
+  statement {
+    sid     = "ImagesBucketRW"
+    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/*",
+    ]
+  }
+
+  statement {
+    sid       = "ImagesBucketList"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.images.arn]
+  }
+
+  statement {
+    sid = "ImagesTableRW"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:Query",
+      "dynamodb:Scan",
+    ]
+    resources = [aws_dynamodb_table.images.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "worker_task" {
+  name   = "worker-task"
+  role   = aws_iam_role.worker_task.id
+  policy = data.aws_iam_policy_document.worker_task.json
+}
+
+# --- Task definition ------------------------------------------------------
+
+locals {
+  worker_env = [
+    { name = "TEMPORAL_ADDRESS", value = var.temporal_address },
+    { name = "TEMPORAL_NAMESPACE", value = var.temporal_namespace },
+    { name = "TEMPORAL_TASK_QUEUE", value = var.temporal_task_queue },
+    { name = "AWS_REGION", value = var.aws_region },
+    { name = "IMAGES_BUCKET", value = aws_s3_bucket.images.bucket },
+    { name = "IMAGES_TABLE", value = aws_dynamodb_table.images.name },
+  ]
+
+  worker_secrets = concat(
+    [
+      {
+        name      = "ANTHROPIC_API_KEY"
+        valueFrom = aws_secretsmanager_secret.anthropic_api_key.arn
+      },
+    ],
+    local.temporal_tls_enabled ? [
+      {
+        name      = "TEMPORAL_TLS_CERT"
+        valueFrom = aws_secretsmanager_secret.temporal_tls_cert[0].arn
+      },
+      {
+        name      = "TEMPORAL_TLS_KEY"
+        valueFrom = aws_secretsmanager_secret.temporal_tls_key[0].arn
+      },
+    ] : [],
+  )
+}
+
+resource "aws_ecs_task_definition" "worker" {
+  family                   = "${local.name_prefix}-worker"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.worker_execution.arn
+  task_role_arn            = aws_iam_role.worker_task.arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([
+    {
+      name      = "worker"
+      image     = var.worker_image
+      essential = true
+
+      # BRIEF.md decision #6: default 30s is not enough to drain a Temporal
+      # worker with concurrent activities. 120s gives in-flight activities
+      # time to complete or heartbeat-fail cleanly.
+      stopTimeout = 120
+
+      environment = local.worker_env
+      secrets     = local.worker_secrets
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.worker.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "worker"
+        }
+      }
+    },
+  ])
+}
+
+# --- ECS service ----------------------------------------------------------
+
+resource "aws_ecs_service" "worker" {
+  name            = "${local.name_prefix}-worker"
+  cluster         = aws_ecs_cluster.worker.id
+  task_definition = aws_ecs_task_definition.worker.arn
+  desired_count   = var.worker_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = aws_subnet.public[*].id
+    security_groups  = [aws_security_group.worker.id]
+    assign_public_ip = true
+  }
+
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 200
+
+  # Workers are stateless and have no health check — the Temporal SDK
+  # handles graceful shutdown via SIGTERM and the stopTimeout above.
+  enable_execute_command = false
+}

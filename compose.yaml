@@ -22,41 +22,60 @@ services:
           memory: 512M
     restart: unless-stopped
 
-  localstack:
-    image: localstack/localstack:latest
+  moto:
+    # `motoserver/moto` is a free, community AWS emulator.
+    # Listens on port 5000 internally; we expose it as 4566 externally
+    # so AWS_ENDPOINT_URL=http://localhost:4566 in .env continues to work.
+    image: motoserver/moto:latest
+    command: ["-H", "0.0.0.0", "-p", "5000"]
     environment:
-      SERVICES: s3,dynamodb
-      DEFAULT_REGION: eu-west-3
-      AWS_DEFAULT_REGION: eu-west-3
+      MOTO_ALLOW_NONEXISTENT_REGION: "true"
     ports:
-      - "4566:4566"  # AWS endpoint
+      - "4566:5000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:5000/moto-api/\").read()' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 512M
     restart: unless-stopped
 
   init:
     image: amazon/aws-cli:latest
     env_file: .env
     depends_on:
-      localstack:
+      moto:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
-    command: |
-      : "$${IMAGES_BUCKET:?IMAGES_BUCKET must be set in .env}"
-      : "$${IMAGES_TABLE:?IMAGES_TABLE must be set in .env}"
-      aws --endpoint-url=http://localstack:4566 s3 mb s3://$$IMAGES_BUCKET || true
-      aws --endpoint-url=http://localstack:4566 dynamodb create-table \
-        --table-name $$IMAGES_TABLE \
-        --attribute-definitions AttributeName=sessionId,AttributeType=S AttributeName=imageId,AttributeType=S \
-        --key-schema AttributeName=sessionId,KeyType=HASH AttributeName=imageId,KeyType=RANGE \
-        --billing-mode PAY_PER_REQUEST || true
+    # Single-element array form of `command:` prevents docker-compose v5
+    # from word-splitting the block scalar across whitespace/newlines.
+    # The block scalar is passed as one argv to `/bin/sh -c`.
+    command:
+      - |
+        set -eux
+        : "${IMAGES_BUCKET:?IMAGES_BUCKET must be set in .env}"
+        : "${IMAGES_TABLE:?IMAGES_TABLE must be set in .env}"
+
+        if ! aws --endpoint-url=http://moto:5000 s3api head-bucket \
+          --bucket "$IMAGES_BUCKET" 2>/dev/null; then
+          aws --endpoint-url=http://moto:5000 s3 mb "s3://$IMAGES_BUCKET"
+        fi
+
+        if ! aws --endpoint-url=http://moto:5000 dynamodb describe-table \
+          --table-name "$IMAGES_TABLE" >/dev/null 2>&1; then
+          aws --endpoint-url=http://moto:5000 dynamodb create-table \
+            --table-name "$IMAGES_TABLE" \
+            --attribute-definitions \
+              AttributeName=sessionId,AttributeType=S \
+              AttributeName=imageId,AttributeType=S \
+            --key-schema \
+              AttributeName=sessionId,KeyType=HASH \
+              AttributeName=imageId,KeyType=RANGE \
+            --billing-mode PAY_PER_REQUEST
+        fi
     restart: "no"
 
   worker:
@@ -67,11 +86,11 @@ services:
     env_file: .env
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ENDPOINT_URL: http://moto:5000
     depends_on:
       temporal:
         condition: service_healthy
-      localstack:
+      moto:
         condition: service_healthy
       init:
         condition: service_completed_successfully
@@ -89,13 +108,13 @@ services:
     env_file: .env
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ENDPOINT_URL: http://moto:5000
     ports:
       - "8000:8000"  # HTTP API
     depends_on:
       temporal:
         condition: service_healthy
-      localstack:
+      moto:
         condition: service_healthy
       init:
         condition: service_completed_successfully

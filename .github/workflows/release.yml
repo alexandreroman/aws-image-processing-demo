@@ -1,0 +1,72 @@
+name: Release worker image
+
+# Builds the multi-stage worker image and pushes
+# it to GitHub Container Registry (GHCR) on
+# version tags (vX.Y.Z).
+#
+# The package is published as **public** so other
+# Temporal SAs can pull without authentication.
+# GHCR packages default to private — set the
+# package visibility to "Public" once in the repo
+# package settings:
+#   Settings → Packages → temporal-aws-autoscaling-demo
+#   → Change visibility → Public.
+# (Visibility cannot be set via the API token used
+# by GITHUB_TOKEN.)
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/temporal-aws-autoscaling-demo
+
+jobs:
+  build-push:
+    name: Build and push (multi-arch)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
