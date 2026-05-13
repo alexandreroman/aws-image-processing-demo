@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/anthropicclient"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )

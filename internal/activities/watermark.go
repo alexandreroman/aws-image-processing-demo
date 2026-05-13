@@ -9,7 +9,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/manifest"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"go.temporal.io/sdk/activity"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"

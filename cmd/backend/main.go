@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/api"
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/awsclient"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/api"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/awsclient"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"

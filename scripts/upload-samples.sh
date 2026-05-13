@@ -5,7 +5,7 @@
 # Local vs. AWS detection:
 #   - If AWS_ENDPOINT_URL is set, target
 #     LocalStack and use IMAGES_BUCKET (default:
-#     temporal-aws-autoscaling-demo-images-local).
+#     aws-image-processing-demo-images-local).
 #   - Otherwise, read images_bucket from Tofu.
 
 set -euo pipefail
@@ -30,7 +30,7 @@ fi
 
 aws_args=()
 if [[ -n "${AWS_ENDPOINT_URL:-}" ]]; then
-  bucket="${IMAGES_BUCKET:-temporal-aws-autoscaling-demo-images-local}"
+  bucket="${IMAGES_BUCKET:-aws-image-processing-demo-images-local}"
   aws_args+=(--endpoint-url "${AWS_ENDPOINT_URL}")
   echo "Target: LocalStack (${AWS_ENDPOINT_URL})"
 else

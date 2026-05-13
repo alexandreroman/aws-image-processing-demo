@@ -17,7 +17,7 @@ const { summary, workflows, error, isPolling, refresh } = useSession(
 );
 
 useHead(() => ({
-  title: `Session ${sessionId.value} — Temporal AWS Demo`,
+  title: `Session ${sessionId.value} — AWS Image Processing Demo`,
 }));
 
 // Toast when a new completion shows up.

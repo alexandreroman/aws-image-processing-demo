@@ -1,6 +1,6 @@
 ---
 name: "AWS resource naming (S3 bucket and DynamoDB table)"
-description: "Fixed names in dev (LocalStack); OpenTofu-generated with prefix `temporal-aws-autoscaling-demo-` in AWS. Neither is a user-tunable knob."
+description: "Fixed names in dev (LocalStack); OpenTofu-generated with prefix `aws-image-processing-demo-` in AWS. Neither is a user-tunable knob."
 type: project
 ---
 
@@ -14,8 +14,8 @@ image processing.
 
 |                  | Env var         | Dev (LocalStack)                                  | Prod (AWS)                                                                |
 |------------------|-----------------|---------------------------------------------------|---------------------------------------------------------------------------|
-| S3 bucket        | `IMAGES_BUCKET` | `temporal-aws-autoscaling-demo-images-local`      | OpenTofu-generated via `bucket_prefix = "temporal-aws-autoscaling-demo-"` |
-| DynamoDB table   | `IMAGES_TABLE`  | `temporal-aws-autoscaling-demo-images-local`      | OpenTofu-generated with prefix `temporal-aws-autoscaling-demo-`           |
+| S3 bucket        | `IMAGES_BUCKET` | `aws-image-processing-demo-images-local`      | OpenTofu-generated via `bucket_prefix = "aws-image-processing-demo-"` |
+| DynamoDB table   | `IMAGES_TABLE`  | `aws-image-processing-demo-images-local`      | OpenTofu-generated with prefix `aws-image-processing-demo-`           |
 
 Bucket and table share the same literal dev
 name. That is fine because S3 and DynamoDB live

@@ -13,7 +13,7 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Temporal AWS Demo — Image Processing Burst',
+      title: 'AWS Image Processing Demo — Image Processing Burst',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -35,7 +35,7 @@ export default defineNuxtConfig({
         process.env.NUXT_PUBLIC_S3_PUBLIC_URL ?? 'http://localhost:4566',
       githubUrl:
         process.env.NUXT_PUBLIC_GITHUB_URL ??
-        'https://github.com/alexandreroman/temporal-aws-autoscaling-demo',
+        'https://github.com/alexandreroman/aws-image-processing-demo',
     },
   },
 

@@ -1,5 +1,5 @@
 {
-  "name": "temporal-aws-autoscaling-demo-frontend",
+  "name": "aws-image-processing-demo-frontend",
   "private": true,
   "type": "module",
   "scripts": {

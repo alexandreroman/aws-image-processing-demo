@@ -1,4 +1,4 @@
-module github.com/alexandreroman/temporal-aws-autoscaling-demo
+module github.com/alexandreroman/aws-image-processing-demo
 
 go 1.26
 

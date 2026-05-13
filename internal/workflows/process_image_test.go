@@ -3,9 +3,9 @@ package workflows_test
 import (
 	"testing"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/activities"
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/manifest"
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/workflows"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"

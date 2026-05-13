@@ -2,7 +2,7 @@
 const config = useRuntimeConfig();
 
 useHead({
-  title: 'Temporal AWS Demo — Image Processing Burst',
+  title: 'AWS Image Processing Demo — Image Processing Burst',
 });
 </script>
 

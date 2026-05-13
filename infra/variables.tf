@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Name prefix used for every resource and as the Project tag value."
   type        = string
-  default     = "temporal-aws-autoscaling-demo"
+  default     = "aws-image-processing-demo"
 }
 
 variable "domain_name" {
@@ -51,7 +51,7 @@ variable "temporal_task_queue" {
 variable "worker_image" {
   description = "Container image for the Fargate worker."
   type        = string
-  default     = "ghcr.io/alexandreroman/temporal-aws-autoscaling-demo:latest"
+  default     = "ghcr.io/alexandreroman/aws-image-processing-demo:latest"
 }
 
 variable "worker_desired_count" {

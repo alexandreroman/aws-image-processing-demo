@@ -1,4 +1,4 @@
-# temporal-aws-demo
+# aws-image-processing-demo
 
 Image-processing burst pipeline demonstrating
 Temporal Cloud + AWS for AWS architects and

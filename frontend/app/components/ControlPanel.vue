@@ -16,7 +16,7 @@ const api = useApi();
 const toast = useToast();
 
 const SAMPLE_COUNT = 20;
-const SAMPLE_BUCKET = 'temporal-aws-autoscaling-demo-images-local';
+const SAMPLE_BUCKET = 'aws-image-processing-demo-images-local';
 
 const count = ref(20);
 const submitting = ref(false);

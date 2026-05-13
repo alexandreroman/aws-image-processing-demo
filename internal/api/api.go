@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/manifest"
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/workflows"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"

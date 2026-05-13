@@ -9,8 +9,8 @@ package workflows
 import (
 	"time"
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/activities"
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/manifest"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )

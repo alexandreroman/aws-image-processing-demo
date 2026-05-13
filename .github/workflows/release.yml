@@ -9,7 +9,7 @@ name: Release worker image
 # GHCR packages default to private — set the
 # package visibility to "Public" once in the repo
 # package settings:
-#   Settings → Packages → temporal-aws-autoscaling-demo
+#   Settings → Packages → aws-image-processing-demo
 #   → Change visibility → Public.
 # (Visibility cannot be set via the API token used
 # by GITHUB_TOKEN.)
@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/temporal-aws-autoscaling-demo
+  IMAGE: ghcr.io/${{ github.repository_owner }}/aws-image-processing-demo
 
 jobs:
   build-push:

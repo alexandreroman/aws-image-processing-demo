@@ -22,7 +22,7 @@ const config = useRuntimeConfig();
             T
           </span>
           <span class="font-semibold text-ink-800 text-sm sm:text-base">
-            Temporal AWS Demo
+            AWS Image Processing Demo
             <span class="text-ink-400 font-normal hidden sm:inline">
               — Image Processing Burst
             </span>

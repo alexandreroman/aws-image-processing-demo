@@ -16,7 +16,7 @@ temporal workflow start \
   --type ProcessImage \
   --task-queue image-processing \
   --workflow-id "manual-$(uuidgen)" \
-  --input '{"bucket":"temporal-aws-autoscaling-demo-images-local","key":"samples/dog.jpg"}'
+  --input '{"bucket":"aws-image-processing-demo-images-local","key":"samples/dog.jpg"}'
 ```
 
 Project-specific values:
@@ -35,7 +35,7 @@ of the frontend (via presigned URL) or a manual
 ```bash
 aws --endpoint-url http://localhost:4566 s3 cp \
   ./samples/dog.jpg \
-  s3://temporal-aws-autoscaling-demo-images-local/uploads/dog.jpg
+  s3://aws-image-processing-demo-images-local/uploads/dog.jpg
 ```
 
 **How to apply:**

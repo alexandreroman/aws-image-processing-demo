@@ -9,7 +9,7 @@ import (
 	"image/jpeg"
 	_ "image/png" // decoder registration
 
-	"github.com/alexandreroman/temporal-aws-autoscaling-demo/internal/manifest"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/disintegration/imaging"

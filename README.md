@@ -1,4 +1,4 @@
-# temporal-aws-demo
+# AWS Image Processing Demo
 
 A conference and customer demo showcasing
 **Temporal Cloud + AWS** through an image-processing
@@ -48,8 +48,8 @@ if you want a custom domain.
 ## Getting Started
 
 ```bash
-git clone https://github.com/alexandreroman/temporal-aws-demo.git
-cd temporal-aws-demo
+git clone https://github.com/alexandreroman/aws-image-processing-demo.git
+cd aws-image-processing-demo
 
 # Configure secrets
 cp .env.example .env
@@ -86,7 +86,7 @@ temporal workflow start \
   --type ProcessImage \
   --task-queue image-processing \
   --workflow-id "manual-$(uuidgen)" \
-  --input '{"bucket":"temporal-aws-autoscaling-demo-images-local","key":"samples/dog.jpg"}'
+  --input '{"bucket":"aws-image-processing-demo-images-local","key":"samples/dog.jpg"}'
 ```
 
 The image must already be present in the bucket
@@ -172,19 +172,19 @@ search.
 
 ### Modules
 
-| Module                  | Description                                              |
-| ----------------------- | -------------------------------------------------------- |
-| `cmd/worker`            | Temporal worker for ECS Fargate                          |
-| `cmd/backend`           | Backend service — Lambda or local HTTP server            |
-| `internal/workflows`    | `ProcessImage` workflow definition                       |
-| `internal/activities`   | Resize, describe, watermark, store activities            |
-| `internal/manifest`     | Shared manifest types and canonical size list            |
-| `internal/awsclient`    | AWS SDK config (LocalStack-aware)                        |
-| `internal/anthropicclient` | Anthropic API wrapper                                 |
-| `internal/api`          | HTTP handlers for `/api/uploads/presign`, `/workflows/*` |
-| `frontend`              | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
-| `infra`                 | OpenTofu modules for AWS + Cloudflare DNS                |
-| `scripts`               | Deploy, teardown, and sample-upload helpers              |
+| Module                     | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| `cmd/worker`               | Temporal worker for ECS Fargate                          |
+| `cmd/backend`              | Backend service — Lambda or local HTTP server            |
+| `internal/workflows`       | `ProcessImage` workflow definition                       |
+| `internal/activities`      | Resize, describe, watermark, store activities            |
+| `internal/manifest`        | Shared manifest types and canonical size list            |
+| `internal/awsclient`       | AWS SDK config (LocalStack-aware)                        |
+| `internal/anthropicclient` | Anthropic API wrapper                                    |
+| `internal/api`             | HTTP handlers for `/api/uploads/presign`, `/workflows/*` |
+| `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
+| `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                |
+| `scripts`                  | Deploy, teardown, and sample-upload helpers              |
 
 ## Contributing
 
