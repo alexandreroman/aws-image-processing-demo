@@ -11,7 +11,7 @@ const config = useRuntimeConfig();
 const api = useApi();
 const toast = useToast();
 
-const SAMPLE_COUNT = 20;
+const SAMPLE_COUNT = 50;
 const SAMPLE_BUCKET = 'aws-image-processing-demo-images-local';
 
 const count = ref(20);
