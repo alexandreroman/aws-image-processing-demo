@@ -6,7 +6,6 @@ definePageMeta({
 });
 
 const route = useRoute();
-const toast = useToast();
 
 const sessionId = computed(() => String(route.params.id ?? ''));
 
@@ -17,29 +16,6 @@ const { summary, workflows, error, isPolling, refresh } = useSession(
 useHead(() => ({
   title: `Session ${sessionId.value} — AWS Image Processing Demo`,
 }));
-
-const seenCompleted = new Set<string>();
-let primed = false;
-watch(
-  workflows,
-  (list) => {
-    if (!primed) {
-      for (const w of list) {
-        if (w.status === 'COMPLETED') seenCompleted.add(w.workflowId);
-      }
-      primed = true;
-      return;
-    }
-    for (const w of list) {
-      if (w.status === 'COMPLETED' && !seenCompleted.has(w.workflowId)) {
-        seenCompleted.add(w.workflowId);
-        const desc = w.manifest?.description;
-        toast.success('Image processed', desc ?? w.workflowId);
-      }
-    }
-  },
-  { deep: true },
-);
 </script>
 
 <template>
