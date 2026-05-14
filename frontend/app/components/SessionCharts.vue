@@ -206,11 +206,11 @@ const stages = computed<StageRow[]>(() => {
   }
 
   return [
+    { key: 'Queued', label: 'Queued', count: buckets.Queued },
     { key: 'ResizeAndUpload', label: 'Resize', count: buckets.ResizeAndUpload },
     { key: 'GenerateDescription', label: 'Describe', count: buckets.GenerateDescription },
     { key: 'ApplyWatermark', label: 'Watermark', count: buckets.ApplyWatermark },
     { key: 'StoreManifest', label: 'Store', count: buckets.StoreManifest },
-    { key: 'Queued', label: 'Queued', count: buckets.Queued },
   ];
 });
 
@@ -221,6 +221,16 @@ const stageScale = computed(() => Math.max(1, props.summary.running, ...stages.v
 function barWidthPct(count: number): string {
   return `${(count / stageScale.value) * 100}%`;
 }
+
+// Running uses `text-iris-400` (not `text-primary` like ControlPanel) so the
+// counter color matches the iris line in the chart above, which is what lets
+// us drop the legend without losing the color-coding cue.
+const summaryRows = computed(() => [
+  { label: 'Total', value: props.summary.total, color: 'text-ink-100' },
+  { label: 'Running', value: props.summary.running, color: 'text-iris-400' },
+  { label: 'Completed', value: props.summary.completed, color: 'text-emerald-400' },
+  { label: 'Failed', value: props.summary.failed, color: 'text-rose-400' },
+]);
 </script>
 
 <template>
@@ -290,27 +300,21 @@ function barWidthPct(count: number): string {
         </div>
       </div>
 
-      <ul class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-300">
-        <li class="inline-flex items-center gap-1.5">
-          <span class="h-0.5 w-3 bg-iris-400" aria-hidden="true" />
-          <span>Running</span>
-        </li>
-        <li class="inline-flex items-center gap-1.5">
-          <span class="h-2 w-2 rounded-sm bg-emerald-400/60 ring-1 ring-emerald-400" aria-hidden="true" />
-          <span>Completed</span>
-        </li>
-        <li class="inline-flex items-center gap-1.5">
-          <span class="h-2 w-2 rounded-sm bg-rose-500/60 ring-1 ring-rose-500" aria-hidden="true" />
-          <span>Failed</span>
-        </li>
-        <li class="inline-flex items-center gap-1.5">
+      <dl class="grid grid-cols-2 gap-1.5">
+        <div
+          v-for="row in summaryRows"
+          :key="row.label"
+          class="flex items-center justify-between rounded-md bg-surface-hover/60
+            px-2.5 py-1.5"
+        >
+          <span class="text-[11px] text-ink-300">{{ row.label }}</span>
           <span
-            class="h-0 w-3 border-t border-dashed border-ink-500"
-            aria-hidden="true"
-          />
-          <span>Target</span>
-        </li>
-      </ul>
+            :class="['font-mono font-semibold tabular-nums text-sm', row.color]"
+          >
+            {{ row.value }}
+          </span>
+        </div>
+      </dl>
     </article>
 
     <article class="card p-4 space-y-3 animate-fade-in">

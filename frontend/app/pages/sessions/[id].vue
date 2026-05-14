@@ -37,17 +37,13 @@ useHead(() => ({
     </div>
 
     <div class="grid lg:grid-cols-12 gap-4">
-      <aside class="lg:col-span-3 space-y-3">
-        <ControlPanel :summary="summary" read-only />
-      </aside>
-
-      <section class="lg:col-span-5">
-        <SessionCharts :workflows="workflows" :summary="summary" />
-      </section>
-
-      <section class="lg:col-span-4">
+      <section class="lg:col-span-8">
         <Gallery :workflows="workflows" />
       </section>
+
+      <aside class="lg:col-span-4 space-y-4">
+        <SessionCharts :workflows="workflows" :summary="summary" />
+      </aside>
     </div>
   </div>
 </template>
