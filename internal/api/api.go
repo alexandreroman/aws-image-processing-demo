@@ -181,10 +181,19 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, startResponse{SessionID: sessionID, WorkflowIDs: workflowIDs})
 }
 
-// newSessionID returns the first 8 hex chars of a UUID v4.
-func newSessionID() string {
+// shortID returns the first 8 hex chars of a UUID v4.
+//
+// Why 8 chars: a burst is at most a few dozen images per session, so the
+// 32-bit space leaves collision probability well under one in a million,
+// and short IDs make URLs, logs, and the Temporal UI dramatically more
+// readable. WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE surfaces the
+// vanishingly rare collision as a start-workflow error.
+func shortID() string {
 	return uuid.NewString()[:8]
 }
+
+func newSessionID() string { return shortID() }
+func newImageID() string   { return shortID() }
 
 // --- /api/sessions/{sessionId} ----------------------------------------------
 
