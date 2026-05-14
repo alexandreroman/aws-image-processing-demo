@@ -21,47 +21,91 @@ interface CompletedThumb {
   largeUrl: string;
 }
 
-const completed = computed<CompletedThumb[]>(() =>
-  props.workflows
-    .filter((w) => w.status === 'COMPLETED' && w.manifest)
-    .map((w) => {
-      const m = w.manifest!;
-      const medium = m.watermarked?.medium ?? m.sizes.medium?.s3Ref;
-      const large = m.watermarked?.large ?? m.sizes.large?.s3Ref;
-      const ref = medium ?? m.original;
-      const big = large ?? m.original;
+type TileStatus = 'completed' | 'running' | 'failed';
+
+interface Tile {
+  workflowId: string;
+  status: TileStatus;
+  currentActivity?: string;
+  image?: CompletedThumb;
+  title: string;
+}
+
+function toCompletedThumb(w: WorkflowItem): CompletedThumb | null {
+  if (!w.manifest) return null;
+  const m = w.manifest;
+  const medium = m.watermarked?.medium ?? m.sizes.medium?.s3Ref;
+  const large = m.watermarked?.large ?? m.sizes.large?.s3Ref;
+  const ref = medium ?? m.original;
+  const big = large ?? m.original;
+  return {
+    workflowId: w.workflowId,
+    imageId: m.imageId,
+    description: m.description ?? '',
+    labels: m.labels ?? [],
+    thumbUrl: publicUrl(ref.bucket, ref.key),
+    largeUrl: publicUrl(big.bucket, big.key),
+  };
+}
+
+function toTile(w: WorkflowItem): Tile {
+  if (w.status === 'COMPLETED') {
+    const image = toCompletedThumb(w);
+    if (image) {
       return {
         workflowId: w.workflowId,
-        imageId: m.imageId,
-        description: m.description ?? '',
-        labels: m.labels ?? [],
-        thumbUrl: publicUrl(ref.bucket, ref.key),
-        largeUrl: publicUrl(big.bucket, big.key),
+        status: 'completed',
+        image,
+        title: image.description || image.imageId,
       };
-    }),
+    }
+    return {
+      workflowId: w.workflowId,
+      status: 'running',
+      currentActivity: w.currentActivity,
+      title: `Running: ${w.currentActivity ?? '…'}`,
+    };
+  }
+  if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
+    return {
+      workflowId: w.workflowId,
+      status: 'running',
+      currentActivity: w.currentActivity,
+      title: `Running: ${w.currentActivity ?? '…'}`,
+    };
+  }
+  return {
+    workflowId: w.workflowId,
+    status: 'failed',
+    title: w.status,
+  };
+}
+
+const tiles = computed<Tile[]>(() =>
+  // Sort by workflowId (deterministic `session-<sessionId>-<imageId>`) for a stable slot per workflow.
+  [...props.workflows]
+    .map(toTile)
+    .sort((a, b) => a.workflowId.localeCompare(b.workflowId)),
 );
 
-const running = computed(() =>
-  props.workflows.filter((w) => w.status === 'RUNNING'),
-);
+type CompletedTile = Tile & { image: CompletedThumb };
 
-const failed = computed(() =>
-  props.workflows.filter(
-    (w) =>
-      w.status === 'FAILED' ||
-      w.status === 'TIMED_OUT' ||
-      w.status === 'TERMINATED',
-  ),
+const completedTiles = computed<CompletedTile[]>(() =>
+  tiles.value.filter((t): t is CompletedTile => t.image != null),
 );
 
 const selectedIndex = ref<number | null>(null);
 
 const selected = computed<CompletedThumb | null>(() => {
   if (selectedIndex.value === null) return null;
-  return completed.value[selectedIndex.value] ?? null;
+  return completedTiles.value[selectedIndex.value]?.image ?? null;
 });
 
-function openModal(index: number): void {
+function openModal(tile: CompletedTile): void {
+  const index = completedTiles.value.findIndex(
+    (t) => t.workflowId === tile.workflowId,
+  );
+  if (index === -1) return;
   selectedIndex.value = index;
 }
 
@@ -70,14 +114,14 @@ function closeModal(): void {
 }
 
 function prev(): void {
-  if (selectedIndex.value === null || completed.value.length <= 1) return;
-  const n = completed.value.length;
+  if (selectedIndex.value === null || completedTiles.value.length <= 1) return;
+  const n = completedTiles.value.length;
   selectedIndex.value = (selectedIndex.value - 1 + n) % n;
 }
 
 function next(): void {
-  if (selectedIndex.value === null || completed.value.length <= 1) return;
-  selectedIndex.value = (selectedIndex.value + 1) % completed.value.length;
+  if (selectedIndex.value === null || completedTiles.value.length <= 1) return;
+  selectedIndex.value = (selectedIndex.value + 1) % completedTiles.value.length;
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -110,7 +154,7 @@ onBeforeUnmount(() => {
     <header class="flex items-baseline justify-between">
       <h2 class="stat-label">Gallery</h2>
       <span class="text-[11px] text-ink-400 font-mono tabular-nums">
-        {{ completed.length }} / {{ workflows.length }}
+        {{ completedTiles.length }} / {{ workflows.length }}
       </span>
     </header>
 
@@ -126,74 +170,76 @@ onBeforeUnmount(() => {
       v-else
       class="grid grid-cols-3 sm:grid-cols-4 gap-2"
     >
-      <button
-        v-for="(item, index) in completed"
-        :key="item.workflowId"
-        type="button"
-        class="group block animate-fade-in text-left
-          focus-visible:outline-none focus-visible:ring-2
-          focus-visible:ring-primary/60 focus-visible:ring-offset-2
-          focus-visible:ring-offset-bg rounded-md"
-        :title="item.description || item.imageId"
-        :aria-label="`Open ${item.description || item.imageId}`"
-        @click="openModal(index)"
+      <template
+        v-for="tile in tiles"
+        :key="tile.workflowId"
       >
-        <div
-          class="aspect-square overflow-hidden rounded-md bg-surface-hover
-            border border-surface-border transition-all duration-300
-            group-hover:border-primary group-hover:ring-2
-            group-hover:ring-primary/60 group-hover:shadow-glow
-            group-hover:scale-[1.03] relative"
+        <button
+          v-if="tile.status === 'completed' && tile.image"
+          type="button"
+          class="group block animate-fade-in text-left
+            focus-visible:outline-none focus-visible:ring-2
+            focus-visible:ring-primary/60 focus-visible:ring-offset-2
+            focus-visible:ring-offset-bg rounded-md"
+          :title="tile.title"
+          :aria-label="`Open ${tile.title}`"
+          @click="openModal(tile as CompletedTile)"
         >
-          <img
-            :src="item.thumbUrl"
-            :alt="item.description || item.imageId"
-            loading="lazy"
-            class="h-full w-full object-cover transition-transform duration-300
-              group-hover:scale-105"
+          <div
+            class="aspect-square overflow-hidden rounded-md bg-surface-hover
+              border border-surface-border transition-all duration-300
+              group-hover:border-primary group-hover:ring-2
+              group-hover:ring-primary/60 group-hover:shadow-glow
+              group-hover:scale-[1.03] relative"
           >
-          <div
-            class="absolute inset-0 bg-gradient-to-t from-bg/60 to-transparent
-              opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            aria-hidden="true"
-          />
-        </div>
-      </button>
+            <img
+              :src="tile.image.thumbUrl"
+              :alt="tile.title"
+              loading="lazy"
+              class="h-full w-full object-cover transition-transform duration-300
+                group-hover:scale-105"
+            >
+            <div
+              class="absolute inset-0 bg-gradient-to-t from-bg/60 to-transparent
+                opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              aria-hidden="true"
+            />
+          </div>
+        </button>
 
-      <div
-        v-for="w in running"
-        :key="w.workflowId"
-        class="animate-fade-in"
-        :title="`Running: ${w.currentActivity ?? '…'}`"
-      >
         <div
-          class="aspect-square rounded-md bg-gradient-to-br from-primary/10
-            to-iris/10 border border-primary/30 flex items-center
-            justify-center animate-pulse-glow"
+          v-else-if="tile.status === 'running'"
+          class="animate-fade-in"
+          :title="tile.title"
         >
           <div
-            class="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary
-              animate-spin"
-            aria-hidden="true"
-          />
+            class="aspect-square rounded-md bg-gradient-to-br from-primary/10
+              to-iris/10 border border-primary/30 flex items-center
+              justify-center animate-pulse-glow"
+          >
+            <div
+              class="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary
+                animate-spin"
+              aria-hidden="true"
+            />
+          </div>
         </div>
-      </div>
 
-      <div
-        v-for="w in failed"
-        :key="w.workflowId"
-        class="animate-fade-in"
-        :title="w.status"
-      >
         <div
-          class="aspect-square rounded-md bg-rose-500/10 border
-            border-rose-500/40 flex items-center justify-center text-rose-400
-            text-2xl font-bold"
-          aria-hidden="true"
+          v-else
+          class="animate-fade-in"
+          :title="tile.title"
         >
-          ×
+          <div
+            class="aspect-square rounded-md bg-rose-500/10 border
+              border-rose-500/40 flex items-center justify-center text-rose-400
+              text-2xl font-bold"
+            aria-hidden="true"
+          >
+            ×
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <Teleport to="body">
@@ -225,7 +271,7 @@ onBeforeUnmount(() => {
           </button>
 
           <button
-            v-if="completed.length > 1"
+            v-if="completedTiles.length > 1"
             type="button"
             class="absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80
@@ -253,7 +299,7 @@ onBeforeUnmount(() => {
           </button>
 
           <button
-            v-if="completed.length > 1"
+            v-if="completedTiles.length > 1"
             type="button"
             class="absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80
