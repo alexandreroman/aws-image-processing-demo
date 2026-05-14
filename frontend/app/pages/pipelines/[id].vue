@@ -11,6 +11,16 @@ const pipelineId = computed(() => String(route.params.id ?? ''));
 
 const { summary, workflows, error, refresh } = usePipeline(pipelineId);
 
+const navExpectedCount = computed<number>(() => {
+  const id = pipelineId.value;
+  if (!id) return 0;
+  return useState<number | null>(`pipeline:expectedCount:${id}`, () => null).value ?? 0;
+});
+
+const expectedCount = computed<number>(() =>
+  Math.max(navExpectedCount.value, summary.value.total, workflows.value.length),
+);
+
 useHead(() => ({
   title: `Pipeline ${pipelineId.value} — AWS Image Processing Demo`,
 }));
@@ -38,7 +48,7 @@ useHead(() => ({
 
     <div class="grid lg:grid-cols-12 gap-4">
       <section class="lg:col-span-8">
-        <Gallery :workflows="workflows" />
+        <Gallery :workflows="workflows" :expected-count="expectedCount" />
       </section>
 
       <aside class="lg:col-span-4 space-y-4">

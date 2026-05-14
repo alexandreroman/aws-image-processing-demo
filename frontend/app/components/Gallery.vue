@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { WorkflowItem } from '~/composables/useApi';
 
-const props = defineProps<{
-  workflows: WorkflowItem[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    workflows: WorkflowItem[];
+    expectedCount?: number;
+  }>(),
+  { expectedCount: 0 },
+);
 
 const config = useRuntimeConfig();
 
@@ -94,6 +98,19 @@ const completedTiles = computed<CompletedTile[]>(() =>
   tiles.value.filter((t): t is CompletedTile => t.image != null),
 );
 
+const slotCount = computed<number>(() =>
+  Math.max(props.expectedCount, tiles.value.length),
+);
+
+type Slot = { kind: 'tile'; tile: Tile } | { kind: 'pending'; index: number };
+
+const slots = computed<Slot[]>(() =>
+  Array.from({ length: slotCount.value }, (_, i): Slot => {
+    const tile = tiles.value[i];
+    return tile ? { kind: 'tile', tile } : { kind: 'pending', index: i };
+  }),
+);
+
 const selectedIndex = ref<number | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 const prevButton = ref<HTMLButtonElement | null>(null);
@@ -182,36 +199,28 @@ onBeforeUnmount(() => {
     <header class="flex items-baseline justify-between">
       <h2 class="stat-label">Gallery</h2>
       <span class="text-[11px] text-ink-400 font-mono tabular-nums">
-        {{ completedTiles.length }} / {{ workflows.length }}
+        {{ completedTiles.length }} / {{ slotCount }}
       </span>
     </header>
 
     <div
-      v-if="workflows.length === 0"
-      class="text-xs text-ink-400 py-10 text-center border border-dashed
-        border-surface-border rounded-lg"
-    >
-      Workflows will appear here as they complete.
-    </div>
-
-    <div
-      v-else
+      v-if="slotCount > 0"
       class="grid grid-cols-3 sm:grid-cols-4 gap-2"
     >
       <template
-        v-for="tile in tiles"
-        :key="tile.workflowId"
+        v-for="slot in slots"
+        :key="slot.kind === 'tile' ? slot.tile.workflowId : `pending-${slot.index}`"
       >
         <button
-          v-if="tile.status === 'completed' && tile.image"
+          v-if="slot.kind === 'tile' && slot.tile.status === 'completed' && slot.tile.image"
           type="button"
           class="group block animate-fade-in text-left
             focus-visible:outline-none focus-visible:ring-2
             focus-visible:ring-primary/60 focus-visible:ring-offset-2
             focus-visible:ring-offset-bg rounded-md"
-          :title="tile.title"
-          :aria-label="`Open ${tile.title}`"
-          @click="openModal(tile as CompletedTile)"
+          :title="slot.tile.title"
+          :aria-label="`Open ${slot.tile.title}`"
+          @click="openModal(slot.tile as CompletedTile)"
         >
           <div
             class="aspect-square overflow-hidden rounded-md bg-surface-hover
@@ -221,8 +230,8 @@ onBeforeUnmount(() => {
               group-hover:scale-[1.03] relative"
           >
             <img
-              :src="tile.image.thumbUrl"
-              :alt="tile.title"
+              :src="slot.tile.image.thumbUrl"
+              :alt="slot.tile.title"
               loading="lazy"
               width="150"
               height="150"
@@ -238,9 +247,9 @@ onBeforeUnmount(() => {
         </button>
 
         <div
-          v-else-if="tile.status === 'running'"
+          v-else-if="slot.kind === 'tile' && slot.tile.status === 'running'"
           class="animate-fade-in"
-          :title="tile.title"
+          :title="slot.tile.title"
         >
           <div
             class="aspect-square rounded-md bg-gradient-to-br from-primary/10
@@ -256,9 +265,9 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else
+          v-else-if="slot.kind === 'tile'"
           class="animate-fade-in"
-          :title="tile.title"
+          :title="slot.tile.title"
         >
           <div
             class="aspect-square rounded-md bg-rose-500/10 border
@@ -268,6 +277,17 @@ onBeforeUnmount(() => {
           >
             ×
           </div>
+        </div>
+
+        <div
+          v-else
+          aria-hidden="true"
+          title="Waiting for workflow..."
+        >
+          <div
+            class="aspect-square rounded-md bg-gradient-to-br from-primary/10
+              to-iris/10 border border-primary/30 animate-pulse-glow"
+          />
         </div>
       </template>
     </div>

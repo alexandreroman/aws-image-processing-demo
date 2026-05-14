@@ -44,6 +44,9 @@ async function startBurst() {
       'Burst started',
       `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows`,
     );
+    // Seed the expected slot count so the gallery reserves space before the first poll lands.
+    useState<number | null>(`pipeline:expectedCount:${res.pipelineId}`, () => null).value
+      = res.workflowIds.length;
     await navigateTo(`/pipelines/${res.pipelineId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
