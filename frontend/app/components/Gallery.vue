@@ -53,6 +53,38 @@ const failed = computed(() =>
       w.status === 'TERMINATED',
   ),
 );
+
+const selected = ref<CompletedThumb | null>(null);
+
+function openModal(item: CompletedThumb): void {
+  selected.value = item;
+}
+
+function closeModal(): void {
+  selected.value = null;
+}
+
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') closeModal();
+}
+
+// Lock body scroll + bind Escape only while a modal is open. Guarded for SSG.
+watch(selected, (item) => {
+  if (typeof document === 'undefined') return;
+  if (item) {
+    document.documentElement.classList.add('overflow-hidden');
+    document.addEventListener('keydown', onKeydown);
+  } else {
+    document.documentElement.classList.remove('overflow-hidden');
+    document.removeEventListener('keydown', onKeydown);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.remove('overflow-hidden');
+  document.removeEventListener('keydown', onKeydown);
+});
 </script>
 
 <template>
@@ -76,19 +108,24 @@ const failed = computed(() =>
       v-else
       class="grid grid-cols-3 sm:grid-cols-4 gap-2"
     >
-      <a
+      <button
         v-for="item in completed"
         :key="item.workflowId"
-        :href="item.largeUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="group block animate-fade-in"
+        type="button"
+        class="group block animate-fade-in text-left
+          focus-visible:outline-none focus-visible:ring-2
+          focus-visible:ring-primary/60 focus-visible:ring-offset-2
+          focus-visible:ring-offset-bg rounded-md"
         :title="item.description || item.imageId"
+        :aria-label="`Open ${item.description || item.imageId}`"
+        @click="openModal(item)"
       >
         <div
           class="aspect-square overflow-hidden rounded-md bg-surface-hover
-            border border-surface-border group-hover:border-primary/60
-            transition-colors"
+            border border-surface-border transition-all duration-300
+            group-hover:border-primary group-hover:ring-2
+            group-hover:ring-primary/60 group-hover:shadow-glow
+            group-hover:scale-[1.03] relative"
         >
           <img
             :src="item.thumbUrl"
@@ -97,8 +134,13 @@ const failed = computed(() =>
             class="h-full w-full object-cover transition-transform duration-300
               group-hover:scale-105"
           >
+          <div
+            class="absolute inset-0 bg-gradient-to-t from-bg/60 to-transparent
+              opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            aria-hidden="true"
+          />
         </div>
-      </a>
+      </button>
 
       <div
         v-for="w in running"
@@ -135,5 +177,72 @@ const failed = computed(() =>
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="selected"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4
+          bg-bg/80 backdrop-blur-md animate-fade-in"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="selected.description || selected.imageId"
+        @click.self="closeModal"
+      >
+        <div
+          class="card-elevated relative w-full max-w-5xl max-h-[90vh]
+            overflow-y-auto p-4 sm:p-6"
+        >
+          <button
+            type="button"
+            class="absolute top-3 right-3 z-10 inline-flex h-9 w-9
+              items-center justify-center rounded-full bg-surface/80
+              border border-surface-border text-ink-200 hover:text-primary
+              hover:border-primary/60 transition-colors text-2xl
+              leading-none focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-primary/60"
+            aria-label="Close"
+            @click="closeModal"
+          >
+            ×
+          </button>
+
+          <div class="flex justify-center bg-bg/40 rounded-lg overflow-hidden">
+            <img
+              :src="selected.largeUrl"
+              :alt="selected.description || selected.imageId"
+              class="max-h-[80vh] max-w-full object-contain"
+            >
+          </div>
+
+          <div class="mt-4 space-y-3">
+            <p
+              v-if="selected.description"
+              class="text-sm text-ink-100 leading-relaxed"
+            >
+              {{ selected.description }}
+            </p>
+            <p
+              v-else
+              class="text-sm text-ink-400 italic"
+            >
+              No description available.
+            </p>
+
+            <div
+              v-if="selected.labels.length > 0"
+              class="flex flex-wrap gap-1.5"
+            >
+              <span
+                v-for="label in selected.labels"
+                :key="label"
+                class="chip-accent"
+              >
+                {{ label }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
