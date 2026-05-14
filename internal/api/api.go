@@ -158,7 +158,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	workflowIDs := make([]string, 0, len(req.Images))
 	for _, img := range req.Images {
-		imageID := uuid.NewString()
+		imageID := newImageID()
 		wfID := fmt.Sprintf("session-%s-%s", sessionID, imageID)
 		opts := client.StartWorkflowOptions{
 			ID:                    wfID,
