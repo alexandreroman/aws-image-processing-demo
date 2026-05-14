@@ -15,6 +15,10 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// ManifestQueryName is the Temporal query handler name that returns the
+// in-flight manifest accumulated so far by a ProcessImage execution.
+const ManifestQueryName = "manifest"
+
 // ProcessImage is the 8-activity image-processing workflow.
 //
 // Fan-out: 3 resize + 3 watermark activities run in parallel. Fan-in is
@@ -52,6 +56,22 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		},
 	}
 
+	// Track the manifest as it grows so the API can surface in-flight state
+	// via a query — the gallery then shows the resized image before
+	// watermarking finishes, without waiting for the final DynamoDB write.
+	state := manifest.Manifest{
+		PipelineID:  in.PipelineID,
+		ImageID:     in.ImageID,
+		Original:    in.Original,
+		Sizes:       map[string]manifest.Size{},
+		Watermarked: map[string]manifest.S3Ref{},
+	}
+	if err := workflow.SetQueryHandler(ctx, ManifestQueryName, func() (manifest.Manifest, error) {
+		return state, nil
+	}); err != nil {
+		return manifest.Manifest{}, err
+	}
+
 	// 1) Fan-out resize: one future per size.
 	resizeFutures := make(map[string]workflow.Future, len(manifest.SizeNames))
 	resizeCtx := workflow.WithActivityOptions(ctx, cpuOpts)
@@ -74,6 +94,7 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		}
 		sizes[sizeName] = sz
 	}
+	state.Sizes = sizes
 
 	// 3) Describe on the medium size.
 	describeCtx := workflow.WithActivityOptions(ctx, describeOpts)
@@ -83,6 +104,8 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		Get(ctx, &description); err != nil {
 		return manifest.Manifest{}, err
 	}
+	state.Description = description.Description
+	state.Labels = description.Labels
 
 	// 4) Fan-out watermark: one future per size, watermarking the resized
 	//    output (not the original).
@@ -107,24 +130,15 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		}
 		watermarked[sizeName] = ref
 	}
+	state.Watermarked = watermarked
 
 	// 6) Persist.
-	m := manifest.Manifest{
-		PipelineID:  in.PipelineID,
-		ImageID:     in.ImageID,
-		Original:    in.Original,
-		Sizes:       sizes,
-		Description: description.Description,
-		Labels:      description.Labels,
-		Watermarked: watermarked,
-	}
-
 	storeWFCtx := workflow.WithActivityOptions(ctx, storeOpts)
-	if err := workflow.ExecuteActivity(storeWFCtx, (*activities.Activities).StoreManifest, m).
+	if err := workflow.ExecuteActivity(storeWFCtx, (*activities.Activities).StoreManifest, state).
 		Get(ctx, nil); err != nil {
 		return manifest.Manifest{}, err
 	}
 
 	logger.Info("ProcessImage done", "imageId", in.ImageID)
-	return m, nil
+	return state, nil
 }

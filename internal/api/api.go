@@ -292,10 +292,12 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		Workflows:  make([]pipelineWorkflow, 0, len(workflowIDs)),
 	}
 
-	// currentActivity lookups make a Temporal RPC per running workflow.
-	// Cap the per-poll fan-out so a 48-workflow burst does not stall the
-	// 1 s frontend poll loop.
+	// currentActivity and manifest-query lookups each make a Temporal RPC per
+	// running workflow. Cap the per-poll fan-out so a 48-workflow burst does
+	// not stall the 1 s frontend poll loop. The two caps are tracked
+	// independently so each feature stays tunable on its own.
 	currentActivityLookups := 0
+	manifestQueryLookups := 0
 	seen := make(map[string]bool, len(executions))
 	for _, exec := range executions {
 		wf := pipelineWorkflow{
@@ -313,6 +315,14 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		if t := exec.GetCloseTime(); t != nil {
 			closed := t.AsTime()
 			wf.CompletedAt = &closed
+		}
+
+		// DynamoDB is authoritative once the final StoreManifest write lands,
+		// so prefer it over the in-flight query result below.
+		ddbManifest, hasDDBManifest := manifests[wf.WorkflowID]
+		if hasDDBManifest {
+			wf.ImageID = ddbManifest.ImageID
+			wf.Manifest = ddbManifest
 		}
 
 		switch exec.GetStatus() {
@@ -334,11 +344,16 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 					wf.CurrentActivity = act
 				}
 			}
-		}
-
-		if m, ok := manifests[wf.WorkflowID]; ok {
-			wf.ImageID = m.ImageID
-			wf.Manifest = m
+			// Best effort: surface the in-flight manifest so the gallery can
+			// show resized images before watermarking finishes. Skip when DDB
+			// already has the final manifest to avoid wasting lookup budget.
+			if !hasDDBManifest && manifestQueryLookups < maxManifestQueryLookups {
+				manifestQueryLookups++
+				if m := h.queryManifest(r.Context(), wf.WorkflowID); m != nil {
+					wf.ImageID = m.ImageID
+					wf.Manifest = m
+				}
+			}
 		}
 
 		resp.Workflows = append(resp.Workflows, wf)
@@ -422,6 +437,11 @@ func (h *Handler) listWorkflows(
 // currentActivity field is left empty on the remaining running workflows.
 const maxCurrentActivityLookups = 10
 
+// maxManifestQueryLookups caps the number of QueryWorkflow calls fired per
+// /api/pipelines/{id} poll to fetch in-flight manifests. Kept separate from
+// maxCurrentActivityLookups so the two features stay independently tunable.
+const maxManifestQueryLookups = 10
+
 // currentActivity returns the name of the first pending activity for the
 // running workflow, or "" if none is reported. Errors are swallowed because
 // this is a best-effort cosmetic field.
@@ -436,6 +456,22 @@ func (h *Handler) currentActivity(ctx context.Context, workflowID string) string
 		}
 	}
 	return ""
+}
+
+// queryManifest returns the in-flight manifest exposed by the ProcessImage
+// workflow's query handler, or nil if the query fails or decoding fails.
+// Best-effort: errors are swallowed because the manifest is cosmetic until
+// the final StoreManifest write lands in DynamoDB.
+func (h *Handler) queryManifest(ctx context.Context, workflowID string) *manifest.Manifest {
+	val, err := h.deps.Temporal.QueryWorkflow(ctx, workflowID, "", workflows.ManifestQueryName)
+	if err != nil {
+		return nil
+	}
+	var m manifest.Manifest
+	if err := val.Get(&m); err != nil {
+		return nil
+	}
+	return &m
 }
 
 // fetchManifests returns the persisted manifests for a pipeline, keyed by

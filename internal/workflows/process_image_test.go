@@ -85,7 +85,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		}, nil).Once()
 	}
 
-	// One store call.
+	// One store call at the end with the fully-populated manifest.
 	s.env.OnActivity(s.acts.StoreManifest, mock.Anything, mock.MatchedBy(func(m manifest.Manifest) bool {
 		return m.PipelineID == pipelineID &&
 			m.ImageID == imageID &&
@@ -112,6 +112,17 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		s.Contains(got.Sizes, name)
 		s.Contains(got.Watermarked, name)
 	}
+
+	// The manifest query handler should expose the same final state.
+	val, err := s.env.QueryWorkflow(workflows.ManifestQueryName)
+	require.NoError(s.T(), err)
+	var queried manifest.Manifest
+	require.NoError(s.T(), val.Get(&queried))
+	s.Equal(pipelineID, queried.PipelineID)
+	s.Equal(imageID, queried.ImageID)
+	s.Equal("a dog catching a frisbee", queried.Description)
+	s.Len(queried.Sizes, len(manifest.SizeNames))
+	s.Len(queried.Watermarked, len(manifest.SizeNames))
 }
 
 // TestProcessImageDeterminism guards against non-deterministic constructs

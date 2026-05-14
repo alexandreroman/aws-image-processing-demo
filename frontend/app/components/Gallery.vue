@@ -27,6 +27,7 @@ interface CompletedThumb {
 
 type TileStatus = 'completed' | 'running' | 'failed';
 
+// image: when status='completed' the final variant, when status='running' an in-flight resized preview behind the spinner.
 interface Tile {
   workflowId: string;
   status: TileStatus;
@@ -35,48 +36,127 @@ interface Tile {
   title: string;
 }
 
-function toCompletedThumb(w: WorkflowItem): CompletedThumb | null {
-  if (!w.manifest) return null;
-  const m = w.manifest;
-  const medium = m.watermarked?.medium ?? m.sizes.medium?.s3Ref;
-  const large = m.watermarked?.large ?? m.sizes.large?.s3Ref;
-  const ref = medium ?? m.original;
-  const big = large ?? m.original;
-  return {
-    workflowId: w.workflowId,
-    imageId: m.imageId,
-    description: m.description ?? '',
-    labels: m.labels ?? [],
-    thumbUrl: publicUrl(ref.bucket, ref.key),
-    largeUrl: publicUrl(big.bucket, big.key),
-  };
+type ThumbKind = 'watermarked' | 'resized';
+
+interface CachedThumb {
+  kind: ThumbKind;
+  thumb: CompletedThumb;
 }
 
+// Why: a tile may first appear with the resized variant (mid-pipeline) and later
+// upgrade to the watermarked one; the kind lets the cache enforce upgrade-only.
+function bestThumb(w: WorkflowItem): CachedThumb | null {
+  if (!w.manifest) return null;
+  const m = w.manifest;
+  const wmMedium = m.watermarked?.medium;
+  const wmLarge = m.watermarked?.large;
+  if (wmMedium && wmLarge) {
+    return {
+      kind: 'watermarked',
+      thumb: {
+        workflowId: w.workflowId,
+        imageId: m.imageId,
+        description: m.description ?? '',
+        labels: m.labels ?? [],
+        thumbUrl: publicUrl(wmMedium.bucket, wmMedium.key),
+        largeUrl: publicUrl(wmLarge.bucket, wmLarge.key),
+      },
+    };
+  }
+  const szMedium = m.sizes?.medium?.s3Ref;
+  const szLarge = m.sizes?.large?.s3Ref;
+  if (szMedium && szLarge) {
+    return {
+      kind: 'resized',
+      thumb: {
+        workflowId: w.workflowId,
+        imageId: m.imageId,
+        description: m.description ?? '',
+        labels: m.labels ?? [],
+        thumbUrl: publicUrl(szMedium.bucket, szMedium.key),
+        largeUrl: publicUrl(szLarge.bucket, szLarge.key),
+      },
+    };
+  }
+  return null;
+}
+
+// Why: latch the best variant seen per workflow — resized first, then upgrade to
+// watermarked when it arrives; never regress (poll responses can be stale or
+// lack the in-flight manifest entirely).
+const completedCache = ref<Map<string, CachedThumb>>(new Map());
+
+watchEffect(() => {
+  let changed = false;
+  const next = completedCache.value;
+  for (const w of props.workflows) {
+    const existing = next.get(w.workflowId);
+    if (existing?.kind === 'watermarked') continue;
+    const candidate = bestThumb(w);
+    if (!candidate) continue;
+    if (!existing) {
+      next.set(w.workflowId, candidate);
+      changed = true;
+    } else if (candidate.kind === 'watermarked') {
+      next.set(w.workflowId, candidate);
+      changed = true;
+    }
+  }
+  if (changed) {
+    completedCache.value = new Map(next);
+  }
+});
+
 function toTile(w: WorkflowItem): Tile {
-  if (w.status === 'COMPLETED') {
-    const image = toCompletedThumb(w);
-    if (image) {
+  const cached = completedCache.value.get(w.workflowId);
+  if (cached) {
+    if (cached.kind === 'watermarked') {
       return {
         workflowId: w.workflowId,
         status: 'completed',
-        image,
-        title: image.description || image.imageId,
+        image: cached.thumb,
+        title: cached.thumb.description || cached.thumb.imageId,
       };
     }
     return {
       workflowId: w.workflowId,
       status: 'running',
       currentActivity: w.currentActivity,
+      image: cached.thumb,
       title: `Running: ${w.currentActivity ?? '…'}`,
     };
   }
-  if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
-    return {
-      workflowId: w.workflowId,
-      status: 'running',
-      currentActivity: w.currentActivity,
-      title: `Running: ${w.currentActivity ?? '…'}`,
-    };
+  if (
+    w.status === 'COMPLETED'
+    || w.status === 'RUNNING'
+    || w.status === 'CONTINUED_AS_NEW'
+  ) {
+    const candidate = bestThumb(w);
+    if (candidate) {
+      if (candidate.kind === 'watermarked') {
+        return {
+          workflowId: w.workflowId,
+          status: 'completed',
+          image: candidate.thumb,
+          title: candidate.thumb.description || candidate.thumb.imageId,
+        };
+      }
+      return {
+        workflowId: w.workflowId,
+        status: 'running',
+        currentActivity: w.currentActivity,
+        image: candidate.thumb,
+        title: `Running: ${w.currentActivity ?? '…'}`,
+      };
+    }
+    if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
+      return {
+        workflowId: w.workflowId,
+        status: 'running',
+        currentActivity: w.currentActivity,
+        title: `Running: ${w.currentActivity ?? '…'}`,
+      };
+    }
   }
   return {
     workflowId: w.workflowId,
@@ -95,7 +175,7 @@ const tiles = computed<Tile[]>(() =>
 type CompletedTile = Tile & { image: CompletedThumb };
 
 const completedTiles = computed<CompletedTile[]>(() =>
-  tiles.value.filter((t): t is CompletedTile => t.image != null),
+  tiles.value.filter((t): t is CompletedTile => t.image != null && t.status === 'completed'),
 );
 
 const slotCount = computed<number>(() =>
@@ -245,6 +325,34 @@ onBeforeUnmount(() => {
             />
           </div>
         </button>
+
+        <div
+          v-else-if="slot.kind === 'tile' && slot.tile.status === 'running' && slot.tile.image"
+          class="animate-fade-in"
+          :title="slot.tile.title"
+        >
+          <div
+            class="aspect-square overflow-hidden rounded-md bg-surface-hover
+              border border-primary/30 relative animate-pulse-glow"
+          >
+            <img
+              :src="slot.tile.image.thumbUrl"
+              :alt="slot.tile.title"
+              loading="lazy"
+              width="150"
+              height="150"
+              class="h-full w-full object-cover opacity-70"
+            >
+            <div
+              class="absolute inset-0 flex items-center justify-center bg-bg/30"
+              aria-hidden="true"
+            >
+              <div
+                class="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
+              />
+            </div>
+          </div>
+        </div>
 
         <div
           v-else-if="slot.kind === 'tile' && slot.tile.status === 'running'"
