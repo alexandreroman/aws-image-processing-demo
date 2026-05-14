@@ -18,11 +18,11 @@ import (
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/api"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/awsclient"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/temporalclient"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"go.temporal.io/sdk/client"
-	sdklog "go.temporal.io/sdk/log"
 )
 
 const (
@@ -61,11 +61,7 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	presigner := s3.NewPresignClient(s3c)
 	ddb := awsclient.NewDynamoDB(awsCfg)
 
-	tc, err := client.Dial(client.Options{
-		HostPort:  envOr("TEMPORAL_ADDRESS", client.DefaultHostPort),
-		Namespace: envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace),
-		Logger:    sdklog.NewStructuredLogger(logger),
-	})
+	tc, namespace, err := temporalclient.Dial(logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,21 +72,22 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 		return nil, nil, errors.New("backend: IMAGES_BUCKET and IMAGES_TABLE are required")
 	}
 
+	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 	h := api.New(api.Dependencies{
 		Temporal:     tc,
 		Presigner:    presigner,
 		Dynamo:       ddb,
 		ImagesBucket: bucket,
 		ImagesTable:  table,
-		TaskQueue:    envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue),
-		Namespace:    envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace),
+		TaskQueue:    taskQueue,
+		Namespace:    namespace,
 		Logger:       logger,
 	})
 
 	logger.Info("backend ready",
 		"bucket", bucket,
 		"table", table,
-		"taskQueue", envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue),
+		"taskQueue", taskQueue,
 	)
 	return h, tc, nil
 }

@@ -12,10 +12,9 @@ import (
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/awsclient"
+	"github.com/alexandreroman/aws-image-processing-demo/internal/temporalclient"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"go.temporal.io/sdk/client"
-	sdklog "go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/worker"
 )
 
@@ -53,11 +52,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 
-	tc, err := client.Dial(client.Options{
-		HostPort:  envOr("TEMPORAL_ADDRESS", client.DefaultHostPort),
-		Namespace: envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace),
-		Logger:    sdklog.NewStructuredLogger(logger),
-	})
+	tc, namespace, err := temporalclient.Dial(logger)
 	if err != nil {
 		return err
 	}
@@ -70,7 +65,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	logger.Info("worker starting",
 		"taskQueue", taskQueue,
-		"namespace", envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace),
+		"namespace", namespace,
 		"bucket", acts.ImagesBucket,
 		"table", acts.ImagesTable,
 	)
