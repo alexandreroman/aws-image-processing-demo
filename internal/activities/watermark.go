@@ -39,8 +39,8 @@ func mustDecodeLogo() image.Image {
 }
 
 // ApplyWatermark composites the Temporal logo on a rounded translucent plate at
-// the bottom-right corner and uploads the result to the session's
-// `watermarked/` prefix.
+// the bottom edge, centered horizontally, and uploads the result to the
+// session's `watermarked/` prefix.
 func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (manifest.S3Ref, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("watermark start", "imageId", in.ImageID, "size", in.SizeName)
@@ -75,15 +75,15 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 }
 
 // stampWatermark draws the Temporal logo on a rounded translucent plate at the
-// bottom-right corner of src.
+// bottom edge of src, centered horizontally.
 func stampWatermark(src image.Image) image.Image {
 	const (
-		minLogoH = 14
-		maxLogoH = 96
+		minLogoH = 12
+		maxLogoH = 80
 		padX     = 8
 		padY     = 6
 	)
-	margin := 8
+	marginX, marginY := 8, 20
 
 	bounds := src.Bounds()
 	imgW, imgH := bounds.Dx(), bounds.Dy()
@@ -91,8 +91,8 @@ func stampWatermark(src image.Image) image.Image {
 	logoBounds := temporalLogo.Bounds()
 	logoOrigW, logoOrigH := logoBounds.Dx(), logoBounds.Dy()
 
-	// Target logo height: ~14% of the shorter image side, clamped.
-	logoH := min(imgW, imgH) * 14 / 100
+	// Target logo height: ~11% of the shorter image side, clamped.
+	logoH := min(imgW, imgH) * 11 / 100
 	logoH = clamp(logoH, minLogoH, maxLogoH)
 	logoW := logoH * logoOrigW / logoOrigH
 
@@ -101,10 +101,10 @@ func stampWatermark(src image.Image) image.Image {
 
 	// Tiny image: shrink margin, then shrink the logo proportionally rather
 	// than overflow the canvas.
-	if plateW > imgW-2*margin || plateH > imgH-2*margin {
-		margin = 2
+	if plateW > imgW-2*marginX || plateH > imgH-2*marginY {
+		marginX, marginY = 2, 2
 	}
-	if maxW, maxH := imgW-2*margin, imgH-2*margin; plateW > maxW || plateH > maxH {
+	if maxW, maxH := imgW-2*marginX, imgH-2*marginY; plateW > maxW || plateH > maxH {
 		scaleW := float64(maxW-2*padX) / float64(logoW)
 		scaleH := float64(maxH-2*padY) / float64(logoH)
 		scale := min(scaleW, scaleH)
@@ -129,8 +129,8 @@ func stampWatermark(src image.Image) image.Image {
 		radius = m
 	}
 
-	plateX0 := bounds.Max.X - plateW - margin
-	plateY0 := bounds.Max.Y - plateH - margin
+	plateX0 := bounds.Min.X + (imgW-plateW)/2
+	plateY0 := bounds.Max.Y - plateH - marginY
 	plateRect := image.Rect(plateX0, plateY0, plateX0+plateW, plateY0+plateH)
 
 	mask := roundedRectMask(plateW, plateH, radius)
