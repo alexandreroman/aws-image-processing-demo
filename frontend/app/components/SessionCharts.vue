@@ -1,0 +1,348 @@
+<script setup lang="ts">
+import { useNow } from '@vueuse/core';
+import type { SessionSummary, WorkflowItem } from '~/composables/useApi';
+
+const props = defineProps<{
+  workflows: WorkflowItem[];
+  summary: SessionSummary;
+}>();
+
+// Component is rendered under `ssr: false` on the session page, so `useNow`
+// (which relies on `window`) is safe. It ticks once per second so the
+// trailing "running" data point keeps moving even between polls.
+const now = useNow({ interval: 1_000 });
+
+interface TimePoint {
+  t: number; // seconds since t0
+  running: number;
+  completed: number;
+  failed: number;
+}
+
+interface Series {
+  points: TimePoint[];
+  duration: number;
+  yMax: number;
+}
+
+function parseTime(s: string | undefined): number | null {
+  if (!s) return null;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// Walk every start/terminal event in chronological order to derive the
+// running/completed/failed series. Events are sorted by timestamp so each
+// step yields a strictly monotonic `t` and a well-defined Y at that instant.
+const series = computed<Series>(() => {
+  const events: { ms: number; kind: 'start' | 'complete' | 'fail' }[] = [];
+
+  for (const w of props.workflows) {
+    const start = parseTime(w.startedAt);
+    if (start !== null) events.push({ ms: start, kind: 'start' });
+
+    const end = parseTime(w.completedAt);
+    if (end !== null) {
+      events.push({
+        ms: end,
+        kind: w.status === 'COMPLETED' ? 'complete' : 'fail',
+      });
+    }
+  }
+
+  if (events.length === 0) {
+    return { points: [], duration: 0, yMax: Math.max(1, props.summary.total) };
+  }
+
+  events.sort((a, b) => a.ms - b.ms);
+  const t0 = events[0]!.ms;
+
+  const points: TimePoint[] = [{ t: 0, running: 0, completed: 0, failed: 0 }];
+  let running = 0;
+  let completed = 0;
+  let failed = 0;
+
+  for (const e of events) {
+    if (e.kind === 'start') running += 1;
+    else if (e.kind === 'complete') {
+      running = Math.max(0, running - 1);
+      completed += 1;
+    } else {
+      running = Math.max(0, running - 1);
+      failed += 1;
+    }
+    points.push({ t: (e.ms - t0) / 1000, running, completed, failed });
+  }
+
+  // Anchor trailing point at "now" while workflows are still in flight so
+  // the running line extends to the present and visibly advances each tick.
+  if (props.summary.running > 0) {
+    const lastT = Math.max(points[points.length - 1]!.t, (now.value.getTime() - t0) / 1000);
+    points.push({ t: lastT, running, completed, failed });
+  }
+
+  const duration = points[points.length - 1]!.t;
+  const yMax = Math.max(1, props.summary.total);
+  return { points, duration, yMax };
+});
+
+const VB_W = 320;
+const VB_H = 120;
+const PAD_L = 4;
+const PAD_R = 4;
+const PAD_T = 6;
+const PAD_B = 6;
+const PLOT_W = VB_W - PAD_L - PAD_R;
+const PLOT_H = VB_H - PAD_T - PAD_B;
+
+function xScale(t: number, duration: number): number {
+  if (duration <= 0) return PAD_L;
+  return PAD_L + (t / duration) * PLOT_W;
+}
+
+function yScale(v: number, yMax: number): number {
+  return PAD_T + PLOT_H - (v / yMax) * PLOT_H;
+}
+
+interface BuiltPaths {
+  completedArea: string;
+  failedArea: string;
+  runningLine: string;
+  targetY: number;
+}
+
+const paths = computed<BuiltPaths>(() => {
+  const { points, duration, yMax } = series.value;
+  if (points.length === 0) {
+    return { completedArea: '', failedArea: '', runningLine: '', targetY: yScale(yMax, yMax) };
+  }
+
+  const baseY = yScale(0, yMax);
+
+  // Step-after interpolation: counts change discretely on each event.
+  const completedSteps: string[] = [];
+  const failedSteps: string[] = [];
+  const runningSteps: string[] = [];
+  let prev = points[0]!;
+  completedSteps.push(`M ${xScale(prev.t, duration)} ${baseY}`);
+  failedSteps.push(`M ${xScale(prev.t, duration)} ${yScale(prev.completed, yMax)}`);
+  runningSteps.push(`M ${xScale(prev.t, duration)} ${yScale(prev.running, yMax)}`);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const p = points[i]!;
+    const x = xScale(p.t, duration);
+
+    completedSteps.push(`L ${x} ${yScale(prev.completed, yMax)}`);
+    completedSteps.push(`L ${x} ${yScale(p.completed, yMax)}`);
+
+    failedSteps.push(`L ${x} ${yScale(prev.completed, yMax)}`);
+    failedSteps.push(`L ${x} ${yScale(p.completed + p.failed, yMax)}`);
+
+    runningSteps.push(`L ${x} ${yScale(prev.running, yMax)}`);
+    runningSteps.push(`L ${x} ${yScale(p.running, yMax)}`);
+
+    prev = p;
+  }
+
+  const lastX = xScale(points[points.length - 1]!.t, duration);
+  const completedArea = `${completedSteps.join(' ')} L ${lastX} ${baseY} Z`;
+
+  // Close the failed ribbon by walking the completed line right-to-left so its
+  // lower boundary hugs the top of the completed area. When `failed === 0` the
+  // ribbon collapses to zero thickness instead of painting a triangle across
+  // the chart back to (firstX, baseY).
+  const failedReturn: string[] = [];
+  failedReturn.push(`L ${lastX} ${yScale(points[points.length - 1]!.completed, yMax)}`);
+  for (let i = points.length - 1; i >= 1; i -= 1) {
+    const p = points[i]!;
+    const prevP = points[i - 1]!;
+    const prevX = xScale(prevP.t, duration);
+    const x = xScale(p.t, duration);
+    failedReturn.push(`L ${x} ${yScale(prevP.completed, yMax)}`);
+    failedReturn.push(`L ${prevX} ${yScale(prevP.completed, yMax)}`);
+  }
+  const failedArea = `${failedSteps.join(' ')} ${failedReturn.join(' ')} Z`;
+  const runningLine = runningSteps.join(' ');
+
+  return { completedArea, failedArea, runningLine, targetY: yScale(yMax, yMax) };
+});
+
+const xTickLabel = computed(() => {
+  const d = series.value.duration;
+  if (d < 60) return `${d.toFixed(0)}s`;
+  const m = Math.floor(d / 60);
+  const s = Math.round(d % 60);
+  return `${m}m${s.toString().padStart(2, '0')}s`;
+});
+
+type StageKey = 'ResizeAndUpload' | 'GenerateDescription' | 'ApplyWatermark' | 'StoreManifest' | 'Queued';
+
+interface StageRow {
+  key: StageKey;
+  label: string;
+  count: number;
+}
+
+const stages = computed<StageRow[]>(() => {
+  const buckets: Record<StageKey, number> = {
+    ResizeAndUpload: 0,
+    GenerateDescription: 0,
+    ApplyWatermark: 0,
+    StoreManifest: 0,
+    Queued: 0,
+  };
+
+  for (const w of props.workflows) {
+    if (w.status !== 'RUNNING' && w.status !== 'CONTINUED_AS_NEW') continue;
+    const a = w.currentActivity;
+    if (a === 'ResizeAndUpload' || a === 'GenerateDescription'
+      || a === 'ApplyWatermark' || a === 'StoreManifest') {
+      buckets[a] += 1;
+    } else {
+      // Backend caps currentActivity lookups at 10 per poll, so unreported
+      // running workflows are surfaced as "Queued" rather than hidden.
+      buckets.Queued += 1;
+    }
+  }
+
+  return [
+    { key: 'ResizeAndUpload', label: 'Resize', count: buckets.ResizeAndUpload },
+    { key: 'GenerateDescription', label: 'Describe', count: buckets.GenerateDescription },
+    { key: 'ApplyWatermark', label: 'Watermark', count: buckets.ApplyWatermark },
+    { key: 'StoreManifest', label: 'Store', count: buckets.StoreManifest },
+    { key: 'Queued', label: 'Queued', count: buckets.Queued },
+  ];
+});
+
+// Scale stage bars against `summary.running` so the X axis stays stable
+// across polls; falling back to the max bucket if running is zero.
+const stageScale = computed(() => Math.max(1, props.summary.running, ...stages.value.map((s) => s.count)));
+
+function barWidthPct(count: number): string {
+  return `${(count / stageScale.value) * 100}%`;
+}
+</script>
+
+<template>
+  <section class="space-y-4">
+    <article class="card p-4 space-y-3 animate-fade-in">
+      <header class="flex items-baseline justify-between">
+        <h2 class="stat-label">Pipeline timeline</h2>
+        <span class="text-[11px] text-ink-400 font-mono tabular-nums">
+          {{ xTickLabel }}
+        </span>
+      </header>
+
+      <div
+        v-if="workflows.length === 0"
+        class="text-xs text-ink-400 py-10 text-center border border-dashed
+          border-surface-border rounded-lg"
+      >
+        Timeline will appear once workflows start.
+      </div>
+
+      <div v-else class="relative">
+        <svg
+          :viewBox="`0 0 ${VB_W} ${VB_H}`"
+          preserveAspectRatio="none"
+          class="w-full h-40 block"
+          role="img"
+          aria-label="Pipeline timeline chart"
+        >
+          <line
+            :x1="PAD_L"
+            :x2="VB_W - PAD_R"
+            :y1="paths.targetY"
+            :y2="paths.targetY"
+            stroke="currentColor"
+            class="text-ink-500"
+            stroke-width="0.5"
+            stroke-dasharray="2 2"
+            vector-effect="non-scaling-stroke"
+          />
+          <path
+            :d="paths.completedArea"
+            fill="rgb(52 211 153 / 0.35)"
+            stroke="rgb(52 211 153)"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+          <path
+            :d="paths.failedArea"
+            fill="rgb(244 63 94 / 0.35)"
+          />
+          <path
+            :d="paths.runningLine"
+            fill="none"
+            stroke="rgb(167 139 250)"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
+
+        <div
+          class="pointer-events-none absolute inset-0 flex flex-col
+            justify-between text-[10px] text-ink-400 font-mono tabular-nums px-1"
+        >
+          <span>{{ summary.total }}</span>
+          <span>0</span>
+        </div>
+      </div>
+
+      <ul class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-300">
+        <li class="inline-flex items-center gap-1.5">
+          <span class="h-0.5 w-3 bg-iris-400" aria-hidden="true" />
+          <span>Running</span>
+        </li>
+        <li class="inline-flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-sm bg-emerald-400/60 ring-1 ring-emerald-400" aria-hidden="true" />
+          <span>Completed</span>
+        </li>
+        <li class="inline-flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-sm bg-rose-500/60 ring-1 ring-rose-500" aria-hidden="true" />
+          <span>Failed</span>
+        </li>
+        <li class="inline-flex items-center gap-1.5">
+          <span
+            class="h-0 w-3 border-t border-dashed border-ink-500"
+            aria-hidden="true"
+          />
+          <span>Target</span>
+        </li>
+      </ul>
+    </article>
+
+    <article class="card p-4 space-y-3 animate-fade-in">
+      <header class="flex items-baseline justify-between">
+        <h2 class="stat-label">Active activity stages</h2>
+        <span class="text-[11px] text-ink-400 font-mono tabular-nums">
+          {{ summary.running }} running
+        </span>
+      </header>
+
+      <ul class="space-y-2">
+        <li
+          v-for="row in stages"
+          :key="row.key"
+          class="grid grid-cols-[5.5rem_1fr_2.5rem] items-center gap-3"
+        >
+          <span class="text-[11px] text-ink-200">{{ row.label }}</span>
+          <div class="h-2 rounded-full bg-surface-hover overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-300 ease-out"
+              :class="row.key === 'Queued'
+                ? 'bg-gradient-to-r from-ink-500 to-ink-400'
+                : 'bg-gradient-to-r from-primary to-iris'"
+              :style="{ width: barWidthPct(row.count) }"
+              aria-hidden="true"
+            />
+          </div>
+          <span class="font-mono text-sm tabular-nums text-right text-ink-100">
+            {{ row.count }}
+          </span>
+        </li>
+      </ul>
+    </article>
+  </section>
+</template>
