@@ -29,8 +29,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:8000',
-      temporalUiUrl:
-        process.env.NUXT_PUBLIC_TEMPORAL_UI_URL ?? 'http://localhost:8233',
       s3PublicUrl:
         process.env.NUXT_PUBLIC_S3_PUBLIC_URL ?? 'http://localhost:4566',
       githubUrl:

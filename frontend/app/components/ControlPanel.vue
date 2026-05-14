@@ -3,11 +3,9 @@ import type { SessionSummary } from '~/composables/useApi';
 
 const props = defineProps<{
   summary?: SessionSummary;
-  temporalUiUrl?: string;
   readOnly?: boolean;
 }>();
 
-const config = useRuntimeConfig();
 const api = useApi();
 const toast = useToast();
 
@@ -45,10 +43,6 @@ async function startBurst() {
     submitting.value = false;
   }
 }
-
-const temporalLink = computed(
-  () => props.temporalUiUrl ?? config.public.temporalUiUrl,
-);
 
 const summaryRows = computed(() => {
   if (!props.summary) return [];
@@ -127,15 +121,5 @@ const summaryRows = computed(() => {
         </span>
       </div>
     </dl>
-
-    <a
-      :href="temporalLink"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="btn-ghost w-full justify-center"
-    >
-      Open in Temporal UI
-      <span aria-hidden="true">↗</span>
-    </a>
   </section>
 </template>
