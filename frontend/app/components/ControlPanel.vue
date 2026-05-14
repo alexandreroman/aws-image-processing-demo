@@ -18,14 +18,13 @@ const count = ref(20);
 const submitting = ref(false);
 
 function pickRandomSamples(n: number): { bucket: string; key: string }[] {
-  const out: { bucket: string; key: string }[] = [];
   const pool = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
-  for (let i = 0; i < n; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    const sampleId = pool[idx]!;
-    out.push({ bucket: SAMPLE_BUCKET, key: `samples/${sampleId}.jpg` });
+  const k = Math.min(n, pool.length);
+  for (let i = 0; i < k; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
   }
-  return out;
+  return pool.slice(0, k).map((id) => ({ bucket: SAMPLE_BUCKET, key: `samples/${id}.jpg` }));
 }
 
 async function startBurst() {
@@ -89,13 +88,13 @@ const summaryRows = computed(() => {
           v-model.number="count"
           type="range"
           min="1"
-          max="50"
+          max="48"
           step="1"
           class="mt-2 w-full accent-primary cursor-pointer"
         >
         <div class="flex justify-between text-[10px] text-ink-400 mt-0.5">
           <span>1</span>
-          <span>50</span>
+          <span>48</span>
         </div>
       </label>
 
