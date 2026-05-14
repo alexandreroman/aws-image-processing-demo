@@ -33,10 +33,7 @@ func (a *Activities) StoreManifest(ctx context.Context, m manifest.Manifest) err
 		return fmt.Errorf("store: marshal: %w", err)
 	}
 
-	createdAt := m.CompletedAt
-	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
-	}
+	createdAt := time.Now().UTC()
 
 	_, err = a.Dynamo.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(a.ImagesTable),

@@ -45,8 +45,6 @@ export interface Manifest {
   description?: string;
   labels?: string[];
   watermarked?: Record<string, S3Ref>;
-  startedAt: string;
-  completedAt?: string;
 }
 
 export interface WorkflowItem {

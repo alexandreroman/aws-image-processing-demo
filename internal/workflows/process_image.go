@@ -29,8 +29,6 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	logger := workflow.GetLogger(ctx)
 	logger.Info("ProcessImage start", "sessionId", in.SessionID, "imageId", in.ImageID)
 
-	started := workflow.Now(ctx)
-
 	cpuOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		HeartbeatTimeout:    10 * time.Second,
@@ -116,7 +114,6 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	}
 
 	// 6) Persist.
-	completed := workflow.Now(ctx)
 	m := manifest.Manifest{
 		SessionID:   in.SessionID,
 		ImageID:     in.ImageID,
@@ -125,8 +122,6 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		Description: description.Description,
 		Labels:      description.Labels,
 		Watermarked: watermarked,
-		StartedAt:   started,
-		CompletedAt: completed,
 	}
 
 	storeWFCtx := workflow.WithActivityOptions(ctx, storeOpts)

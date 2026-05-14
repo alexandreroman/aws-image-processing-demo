@@ -2,8 +2,6 @@
 // activities, API handlers, and the manifest stored in DynamoDB.
 package manifest
 
-import "time"
-
 // S3Ref points to an object in S3.
 type S3Ref struct {
 	Bucket string `json:"bucket"`
@@ -28,8 +26,6 @@ type Manifest struct {
 	Description string           `json:"description,omitempty"`
 	Labels      []string         `json:"labels,omitempty"`
 	Watermarked map[string]S3Ref `json:"watermarked,omitempty"`
-	StartedAt   time.Time        `json:"startedAt"`
-	CompletedAt time.Time        `json:"completedAt,omitempty"`
 }
 
 // ProcessImageInput is the input of the ProcessImage workflow.
