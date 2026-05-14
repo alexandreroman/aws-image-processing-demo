@@ -260,10 +260,11 @@ onBeforeUnmount(() => {
             type="button"
             class="absolute top-3 right-3 z-10 inline-flex h-9 w-9
               items-center justify-center rounded-full bg-surface/80
-              border border-surface-border text-ink-200 hover:text-primary
-              hover:border-primary/60 transition-colors text-2xl
-              leading-none focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-primary/60"
+              border-2 border-surface-border text-ink-200
+              hover:border-primary hover:ring-2 hover:ring-primary/60
+              hover:shadow-glow hover:text-primary transition-colors
+              text-2xl leading-none focus-visible:outline-none
+              focus-visible:ring-2 focus-visible:ring-primary/60"
             aria-label="Close"
             @click="closeModal"
           >
@@ -275,8 +276,9 @@ onBeforeUnmount(() => {
             type="button"
             class="absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80
-              border border-surface-border text-ink-200 hover:text-primary
-              hover:border-primary/60 transition-colors
+              border-2 border-surface-border text-ink-200
+              hover:border-primary hover:ring-2 hover:ring-primary/60
+              hover:shadow-glow hover:text-primary transition-colors
               focus-visible:outline-none focus-visible:ring-2
               focus-visible:ring-primary/60"
             aria-label="Previous image"
@@ -303,8 +305,9 @@ onBeforeUnmount(() => {
             type="button"
             class="absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80
-              border border-surface-border text-ink-200 hover:text-primary
-              hover:border-primary/60 transition-colors
+              border-2 border-surface-border text-ink-200
+              hover:border-primary hover:ring-2 hover:ring-primary/60
+              hover:shadow-glow hover:text-primary transition-colors
               focus-visible:outline-none focus-visible:ring-2
               focus-visible:ring-primary/60"
             aria-label="Next image"
