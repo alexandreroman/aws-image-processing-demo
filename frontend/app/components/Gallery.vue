@@ -54,18 +54,36 @@ const failed = computed(() =>
   ),
 );
 
-const selected = ref<CompletedThumb | null>(null);
+const selectedIndex = ref<number | null>(null);
 
-function openModal(item: CompletedThumb): void {
-  selected.value = item;
+const selected = computed<CompletedThumb | null>(() => {
+  if (selectedIndex.value === null) return null;
+  return completed.value[selectedIndex.value] ?? null;
+});
+
+function openModal(index: number): void {
+  selectedIndex.value = index;
 }
 
 function closeModal(): void {
-  selected.value = null;
+  selectedIndex.value = null;
+}
+
+function prev(): void {
+  if (selectedIndex.value === null || completed.value.length <= 1) return;
+  const n = completed.value.length;
+  selectedIndex.value = (selectedIndex.value - 1 + n) % n;
+}
+
+function next(): void {
+  if (selectedIndex.value === null || completed.value.length <= 1) return;
+  selectedIndex.value = (selectedIndex.value + 1) % completed.value.length;
 }
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') closeModal();
+  else if (e.key === 'ArrowLeft') prev();
+  else if (e.key === 'ArrowRight') next();
 }
 
 // Lock body scroll + bind Escape only while a modal is open. Guarded for SSG.
@@ -109,7 +127,7 @@ onBeforeUnmount(() => {
       class="grid grid-cols-3 sm:grid-cols-4 gap-2"
     >
       <button
-        v-for="item in completed"
+        v-for="(item, index) in completed"
         :key="item.workflowId"
         type="button"
         class="group block animate-fade-in text-left
@@ -118,7 +136,7 @@ onBeforeUnmount(() => {
           focus-visible:ring-offset-bg rounded-md"
         :title="item.description || item.imageId"
         :aria-label="`Open ${item.description || item.imageId}`"
-        @click="openModal(item)"
+        @click="openModal(index)"
       >
         <div
           class="aspect-square overflow-hidden rounded-md bg-surface-hover
@@ -204,6 +222,62 @@ onBeforeUnmount(() => {
             @click="closeModal"
           >
             ×
+          </button>
+
+          <button
+            v-if="completed.length > 1"
+            type="button"
+            class="absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex
+              h-10 w-10 items-center justify-center rounded-full bg-surface/80
+              border border-surface-border text-ink-200 hover:text-primary
+              hover:border-primary/60 transition-colors
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-primary/60"
+            aria-label="Previous image"
+            @click="prev"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+
+          <button
+            v-if="completed.length > 1"
+            type="button"
+            class="absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex
+              h-10 w-10 items-center justify-center rounded-full bg-surface/80
+              border border-surface-border text-ink-200 hover:text-primary
+              hover:border-primary/60 transition-colors
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-primary/60"
+            aria-label="Next image"
+            @click="next"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </button>
 
           <div class="flex justify-center bg-bg/40 rounded-lg overflow-hidden">
