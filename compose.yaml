@@ -66,6 +66,23 @@ services:
           aws --endpoint-url=http://moto:5000 s3 mb "s3://$IMAGES_BUCKET"
         fi
 
+        # Dev-only: moto refuses anonymous GETs without a bucket policy; the
+        # frontend fetches images directly from this S3 endpoint, so allow
+        # public read. Production uses CloudFront + OAC and keeps the bucket
+        # fully private (see infra/storage.tf).
+        aws --endpoint-url=http://moto:5000 s3api put-bucket-policy \
+          --bucket "$IMAGES_BUCKET" \
+          --policy "{
+            \"Version\": \"2012-10-17\",
+            \"Statement\": [{
+              \"Sid\": \"PublicReadLocalDev\",
+              \"Effect\": \"Allow\",
+              \"Principal\": \"*\",
+              \"Action\": \"s3:GetObject\",
+              \"Resource\": \"arn:aws:s3:::${IMAGES_BUCKET}/*\"
+            }]
+          }"
+
         if ! aws --endpoint-url=http://moto:5000 dynamodb describe-table \
           --table-name "$IMAGES_TABLE" >/dev/null 2>&1; then
           aws --endpoint-url=http://moto:5000 dynamodb create-table \
