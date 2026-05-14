@@ -58,6 +58,7 @@ func run(logger *slog.Logger) error {
 	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 	w := worker.New(tc, taskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.ProcessImage)
+	w.RegisterWorkflow(workflows.LaunchPipelines)
 	w.RegisterActivity(acts)
 
 	logger.Info("worker starting",

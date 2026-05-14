@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
@@ -25,7 +27,6 @@ import (
 	workflowpb "go.temporal.io/api/workflow/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
-	"golang.org/x/sync/errgroup"
 )
 
 // Dependencies holds the runtime collaborators of the API. The struct is
@@ -166,11 +167,6 @@ type startResponse struct {
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
-// startWorkflowConcurrency bounds parallel ExecuteWorkflow calls so a burst
-// of 48 images does not exhaust the Temporal client's gRPC streams while
-// still finishing well inside the 29 s API Gateway timeout.
-const startWorkflowConcurrency = 8
-
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -184,42 +180,41 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	pipelineID := newPipelineID()
 
-	// Pre-allocate IDs sequentially so the response preserves input order
-	// regardless of which goroutine finishes its ExecuteWorkflow first.
-	workflowIDs := make([]string, len(req.Images))
 	imageIDs := make([]string, len(req.Images))
-	for i := range req.Images {
+	images := make([]manifest.LaunchPipelineImage, len(req.Images))
+	for i, img := range req.Images {
 		imageIDs[i] = newImageID()
-		workflowIDs[i] = fmt.Sprintf("pipeline-%s-%s", pipelineID, imageIDs[i])
+		images[i] = manifest.LaunchPipelineImage{ImageID: imageIDs[i], Original: img}
 	}
 
-	g, gctx := errgroup.WithContext(r.Context())
-	g.SetLimit(startWorkflowConcurrency)
-	for i, img := range req.Images {
-		g.Go(func() error {
-			opts := client.StartWorkflowOptions{
-				ID:                    workflowIDs[i],
-				TaskQueue:             h.deps.TaskQueue,
-				WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-			}
-			in := manifest.ProcessImageInput{
-				PipelineID: pipelineID,
-				ImageID:    imageIDs[i],
-				Original:   img,
-			}
-			if _, err := h.deps.Temporal.ExecuteWorkflow(gctx, opts, workflows.ProcessImage, in); err != nil {
-				h.deps.Logger.Error("start workflow failed", "workflowId", workflowIDs[i], "err", err)
-				return fmt.Errorf("workflow %s: %w", workflowIDs[i], err)
-			}
-			return nil
-		})
+	// One call instead of N: the LaunchPipelines workflow fans out the
+	// per-image ProcessImage children and returns as soon as they are
+	// started, so the backend stays well inside the API Gateway 29 s budget
+	// regardless of burst size.
+	//
+	// The "launch-" ID prefix keeps this workflow out of the pipeline
+	// listing (which filters on `pipeline-{id}-`).
+	opts := client.StartWorkflowOptions{
+		ID:                    fmt.Sprintf("launch-%s", pipelineID),
+		TaskQueue:             h.deps.TaskQueue,
+		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
-	if err := g.Wait(); err != nil {
+	in := manifest.LaunchPipelinesInput{PipelineID: pipelineID, Images: images}
+	run, err := h.deps.Temporal.ExecuteWorkflow(r.Context(), opts, workflows.LaunchPipelines, in)
+	if err != nil {
+		h.deps.Logger.Error("start launcher failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, startResponse{PipelineID: pipelineID, WorkflowIDs: workflowIDs})
+	var result manifest.LaunchPipelinesResult
+	if err := run.Get(r.Context(), &result); err != nil {
+		h.deps.Logger.Error("launcher failed", "pipelineId", pipelineID, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, startResponse{PipelineID: pipelineID, WorkflowIDs: result.WorkflowIDs})
 }
 
 // shortID returns the first 8 hex chars of a UUID v4.
@@ -277,7 +272,14 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	executions, err := h.listWorkflows(r.Context(), pipelineID)
+	workflowIDs, err := h.fetchPipelineWorkflowIDs(r.Context(), pipelineID)
+	if err != nil {
+		h.deps.Logger.Error("fetch launcher result failed", "pipelineId", pipelineID, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to read pipeline: "+err.Error())
+		return
+	}
+
+	executions, err := h.listWorkflows(r.Context(), workflowIDs)
 	if err != nil {
 		h.deps.Logger.Error("list workflows failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to list workflows: "+err.Error())
@@ -286,19 +288,21 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 
 	resp := pipelineResponse{
 		PipelineID: pipelineID,
-		ImageCount: len(executions),
-		Workflows:  make([]pipelineWorkflow, 0, len(executions)),
+		ImageCount: len(workflowIDs),
+		Workflows:  make([]pipelineWorkflow, 0, len(workflowIDs)),
 	}
 
 	// currentActivity lookups make a Temporal RPC per running workflow.
 	// Cap the per-poll fan-out so a 48-workflow burst does not stall the
 	// 1 s frontend poll loop.
 	currentActivityLookups := 0
+	seen := make(map[string]bool, len(executions))
 	for _, exec := range executions {
 		wf := pipelineWorkflow{
 			WorkflowID: exec.GetExecution().GetWorkflowId(),
 			Status:     statusName(exec.GetStatus()),
 		}
+		seen[wf.WorkflowID] = true
 		if t := exec.GetStartTime(); t != nil {
 			started := t.AsTime()
 			wf.StartedAt = started
@@ -339,19 +343,61 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 
 		resp.Workflows = append(resp.Workflows, wf)
 	}
-	resp.Summary.Total = len(executions)
+
+	// Synthesize entries for IDs the launcher promised but visibility hasn't
+	// indexed yet. Without this the frontend would undercount the burst in
+	// the first second or two after start, before visibility catches up.
+	for _, id := range workflowIDs {
+		if seen[id] {
+			continue
+		}
+		resp.Workflows = append(resp.Workflows, pipelineWorkflow{
+			WorkflowID: id,
+			Status:     "RUNNING",
+		})
+		resp.Summary.Running++
+	}
+	resp.Summary.Total = len(workflowIDs)
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *Handler) listWorkflows(
+// fetchPipelineWorkflowIDs reads the LaunchPipelines workflow output to get
+// the canonical list of pipeline workflow IDs. The launcher completes as
+// soon as all children are started, so this returns quickly even on the
+// 1 s frontend poll cadence. We deliberately rely on the launcher's output
+// rather than a visibility STARTS_WITH query so the pipeline page sees the
+// full burst even if visibility hasn't caught up yet.
+func (h *Handler) fetchPipelineWorkflowIDs(
 	ctx context.Context, pipelineID string,
+) ([]string, error) {
+	launcherID := fmt.Sprintf("launch-%s", pipelineID)
+	run := h.deps.Temporal.GetWorkflow(ctx, launcherID, "")
+	var result manifest.LaunchPipelinesResult
+	if err := run.Get(ctx, &result); err != nil {
+		return nil, err
+	}
+	return result.WorkflowIDs, nil
+}
+
+func (h *Handler) listWorkflows(
+	ctx context.Context, workflowIDs []string,
 ) ([]*workflowpb.WorkflowExecutionInfo, error) {
-	// ListWorkflow (rather than ListOpen/ListClosed) so the result set
-	// includes both running and terminal executions in one call.
+	if len(workflowIDs) == 0 {
+		return nil, nil
+	}
+	// Drive the visibility query off the launcher's output: `WorkflowId IN
+	// ("a","b",...)` returns exactly the executions the launcher promised,
+	// so the response can never include stale neighbours and the caller can
+	// still synthesize entries for IDs visibility hasn't indexed yet.
+	quoted := make([]string, len(workflowIDs))
+	for i, id := range workflowIDs {
+		quoted[i] = strconv.Quote(id)
+	}
+	query := fmt.Sprintf("WorkflowId IN (%s)", strings.Join(quoted, ","))
+
 	var out []*workflowpb.WorkflowExecutionInfo
 	var pageToken []byte
-	query := fmt.Sprintf(`WorkflowId STARTS_WITH "pipeline-%s-"`, pipelineID)
 	for {
 		resp, err := h.deps.Temporal.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace:     h.deps.Namespace,

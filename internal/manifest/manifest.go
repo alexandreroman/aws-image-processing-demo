@@ -35,6 +35,24 @@ type ProcessImageInput struct {
 	Original   S3Ref  `json:"original"`
 }
 
+// LaunchPipelineImage is one image to be processed by a child ProcessImage
+// workflow scheduled by LaunchPipelines.
+type LaunchPipelineImage struct {
+	ImageID  string `json:"imageId"`
+	Original S3Ref  `json:"original"`
+}
+
+// LaunchPipelinesInput is the input of the LaunchPipelines workflow.
+type LaunchPipelinesInput struct {
+	PipelineID string                `json:"pipelineId"`
+	Images     []LaunchPipelineImage `json:"images"`
+}
+
+// LaunchPipelinesResult is the output of the LaunchPipelines workflow.
+type LaunchPipelinesResult struct {
+	WorkflowIDs []string `json:"workflowIds"`
+}
+
 // SizeNames is the canonical, ordered list of size keys. Workflow code MUST
 // iterate this slice (Go map iteration is non-deterministic and would break
 // replay).
