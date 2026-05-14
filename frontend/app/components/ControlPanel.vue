@@ -8,6 +8,7 @@ const props = defineProps<{
 
 const api = useApi();
 const toast = useToast();
+const config = useRuntimeConfig();
 
 const SAMPLE_COUNT = 50;
 const samplesBucket = config.public.samplesBucket;
