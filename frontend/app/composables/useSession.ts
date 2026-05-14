@@ -1,10 +1,10 @@
-// Poll a single session every 1.5s. Stops polling once everything is done
+// Poll a single session every 1s. Stops polling once everything is done
 // (running === 0 && total > 0) or when the component using it unmounts.
 
 import { useIntervalFn } from '@vueuse/core';
 import type { Session, SessionSummary, WorkflowItem } from './useApi';
 
-const POLL_INTERVAL_MS = 1_500;
+const POLL_INTERVAL_MS = 1_000;
 
 export interface UseSessionReturn {
   session: Ref<Session | null>;

@@ -52,7 +52,7 @@ useHead(() => ({
               class="h-1.5 w-1.5 rounded-full bg-primary animate-pulse-glow"
               aria-hidden="true"
             />
-            Polling every 1.5s…
+            Polling every 1s…
           </span>
           <span v-else class="inline-flex items-center gap-1.5">
             <span
