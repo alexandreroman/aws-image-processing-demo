@@ -12,4 +12,5 @@ in this directory.
 - [Triggering a workflow from the Temporal CLI](references/workflow_cli.md) — launch a single `ProcessImage` workflow via `temporal workflow start` for debug or scripted invocation
 - [IaC provider versions in infra/](references/iac_provider_versions.md) — AWS ~> 6.0 and Cloudflare ~> 5.0; v5 uses `cloudflare_dns_record` with `content` and FQDN `name`
 - [Local AWS emulator: Moto Server](references/local_aws_emulator.md) — uses `motoserver/moto` (LocalStack 2026 is Pro-licensed); host 4566 → container 5000
+- [Moto: keep the default listening port](references/feedback_moto_default_port.md) — never change moto's internal port; keep it at the default (5000)
 - [No per-image notifications](references/no_per_image_notifications.md) — never emit a toast per processed image; at most one end-of-burst toast; errors may still toast individually
