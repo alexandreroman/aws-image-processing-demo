@@ -14,7 +14,10 @@ import (
 	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.temporal.io/sdk/client"
 )
+
+const defaultTaskQueue = "image-processing"
 
 // ClaudeInvalidInputErrorType is the application error type returned by
 // GenerateDescription when the model rejects or cannot parse the image.
@@ -29,15 +32,22 @@ type Activities struct {
 	Presigner *s3.PresignClient
 	Dynamo    *dynamodb.Client
 	Anthropic *anthropicclient.Client
+	// Temporal is used by the StartProcessImage starter activity to schedule
+	// independent top-level ProcessImage workflows.
+	Temporal client.Client
 
 	ImagesBucket string
 	ImagesTable  string
+	// TaskQueue is the queue StartProcessImage targets when scheduling new
+	// ProcessImage workflows.
+	TaskQueue string
 }
 
 // Config carries optional overrides. Empty values fall back to env vars.
 type Config struct {
 	ImagesBucket string
 	ImagesTable  string
+	TaskQueue    string
 }
 
 // New builds an Activities struct, resolving IMAGES_BUCKET and IMAGES_TABLE
@@ -47,6 +57,7 @@ func New(
 	presigner *s3.PresignClient,
 	ddb *dynamodb.Client,
 	ac *anthropicclient.Client,
+	tc client.Client,
 	cfg Config,
 ) (*Activities, error) {
 	bucket := cfg.ImagesBucket
@@ -56,6 +67,13 @@ func New(
 	table := cfg.ImagesTable
 	if table == "" {
 		table = os.Getenv("IMAGES_TABLE")
+	}
+	taskQueue := cfg.TaskQueue
+	if taskQueue == "" {
+		taskQueue = os.Getenv("TEMPORAL_TASK_QUEUE")
+	}
+	if taskQueue == "" {
+		taskQueue = defaultTaskQueue
 	}
 	if bucket == "" {
 		return nil, errors.New("activities: IMAGES_BUCKET is required")
@@ -71,8 +89,10 @@ func New(
 		Presigner:    presigner,
 		Dynamo:       ddb,
 		Anthropic:    ac,
+		Temporal:     tc,
 		ImagesBucket: bucket,
 		ImagesTable:  table,
+		TaskQueue:    taskQueue,
 	}, nil
 }
 

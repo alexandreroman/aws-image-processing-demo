@@ -1,9 +1,12 @@
 package workflows_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
 	"github.com/stretchr/testify/mock"
@@ -11,20 +14,27 @@ import (
 	"go.temporal.io/sdk/testsuite"
 )
 
-func TestLaunchPipelines_StartsChildWorkflows(t *testing.T) {
+func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	const pipelineID = "deadbeef"
 	imageIDs := []string{"img-1", "img-2", "img-3"}
 
 	var ts testsuite.WorkflowTestSuite
 	env := ts.NewTestWorkflowEnvironment()
-	env.RegisterWorkflow(workflows.ProcessImage)
 
-	// Short-circuit the child: the launcher's contract is "started" not
-	// "completed", but the test environment runs children to completion in
-	// the same goroutine — so we mock the child workflow itself rather than
-	// wire up every downstream activity.
-	env.OnWorkflow(workflows.ProcessImage, mock.Anything, mock.Anything).
-		Return(manifest.Manifest{}, nil)
+	// No Temporal client wired in: the mock intercepts the activity before
+	// it would dereference a.Temporal.
+	acts := &activities.Activities{
+		ImagesBucket: "test-bucket",
+		ImagesTable:  "test-table",
+		TaskQueue:    "test-queue",
+	}
+	env.RegisterActivity(acts)
+
+	env.OnActivity(acts.StartProcessImage, mock.Anything,
+		mock.MatchedBy(func(in activities.StartProcessImageInput) bool { return true }),
+	).Return(func(_ context.Context, in activities.StartProcessImageInput) (string, error) {
+		return in.WorkflowID, nil
+	})
 
 	images := make([]manifest.LaunchPipelineImage, len(imageIDs))
 	for i, id := range imageIDs {
@@ -48,4 +58,29 @@ func TestLaunchPipelines_StartsChildWorkflows(t *testing.T) {
 	for i, id := range imageIDs {
 		require.Equal(t, fmt.Sprintf("pipeline-%s-%s", pipelineID, id), got.WorkflowIDs[i])
 	}
+}
+
+func TestLaunchPipelines_PropagatesActivityError(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+
+	acts := &activities.Activities{
+		ImagesBucket: "test-bucket",
+		ImagesTable:  "test-table",
+		TaskQueue:    "test-queue",
+	}
+	env.RegisterActivity(acts)
+
+	env.OnActivity(acts.StartProcessImage, mock.Anything, mock.Anything).
+		Return("", errors.New("boom"))
+
+	env.ExecuteWorkflow(workflows.LaunchPipelines, manifest.LaunchPipelinesInput{
+		PipelineID: "deadbeef",
+		Images: []manifest.LaunchPipelineImage{
+			{ImageID: "img-1", Original: manifest.S3Ref{Bucket: "b", Key: "k"}},
+		},
+	})
+
+	require.True(t, env.IsWorkflowCompleted())
+	require.Error(t, env.GetWorkflowError())
 }

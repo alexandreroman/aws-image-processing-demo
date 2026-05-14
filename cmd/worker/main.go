@@ -44,11 +44,6 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	acts, err := activities.New(s3c, presigner, ddb, anth, activities.Config{})
-	if err != nil {
-		return err
-	}
-
 	tc, namespace, err := temporalclient.Dial(logger)
 	if err != nil {
 		return err
@@ -56,6 +51,11 @@ func run(logger *slog.Logger) error {
 	defer tc.Close()
 
 	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
+	acts, err := activities.New(s3c, presigner, ddb, anth, tc, activities.Config{TaskQueue: taskQueue})
+	if err != nil {
+		return err
+	}
+
 	w := worker.New(tc, taskQueue, worker.Options{})
 	w.RegisterWorkflow(workflows.ProcessImage)
 	w.RegisterWorkflow(workflows.LaunchPipelines)

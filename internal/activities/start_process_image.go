@@ -1,0 +1,54 @@
+package activities
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
+	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/client"
+)
+
+// StartProcessImageInput is the input for the StartProcessImage activity.
+type StartProcessImageInput struct {
+	WorkflowID string          `json:"workflowId"`
+	PipelineID string          `json:"pipelineId"`
+	ImageID    string          `json:"imageId"`
+	Original   manifest.S3Ref  `json:"original"`
+}
+
+// StartProcessImage schedules a ProcessImage workflow on the configured task
+// queue and returns its workflow ID once Temporal has accepted the start.
+//
+// The target workflow is referenced by its registered name "ProcessImage"
+// rather than by symbol on purpose: this keeps internal/activities free of
+// an import on internal/workflows, which would otherwise create a cycle
+// (workflows already imports activities). Temporal resolves the name from
+// the worker registration at run time.
+//
+// This is the canonical "starter activity" pattern: it lets a workflow
+// (LaunchPipelines) fan out child executions that are fully independent
+// top-level workflows — no parent/child relationship, no
+// PARENT_CLOSE_POLICY plumbing.
+func (a *Activities) StartProcessImage(
+	ctx context.Context, in StartProcessImageInput,
+) (string, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("StartProcessImage", "workflowId", in.WorkflowID, "pipelineId", in.PipelineID)
+
+	opts := client.StartWorkflowOptions{
+		ID:                    in.WorkflowID,
+		TaskQueue:             a.TaskQueue,
+		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
+	}
+	procIn := manifest.ProcessImageInput{
+		PipelineID: in.PipelineID,
+		ImageID:    in.ImageID,
+		Original:   in.Original,
+	}
+	if _, err := a.Temporal.ExecuteWorkflow(ctx, opts, "ProcessImage", procIn); err != nil {
+		return "", fmt.Errorf("start %s: %w", in.WorkflowID, err)
+	}
+	return in.WorkflowID, nil
+}
