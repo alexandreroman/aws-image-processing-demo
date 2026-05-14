@@ -15,11 +15,6 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// claudeInvalidInputErrorType mirrors the constant in the activities package.
-// It is duplicated as a const here (not imported) because hard-coding the
-// retry policy keeps the workflow self-contained and easy to audit.
-const claudeInvalidInputErrorType = "ClaudeInvalidInput"
-
 // ProcessImage is the 8-activity image-processing workflow.
 //
 // Fan-out: 3 resize + 3 watermark activities run in parallel. Fan-in is
@@ -45,7 +40,7 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 			InitialInterval:        time.Second,
 			BackoffCoefficient:     2.0,
 			MaximumAttempts:        4,
-			NonRetryableErrorTypes: []string{claudeInvalidInputErrorType},
+			NonRetryableErrorTypes: []string{activities.ClaudeInvalidInputErrorType},
 		},
 	}
 	storeOpts := workflow.ActivityOptions{

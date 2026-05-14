@@ -16,6 +16,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// ClaudeInvalidInputErrorType is the application error type returned by
+// GenerateDescription when the model rejects or cannot parse the image.
+// Exported so the workflow can reference the same literal in its
+// NonRetryableErrorTypes list without risk of drift.
+const ClaudeInvalidInputErrorType = "ClaudeInvalidInput"
+
 // Activities bundles the external clients and configuration used by every
 // activity method. It is constructed once at worker startup.
 type Activities struct {
@@ -56,6 +62,9 @@ func New(
 	}
 	if table == "" {
 		return nil, errors.New("activities: IMAGES_TABLE is required")
+	}
+	if ac == nil {
+		return nil, errors.New("activities: anthropic client is required")
 	}
 	return &Activities{
 		S3:           s3c,

@@ -97,6 +97,8 @@ func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler) {
 		Addr:              httpAddr,
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

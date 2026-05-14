@@ -69,7 +69,12 @@ tofu -chdir="${infra_dir}" apply "${tofu_apply_args[@]}"
 
 echo "==> Building frontend"
 pnpm -C "${frontend_dir}" install --frozen-lockfile
-pnpm -C "${frontend_dir}" generate
+
+# Inject the real images bucket name so the static site targets the
+# right S3 bucket in prod (the local dev bucket name is hardcoded
+# elsewhere — see ControlPanel.vue).
+NUXT_PUBLIC_SAMPLES_BUCKET="$(tofu -chdir="${infra_dir}" output -raw images_bucket)" \
+  pnpm -C "${frontend_dir}" generate
 
 frontend_bucket="$(tofu -chdir="${infra_dir}" output -raw frontend_bucket)"
 distribution_id="$(tofu -chdir="${infra_dir}" output -raw cloudfront_distribution_id)"

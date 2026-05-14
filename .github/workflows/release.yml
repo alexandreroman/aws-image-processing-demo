@@ -70,3 +70,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  redeploy-worker:
+    name: Force ECS worker redeployment
+    needs: build-push
+    runs-on: ubuntu-24.04
+    # Gated on AWS_DEPLOY_ROLE_ARN being set. Wire it up by creating a
+    # repository secret pointing at an IAM role that trusts the GitHub
+    # OIDC provider and has ecs:UpdateService on the worker service.
+    # Without it, the release publishes the new image but ECS keeps
+    # running the old task (the :latest tag does not change the task
+    # definition digest) — run `aws ecs update-service ...
+    # --force-new-deployment` manually instead.
+    if: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: github-release-redeploy
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster aws-image-processing-demo-cluster \
+            --service aws-image-processing-demo-worker \
+            --force-new-deployment >/dev/null

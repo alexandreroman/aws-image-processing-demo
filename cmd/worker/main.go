@@ -6,8 +6,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
@@ -24,17 +22,16 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	if err := run(ctx, logger); err != nil {
+	if err := run(logger); err != nil {
 		logger.Error("worker exited with error", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, logger *slog.Logger) error {
-	awsCfg, err := awsclient.Load(ctx)
+func run(logger *slog.Logger) error {
+	// AWS config loading is fast and only needs a Background context.
+	// Cancellation flows through worker.InterruptCh() below.
+	awsCfg, err := awsclient.Load(context.Background())
 	if err != nil {
 		return err
 	}
@@ -70,18 +67,8 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		"table", acts.ImagesTable,
 	)
 
-	// worker.Run blocks until interruptCh receives or the worker fails to
-	// start. Pipe SIGINT/SIGTERM through the context channel.
-	return w.Run(workerSignal(ctx))
-}
-
-func workerSignal(ctx context.Context) <-chan interface{} {
-	ch := make(chan interface{}, 1)
-	go func() {
-		<-ctx.Done()
-		ch <- struct{}{}
-	}()
-	return ch
+	// worker.InterruptCh closes on SIGINT/SIGTERM; no goroutine to leak.
+	return w.Run(worker.InterruptCh())
 }
 
 func envOr(key, fallback string) string {

@@ -133,6 +133,14 @@ services:
       AWS_ENDPOINT_URL: http://moto:5000
     ports:
       - "8000:8000"  # HTTP API
+    # The backend image is distroless static; the Dockerfile bakes in a
+    # static wget binary from busybox specifically for this probe.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       temporal:
         condition: service_healthy
@@ -155,7 +163,7 @@ services:
       - "3000:3000"  # Nuxt
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:

@@ -34,6 +34,9 @@ export default defineNuxtConfig({
       githubUrl:
         process.env.NUXT_PUBLIC_GITHUB_URL ??
         'https://github.com/alexandreroman/aws-image-processing-demo',
+      samplesBucket:
+        process.env.NUXT_PUBLIC_SAMPLES_BUCKET ??
+        'aws-image-processing-demo-images-local',
     },
   },
 

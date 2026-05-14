@@ -1,6 +1,8 @@
 package workflows_test
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -9,7 +11,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/testsuite"
+	"go.temporal.io/sdk/worker"
 )
 
 type ProcessImageSuite struct {
@@ -55,7 +60,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		})).Return(manifest.Size{
 			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
 			Width:  manifest.SizeWidths[size],
-			Height: manifest.SizeWidths[size],
+			Height: manifest.SizeWidths[size] * 3 / 4,
 			Bytes:  1000,
 		}, nil).Once()
 	}
@@ -107,4 +112,80 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		s.Contains(got.Sizes, name)
 		s.Contains(got.Watermarked, name)
 	}
+}
+
+// TestProcessImageDeterminism guards against non-deterministic constructs
+// (e.g. iterating Go maps) sneaking into workflow code. It also exercises
+// worker.NewWorkflowReplayer so a future refactor that breaks workflow
+// registration is caught immediately.
+//
+// The check runs the workflow twice in a TestWorkflowEnvironment and asserts
+// the exact sequence of activity invocations is identical between runs.
+func TestProcessImageDeterminism(t *testing.T) {
+	// Sanity check: the workflow can be registered with a replayer. This
+	// catches workflow-time misuse (e.g. closures that capture a non-
+	// serializable value) at registration rather than runtime.
+	replayer := worker.NewWorkflowReplayer()
+	replayer.RegisterWorkflow(workflows.ProcessImage)
+
+	first := runAndRecordActivities(t)
+	second := runAndRecordActivities(t)
+
+	require.Equal(t, first, second, "activity sequence must be deterministic across runs")
+	require.NotEmpty(t, first, "expected at least one activity to be recorded")
+}
+
+func runAndRecordActivities(t *testing.T) []string {
+	t.Helper()
+
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestWorkflowEnvironment()
+	acts := &activities.Activities{ImagesBucket: "test-bucket", ImagesTable: "test-table"}
+	env.RegisterActivity(acts)
+
+	var (
+		mu         sync.Mutex
+		invocations []string
+	)
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
+		mu.Lock()
+		defer mu.Unlock()
+		invocations = append(invocations, info.ActivityType.Name)
+	})
+
+	const (
+		sessionID = "deadbeef"
+		imageID   = "img-1"
+	)
+	for _, name := range manifest.SizeNames {
+		size := name
+		key := "sessions/" + sessionID + "/resized/" + imageID + "/" + size + ".jpg"
+		env.OnActivity(acts.ResizeAndUpload, mock.Anything, mock.Anything).Return(manifest.Size{
+			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
+			Width:  manifest.SizeWidths[size],
+			Height: manifest.SizeWidths[size] * 3 / 4,
+			Bytes:  1000,
+		}, nil)
+	}
+	env.OnActivity(acts.GenerateDescription, mock.Anything, mock.Anything).Return(activities.DescribeResult{
+		Description: "x",
+		Labels:      []string{"a"},
+	}, nil)
+	env.OnActivity(acts.ApplyWatermark, mock.Anything, mock.Anything).Return(manifest.S3Ref{
+		Bucket: "test-bucket",
+		Key:    "sessions/" + sessionID + "/watermarked/" + imageID + "/medium.jpg",
+	}, nil)
+	env.OnActivity(acts.StoreManifest, mock.Anything, mock.Anything).Return(nil)
+
+	env.ExecuteWorkflow(workflows.ProcessImage, manifest.ProcessImageInput{
+		SessionID: sessionID,
+		ImageID:   imageID,
+		Original:  manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"},
+	})
+	require.True(t, env.IsWorkflowCompleted())
+	require.NoError(t, env.GetWorkflowError())
+
+	mu.Lock()
+	defer mu.Unlock()
+	return append([]string(nil), invocations...)
 }

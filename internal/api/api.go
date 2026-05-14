@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
@@ -24,6 +25,7 @@ import (
 	workflowpb "go.temporal.io/api/workflow/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
+	"golang.org/x/sync/errgroup"
 )
 
 // Dependencies holds the runtime collaborators of the API. The struct is
@@ -66,11 +68,21 @@ func New(deps Dependencies) *Handler {
 	return h
 }
 
-// ServeHTTP applies CORS for all requests (the Nuxt dev server on :3000
-// talks to the backend on :8000 in local mode), short-circuits preflights,
-// then dispatches to the mux.
+// allowedOrigin returns the value of Access-Control-Allow-Origin to advertise.
+// Production should set ALLOWED_ORIGIN=https://<your-cloudfront-domain> so the
+// API does not advertise itself to arbitrary origins; local dev defaults to
+// "*" so the Nuxt dev server on :3000 can talk to the backend on :8000.
+func allowedOrigin() string {
+	if v := os.Getenv("ALLOWED_ORIGIN"); v != "" {
+		return v
+	}
+	return "*"
+}
+
+// ServeHTTP applies CORS for all requests, short-circuits preflights, then
+// dispatches to the mux.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {
@@ -89,7 +101,8 @@ func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 // --- /api/uploads/presign ---------------------------------------------------
 
 type presignRequest struct {
-	Count int `json:"count"`
+	Count int   `json:"count"`
+	Size  int64 `json:"size,omitempty"`
 }
 
 type presignedURL struct {
@@ -100,6 +113,11 @@ type presignedURL struct {
 const (
 	presignTTL    = 15 * time.Minute
 	maxPresignCnt = 50
+	// maxPresignSize mirrors maxImageBytes in internal/activities/resize.go.
+	// S3 PUT presigned URLs cannot fully enforce object size at the SDK
+	// level — a client can ignore Content-Length — so the worker also
+	// enforces the cap as defense in depth when it downloads the object.
+	maxPresignSize = 25 * 1024 * 1024
 )
 
 func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +128,12 @@ func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Count <= 0 || req.Count > maxPresignCnt {
 		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("count must be between 1 and %d", maxPresignCnt))
+			fmt.Sprintf("count must be between 1 and %d, got %d", maxPresignCnt, req.Count))
+		return
+	}
+	if req.Size > maxPresignSize {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("size must be <= %d bytes, got %d", maxPresignSize, req.Size))
 		return
 	}
 
@@ -143,6 +166,11 @@ type startResponse struct {
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
+// startWorkflowConcurrency bounds parallel ExecuteWorkflow calls so a burst
+// of 48 images does not exhaust the Temporal client's gRPC streams while
+// still finishing well inside the 29 s API Gateway timeout.
+const startWorkflowConcurrency = 8
+
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -156,26 +184,39 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := newSessionID()
 
-	workflowIDs := make([]string, 0, len(req.Images))
-	for _, img := range req.Images {
-		imageID := newImageID()
-		wfID := fmt.Sprintf("session-%s-%s", sessionID, imageID)
-		opts := client.StartWorkflowOptions{
-			ID:                    wfID,
-			TaskQueue:             h.deps.TaskQueue,
-			WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
-		}
-		in := manifest.ProcessImageInput{
-			SessionID: sessionID,
-			ImageID:   imageID,
-			Original:  img,
-		}
-		if _, err := h.deps.Temporal.ExecuteWorkflow(r.Context(), opts, workflows.ProcessImage, in); err != nil {
-			h.deps.Logger.Error("start workflow failed", "workflowId", wfID, "err", err)
-			writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
-			return
-		}
-		workflowIDs = append(workflowIDs, wfID)
+	// Pre-allocate IDs sequentially so the response preserves input order
+	// regardless of which goroutine finishes its ExecuteWorkflow first.
+	workflowIDs := make([]string, len(req.Images))
+	imageIDs := make([]string, len(req.Images))
+	for i := range req.Images {
+		imageIDs[i] = newImageID()
+		workflowIDs[i] = fmt.Sprintf("session-%s-%s", sessionID, imageIDs[i])
+	}
+
+	g, gctx := errgroup.WithContext(r.Context())
+	g.SetLimit(startWorkflowConcurrency)
+	for i, img := range req.Images {
+		g.Go(func() error {
+			opts := client.StartWorkflowOptions{
+				ID:                    workflowIDs[i],
+				TaskQueue:             h.deps.TaskQueue,
+				WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
+			}
+			in := manifest.ProcessImageInput{
+				SessionID: sessionID,
+				ImageID:   imageIDs[i],
+				Original:  img,
+			}
+			if _, err := h.deps.Temporal.ExecuteWorkflow(gctx, opts, workflows.ProcessImage, in); err != nil {
+				h.deps.Logger.Error("start workflow failed", "workflowId", workflowIDs[i], "err", err)
+				return fmt.Errorf("workflow %s: %w", workflowIDs[i], err)
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, startResponse{SessionID: sessionID, WorkflowIDs: workflowIDs})
@@ -249,6 +290,10 @@ func (h *Handler) handleSession(w http.ResponseWriter, r *http.Request) {
 		Workflows:  make([]sessionWorkflow, 0, len(executions)),
 	}
 
+	// currentActivity lookups make a Temporal RPC per running workflow.
+	// Cap the per-poll fan-out so a 48-workflow burst does not stall the
+	// 1 s frontend poll loop.
+	currentActivityLookups := 0
 	for _, exec := range executions {
 		wf := sessionWorkflow{
 			WorkflowID: exec.GetExecution().GetWorkflowId(),
@@ -279,8 +324,11 @@ func (h *Handler) handleSession(w http.ResponseWriter, r *http.Request) {
 			resp.Summary.Running++
 			// Best effort: surface the currently scheduled activity so the
 			// frontend can show "GenerateDescription…" mid-flight.
-			if act := h.currentActivity(r.Context(), wf.WorkflowID); act != "" {
-				wf.CurrentActivity = act
+			if currentActivityLookups < maxCurrentActivityLookups {
+				currentActivityLookups++
+				if act := h.currentActivity(r.Context(), wf.WorkflowID); act != "" {
+					wf.CurrentActivity = act
+				}
 			}
 		}
 
@@ -322,6 +370,11 @@ func (h *Handler) listWorkflows(
 	}
 	return out, nil
 }
+
+// maxCurrentActivityLookups caps the number of DescribeWorkflowExecution
+// calls each /api/sessions/{id} poll fires. Above this threshold the
+// currentActivity field is left empty on the remaining running workflows.
+const maxCurrentActivityLookups = 10
 
 // currentActivity returns the name of the first pending activity for the
 // running workflow, or "" if none is reported. Errors are swallowed because
@@ -411,7 +464,7 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		// At this point headers are flushed; logging is the best we can do.
-		_ = err
+		slog.Error("write json failed", "err", err)
 	}
 }
 

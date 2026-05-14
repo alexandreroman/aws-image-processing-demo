@@ -95,6 +95,10 @@ const completedTiles = computed<CompletedTile[]>(() =>
 );
 
 const selectedIndex = ref<number | null>(null);
+const closeButton = ref<HTMLButtonElement | null>(null);
+const prevButton = ref<HTMLButtonElement | null>(null);
+const nextButton = ref<HTMLButtonElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
 
 const selected = computed<CompletedThumb | null>(() => {
   if (selectedIndex.value === null) return null;
@@ -106,6 +110,10 @@ function openModal(tile: CompletedTile): void {
     (t) => t.workflowId === tile.workflowId,
   );
   if (index === -1) return;
+  previouslyFocused
+    = typeof document !== 'undefined'
+      ? (document.activeElement as HTMLElement | null)
+      : null;
   selectedIndex.value = index;
 }
 
@@ -124,10 +132,26 @@ function next(): void {
   selectedIndex.value = (selectedIndex.value + 1) % completedTiles.value.length;
 }
 
+// Cycle Tab/Shift+Tab among the modal's focusable controls. Kept inline
+// to avoid a focus-trap dependency; the modal has at most three controls.
+function trapFocus(e: KeyboardEvent): void {
+  const order = [prevButton.value, nextButton.value, closeButton.value].filter(
+    (el): el is HTMLButtonElement => el != null,
+  );
+  if (order.length === 0) return;
+  const active = document.activeElement as HTMLElement | null;
+  const idx = active ? order.indexOf(active as HTMLButtonElement) : -1;
+  const delta = e.shiftKey ? -1 : 1;
+  const nextIdx = (idx + delta + order.length) % order.length;
+  e.preventDefault();
+  order[nextIdx]!.focus();
+}
+
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') closeModal();
   else if (e.key === 'ArrowLeft') prev();
   else if (e.key === 'ArrowRight') next();
+  else if (e.key === 'Tab') trapFocus(e);
 }
 
 // Lock body scroll + bind Escape only while a modal is open. Guarded for SSG.
@@ -136,9 +160,13 @@ watch(selected, (item) => {
   if (item) {
     document.documentElement.classList.add('overflow-hidden');
     document.addEventListener('keydown', onKeydown);
+    // Wait for the modal to render before moving focus into it.
+    void nextTick(() => closeButton.value?.focus());
   } else {
     document.documentElement.classList.remove('overflow-hidden');
     document.removeEventListener('keydown', onKeydown);
+    previouslyFocused?.focus();
+    previouslyFocused = null;
   }
 });
 
@@ -196,6 +224,8 @@ onBeforeUnmount(() => {
               :src="tile.image.thumbUrl"
               :alt="tile.title"
               loading="lazy"
+              width="150"
+              height="150"
               class="h-full w-full object-cover transition-transform duration-300
                 group-hover:scale-105"
             >
@@ -257,6 +287,7 @@ onBeforeUnmount(() => {
             overflow-y-auto p-4 sm:p-6"
         >
           <button
+            ref="closeButton"
             type="button"
             class="absolute top-3 right-3 z-10 inline-flex h-9 w-9
               items-center justify-center rounded-full bg-surface/80
@@ -273,6 +304,7 @@ onBeforeUnmount(() => {
 
           <button
             v-if="completedTiles.length > 1"
+            ref="prevButton"
             type="button"
             class="absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80
@@ -302,6 +334,7 @@ onBeforeUnmount(() => {
 
           <button
             v-if="completedTiles.length > 1"
+            ref="nextButton"
             type="button"
             class="absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex
               h-10 w-10 items-center justify-center rounded-full bg-surface/80

@@ -150,11 +150,10 @@ resource "aws_cloudfront_distribution" "demo" {
       ? "sni-only"
       : null
     )
-    minimum_protocol_version = (
-      var.enable_custom_domain && var.domain_name != ""
-      ? "TLSv1.2_2021"
-      : "TLSv1"
-    )
+    # Enforce TLS 1.2 (2021 policy) regardless of cert source. The default
+    # CloudFront certificate supports TLSv1.2_2021, so there is no reason
+    # to fall back to the legacy `TLSv1` SSL policy.
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
 

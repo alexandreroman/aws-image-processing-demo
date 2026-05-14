@@ -10,26 +10,34 @@ const api = useApi();
 const toast = useToast();
 
 const SAMPLE_COUNT = 50;
-const SAMPLE_BUCKET = 'aws-image-processing-demo-images-local';
+const samplesBucket = config.public.samplesBucket;
 
 const count = ref(20);
 const submitting = ref(false);
 
-function pickRandomSamples(n: number): { bucket: string; key: string }[] {
+function pickRandomSamples<T>(pool: T[], k: number): T[] {
+  const a = [...pool];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a.slice(0, k);
+}
+
+function pickRandomSampleRefs(n: number): { bucket: string; key: string }[] {
   const pool = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
   const k = Math.min(n, pool.length);
-  for (let i = 0; i < k; i++) {
-    const j = i + Math.floor(Math.random() * (pool.length - i));
-    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
-  }
-  return pool.slice(0, k).map((id) => ({ bucket: SAMPLE_BUCKET, key: `samples/${id}.jpg` }));
+  return pickRandomSamples(pool, k).map((id) => ({
+    bucket: samplesBucket,
+    key: `samples/${id}.jpg`,
+  }));
 }
 
 async function startBurst() {
   if (submitting.value) return;
   submitting.value = true;
   try {
-    const images = pickRandomSamples(count.value);
+    const images = pickRandomSampleRefs(count.value);
     const res = await api.startWorkflows(images);
     toast.success(
       'Burst started',

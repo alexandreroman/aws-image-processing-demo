@@ -17,10 +17,6 @@ type DescribeResult struct {
 	Labels      []string
 }
 
-// claudeInvalidInputErrorType is the application error type used so the
-// workflow can list it in NonRetryableErrorTypes.
-const claudeInvalidInputErrorType = "ClaudeInvalidInput"
-
 // GenerateDescription downloads the medium-size image and asks Claude for a
 // caption and a few labels. A malformed image becomes a non-retryable
 // application error so the workflow does not waste retries on it.
@@ -39,7 +35,7 @@ func (a *Activities) GenerateDescription(ctx context.Context, ref manifest.S3Ref
 	if err != nil {
 		if errors.Is(err, anthropicclient.ErrClaudeInvalidInput) {
 			return DescribeResult{}, temporal.NewNonRetryableApplicationError(
-				err.Error(), claudeInvalidInputErrorType, err,
+				err.Error(), ClaudeInvalidInputErrorType, err,
 			)
 		}
 		return DescribeResult{}, fmt.Errorf("describe: anthropic: %w", err)

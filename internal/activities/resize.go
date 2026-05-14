@@ -8,12 +8,14 @@ import (
 	_ "image/gif"  // decoder registration
 	"image/jpeg"
 	_ "image/png" // decoder registration
+	"io"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/disintegration/imaging"
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
 )
 
 // ResizeInput is the input of the ResizeAndUpload activity.
@@ -27,6 +29,12 @@ type ResizeInput struct {
 // jpegQuality is intentionally on the lower side: this is a demo, and the
 // derived artifacts only need to look good as gallery thumbnails.
 const jpegQuality = 85
+
+// maxImageBytes caps the size of objects pulled from S3. With a 1 GiB worker
+// task and Go's image decoder allocating several times the raw size,
+// anything past ~25 MiB risks OOM. Enforced both via Content-Length and a
+// bounded body reader (defense in depth against a misreported header).
+const maxImageBytes = 25 * 1024 * 1024
 
 // ResizeAndUpload downloads the original image, scales it to the target
 // width (keeping aspect), re-encodes as JPEG, and uploads it to a
@@ -85,9 +93,25 @@ func (a *Activities) download(ctx context.Context, ref manifest.S3Ref) ([]byte, 
 		return nil, err
 	}
 	defer out.Body.Close()
+
+	if out.ContentLength != nil && *out.ContentLength > maxImageBytes {
+		return nil, temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("image too large: %d bytes (max %d)", *out.ContentLength, maxImageBytes),
+			"ImageTooLarge", nil,
+		)
+	}
+
+	// LimitReader allows one extra byte so we can detect a misreported
+	// Content-Length and fail closed rather than truncating silently.
 	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(out.Body); err != nil {
+	if _, err := buf.ReadFrom(io.LimitReader(out.Body, maxImageBytes+1)); err != nil {
 		return nil, err
+	}
+	if buf.Len() > maxImageBytes {
+		return nil, temporal.NewNonRetryableApplicationError(
+			fmt.Sprintf("image too large: streamed >%d bytes", maxImageBytes),
+			"ImageTooLarge", nil,
+		)
 	}
 	return buf.Bytes(), nil
 }

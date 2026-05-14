@@ -35,19 +35,16 @@ resource "aws_iam_role_policy_attachment" "backend_logs" {
 }
 
 data "aws_iam_policy_document" "backend" {
-  # Presign uploads (PUT) and read manifests if needed.
+  # Presigned uploads: the backend signs `PutObject` URLs scoped to
+  # `uploads/`. The signature must match the action the browser performs,
+  # so the role itself needs `s3:PutObject` on that prefix even though the
+  # Lambda never uploads directly.
   statement {
-    sid     = "ImagesBucketRW"
-    actions = ["s3:PutObject", "s3:GetObject"]
+    sid     = "ImagesBucketPresignPut"
+    actions = ["s3:PutObject"]
     resources = [
-      "${aws_s3_bucket.images.arn}/*",
+      "${aws_s3_bucket.images.arn}/uploads/*",
     ]
-  }
-
-  statement {
-    sid       = "ImagesBucketList"
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.images.arn]
   }
 
   statement {
@@ -60,10 +57,20 @@ data "aws_iam_policy_document" "backend" {
     resources = [aws_dynamodb_table.images.arn]
   }
 
-  statement {
-    sid       = "ReadAnthropicSecret"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.anthropic_api_key.arn]
+  # Temporal Cloud mTLS material is injected as Lambda env vars via the
+  # Secrets Manager data sources below; this statement grants the role the
+  # ability to fetch the same secrets at runtime if the Lambda is later
+  # changed to pull them lazily.
+  dynamic "statement" {
+    for_each = local.temporal_tls_enabled ? [1] : []
+    content {
+      sid     = "ReadTemporalTLSSecrets"
+      actions = ["secretsmanager:GetSecretValue"]
+      resources = [
+        aws_secretsmanager_secret.temporal_tls_cert[0].arn,
+        aws_secretsmanager_secret.temporal_tls_key[0].arn,
+      ]
+    }
   }
 }
 
@@ -97,13 +104,24 @@ resource "aws_lambda_function" "backend" {
   timeout     = 29 # API Gateway HTTP API caps at 30s
 
   environment {
-    variables = {
-      TEMPORAL_ADDRESS    = var.temporal_address
-      TEMPORAL_NAMESPACE  = var.temporal_namespace
-      TEMPORAL_TASK_QUEUE = var.temporal_task_queue
-      IMAGES_BUCKET       = aws_s3_bucket.images.bucket
-      IMAGES_TABLE        = aws_dynamodb_table.images.name
-    }
+    # Temporal Cloud mTLS material (when configured) is injected from
+    # Secrets Manager via the data sources below. Lambda has no native
+    # `secrets:` equivalent to the ECS task definition, so the PEM blobs
+    # are surfaced as env vars at deploy time — matching the env-var
+    # contract the worker uses and `temporalclient.Dial` reads.
+    variables = merge(
+      {
+        TEMPORAL_ADDRESS    = var.temporal_address
+        TEMPORAL_NAMESPACE  = var.temporal_namespace
+        TEMPORAL_TASK_QUEUE = var.temporal_task_queue
+        IMAGES_BUCKET       = aws_s3_bucket.images.bucket
+        IMAGES_TABLE        = aws_dynamodb_table.images.name
+      },
+      local.temporal_tls_enabled ? {
+        TEMPORAL_TLS_CERT = data.aws_secretsmanager_secret_version.temporal_tls_cert[0].secret_string
+        TEMPORAL_TLS_KEY  = data.aws_secretsmanager_secret_version.temporal_tls_key[0].secret_string
+      } : {},
+    )
   }
 
   depends_on = [
@@ -127,9 +145,14 @@ resource "aws_apigatewayv2_integration" "backend" {
   payload_format_version = "2.0"
 }
 
+# `{proxy+}` requires at least one path segment, so /api alone would 404.
+# A dedicated route covers the exact /api path; the proxy route handles
+# everything below it.
 resource "aws_apigatewayv2_route" "backend_api" {
+  for_each = toset(["ANY /api", "ANY /api/{proxy+}"])
+
   api_id    = aws_apigatewayv2_api.backend.id
-  route_key = "ANY /api/{proxy+}"
+  route_key = each.value
   target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
 }
 

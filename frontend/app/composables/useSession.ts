@@ -1,10 +1,15 @@
-// Poll a single session every 1s. Stops polling once everything is done
-// (running === 0 && total > 0) or when the component using it unmounts.
+// Poll a single session with adaptive backoff: start at 1s, slow to 2s after
+// 10s, then 3s after 30s. Stops once everything is done (running === 0 &&
+// total > 0) or when the component using it unmounts.
 
 import { useIntervalFn } from '@vueuse/core';
 import type { Session, SessionSummary, WorkflowItem } from './useApi';
 
-const POLL_INTERVAL_MS = 1_000;
+const POLL_FAST_MS = 1_000;
+const POLL_MEDIUM_MS = 2_000;
+const POLL_SLOW_MS = 3_000;
+const SLOW_AFTER_MS = 30_000;
+const MEDIUM_AFTER_MS = 10_000;
 
 export interface UseSessionReturn {
   session: Ref<Session | null>;
@@ -54,13 +59,36 @@ export function useSession(sessionId: MaybeRefOrGetter<string>): UseSessionRetur
     }
   }
 
+  const pollIntervalMs = ref(POLL_FAST_MS);
+  let pollStartedAt = 0;
+
+  function updatePollInterval() {
+    const elapsed = Date.now() - pollStartedAt;
+    const next
+      = elapsed >= SLOW_AFTER_MS
+        ? POLL_SLOW_MS
+        : elapsed >= MEDIUM_AFTER_MS
+          ? POLL_MEDIUM_MS
+          : POLL_FAST_MS;
+    if (next !== pollIntervalMs.value) {
+      pollIntervalMs.value = next;
+    }
+  }
+
   const { pause, resume, isActive } = useIntervalFn(
     () => {
+      updatePollInterval();
       void refresh();
     },
-    POLL_INTERVAL_MS,
+    pollIntervalMs,
     { immediate: false, immediateCallback: false },
   );
+
+  function startPolling() {
+    pollStartedAt = Date.now();
+    pollIntervalMs.value = POLL_FAST_MS;
+    resume();
+  }
 
   // Stop polling automatically when everything is done.
   watch(summary, (s) => {
@@ -77,7 +105,7 @@ export function useSession(sessionId: MaybeRefOrGetter<string>): UseSessionRetur
         return;
       }
       void refresh();
-      resume();
+      startPolling();
     },
     { immediate: true },
   );

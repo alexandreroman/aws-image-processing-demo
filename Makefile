@@ -78,7 +78,9 @@ deploy: ## Provision AWS infra (tofu init + apply) and deploy the frontend
 
 .PHONY: frontend-deploy
 frontend-deploy: ## Build the frontend, sync to S3, invalidate CloudFront
-	pnpm -C frontend install && pnpm -C frontend generate
+	pnpm -C frontend install
+	NUXT_PUBLIC_SAMPLES_BUCKET=$$(tofu -chdir=infra output -raw images_bucket) \
+		pnpm -C frontend generate
 	aws s3 sync frontend/.output/public/ \
 		s3://$$(tofu -chdir=infra output -raw frontend_bucket)/ --delete
 	aws cloudfront create-invalidation \

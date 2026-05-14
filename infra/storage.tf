@@ -41,10 +41,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
   }
 }
 
-# CORS: presigned PUTs come from the browser. Allow any origin for v1 —
-# tightening this requires knowing the demo URL ahead of time, which is
-# circular (the bucket is referenced from the worker env, which is needed
-# before CloudFront exists). Demo workload, acceptable trade-off.
+# SECURITY: `allowed_origins = ["*"]` lets ANY web origin issue presigned
+# PUTs against this bucket. That is acceptable for this demo, but it is
+# NOT safe for production — combined with our presign role it broadens
+# the blast radius of any leaked presigned URL beyond the demo frontend.
+#
+# Why it is wide open today: locking CORS to `https://${subdomain}.${domain}`
+# requires knowing the public hostname at bucket-creation time, but the
+# bucket is referenced by the worker task definition which is provisioned
+# before the CloudFront distribution exists, so there is a chicken-and-egg
+# cycle in a single `tofu apply`.
+#
+# Post-deploy hardening (run after the first successful apply):
+#   1. Set `allowed_origins` to the CloudFront / custom-domain URL only
+#      (e.g. ["https://demo.example.com"]).
+#   2. Drop `GET` and `HEAD` from `allowed_methods` — only `PUT` is needed
+#      for the upload flow; downloads go through CloudFront, not S3 CORS.
+#   3. Re-apply; nothing else depends on the wide-open rule.
 resource "aws_s3_bucket_cors_configuration" "images" {
   bucket = aws_s3_bucket.images.id
 

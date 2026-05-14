@@ -8,9 +8,6 @@ architects and developers.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-> **Status:** scaffold only. The project structure is
-> in place; implementation lands sprint by sprint.
-
 ## Features
 
 - **Bursty image pipeline** — upload N images, watch
@@ -166,9 +163,11 @@ with 8 activities, 6 of which run in parallel:
 3. Fan-out 3 × `ApplyWatermark`
 4. 1 × `StoreManifest` to DynamoDB
 
-The workflow ID format is `{sessionId}-{i}` so the
-Temporal UI can filter a whole burst with a prefix
-search.
+The workflow ID format is
+`session-<sessionId>-<imageId>` (where `<sessionId>` and
+`<imageId>` are short 8-char hex IDs) so the Temporal UI
+can filter a whole burst with a `session-<sessionId>`
+prefix search.
 
 ### Modules
 

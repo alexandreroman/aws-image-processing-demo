@@ -64,18 +64,25 @@ resource "aws_iam_role" "worker_task" {
 }
 
 data "aws_iam_policy_document" "worker_task" {
+  # Reads: visitor uploads + the preloaded sample pool.
   statement {
-    sid     = "ImagesBucketRW"
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    sid     = "ImagesBucketRead"
+    actions = ["s3:GetObject"]
     resources = [
-      "${aws_s3_bucket.images.arn}/*",
+      "${aws_s3_bucket.images.arn}/uploads/*",
+      "${aws_s3_bucket.images.arn}/samples/*",
     ]
   }
 
+  # Writes: derived artifacts only — resized and watermarked variants.
+  # Originals under `uploads/` and `samples/` are read-only for the worker.
+  # Deletes are handled by S3 lifecycle rules; the worker never deletes.
   statement {
-    sid       = "ImagesBucketList"
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.images.arn]
+    sid     = "ImagesBucketWriteSessions"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/sessions/*",
+    ]
   }
 
   statement {
@@ -186,6 +193,13 @@ resource "aws_ecs_service" "worker" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 200
+
+  # Auto-rollback a bad task definition (image pull failure, crash loop,
+  # etc.) instead of leaving the service stuck at 0 healthy tasks.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   # Workers are stateless and have no health check — the Temporal SDK
   # handles graceful shutdown via SIGTERM and the stopTimeout above.

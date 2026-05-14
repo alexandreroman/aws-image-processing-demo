@@ -12,6 +12,11 @@ name: Deploy frontend
 #   AWS_REGION
 #   AWS_FRONTEND_BUCKET
 #   AWS_CLOUDFRONT_DISTRIBUTION_ID
+#   AWS_DEMO_DOMAIN  (host without scheme, e.g. demo.example.com — used
+#                     by the post-deploy smoke test)
+#   AWS_IMAGES_BUCKET  (S3 bucket holding samples/originals — exposed to
+#                       the static site as NUXT_PUBLIC_SAMPLES_BUCKET so
+#                       the frontend can target the right prod bucket)
 #
 # TODO: in a future iteration, fetch the bucket
 # name and distribution ID from the Tofu remote
@@ -55,6 +60,8 @@ jobs:
         run: pnpm -C frontend install --frozen-lockfile
 
       - name: Generate static site
+        env:
+          NUXT_PUBLIC_SAMPLES_BUCKET: ${{ secrets.AWS_IMAGES_BUCKET }}
         run: pnpm -C frontend generate
 
       - name: Configure AWS credentials
@@ -74,3 +81,12 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" \
             --paths '/*' >/dev/null
+
+      - name: Smoke-test deployment
+        env:
+          DOMAIN: ${{ secrets.AWS_DEMO_DOMAIN }}
+        run: |
+          # Give CloudFront a moment to start serving the new content
+          # before checking that the index responds 2xx.
+          sleep 10
+          curl -fsSL "https://${DOMAIN}/index.html" -o /dev/null
