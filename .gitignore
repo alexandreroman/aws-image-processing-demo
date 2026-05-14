@@ -42,3 +42,6 @@ BRIEF.md
 ca.*
 
 .worktrees/
+
+# Claude Code
+.claude/scheduled_tasks.lock
