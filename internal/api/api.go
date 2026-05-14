@@ -238,7 +238,7 @@ type pipelineWorkflow struct {
 	ImageID         string             `json:"imageId,omitempty"`
 	Status          string             `json:"status"`
 	CurrentActivity string             `json:"currentActivity,omitempty"`
-	StartedAt       time.Time          `json:"startedAt,omitempty"`
+	StartedAt       *time.Time         `json:"startedAt,omitempty"`
 	CompletedAt     *time.Time         `json:"completedAt,omitempty"`
 	Manifest        *manifest.Manifest `json:"manifest,omitempty"`
 }
@@ -307,7 +307,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		seen[wf.WorkflowID] = true
 		if t := exec.GetStartTime(); t != nil {
 			started := t.AsTime()
-			wf.StartedAt = started
+			wf.StartedAt = &started
 			if resp.CreatedAt.IsZero() || started.Before(resp.CreatedAt) {
 				resp.CreatedAt = started
 			}

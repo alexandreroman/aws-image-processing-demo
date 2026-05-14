@@ -52,7 +52,7 @@ export interface WorkflowItem {
   imageId: string;
   status: WorkflowStatus;
   currentActivity?: string;
-  startedAt: string;
+  startedAt?: string;
   completedAt?: string;
   manifest?: Manifest;
 }

@@ -43,19 +43,39 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     () => pipeline.value?.workflows ?? [],
   );
 
+  // Why: backend latency varies wildly under load, so out-of-order responses can
+  // overwrite fresh state with stale snapshots and wedge the page after the
+  // running-zero watch has paused polling. Track a monotonic sequence and drop
+  // responses older than the last one we already applied.
+  let nextSeq = 0;
+  let lastAppliedSeq = 0;
+  let inFlight = 0;
+
   async function refresh() {
     const id = toValue(pipelineId);
     if (!id) {
       return;
     }
+    const seq = ++nextSeq;
+    inFlight++;
     loading.value = true;
     try {
-      pipeline.value = await api.getPipeline(id);
+      const result = await api.getPipeline(id);
+      if (seq <= lastAppliedSeq) {
+        return;
+      }
+      lastAppliedSeq = seq;
+      pipeline.value = result;
       error.value = null;
     } catch (err) {
+      if (seq <= lastAppliedSeq) {
+        return;
+      }
+      lastAppliedSeq = seq;
       error.value = err instanceof Error ? err : new Error(String(err));
     } finally {
-      loading.value = false;
+      inFlight--;
+      loading.value = inFlight > 0;
     }
   }
 
