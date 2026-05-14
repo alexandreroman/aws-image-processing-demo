@@ -3,17 +3,17 @@ package activities
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/jpeg"
+	"image/png"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	"go.temporal.io/sdk/activity"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/basicfont"
-	"golang.org/x/image/math/fixed"
+	xdraw "golang.org/x/image/draw"
 )
 
 // WatermarkInput is the input of the ApplyWatermark activity.
@@ -24,10 +24,23 @@ type WatermarkInput struct {
 	Source    manifest.S3Ref
 }
 
-const watermarkText = "temporal demo"
+//go:embed assets/temporal-logo.png
+var temporalLogoPNG []byte
 
-// ApplyWatermark stamps a small bottom-right label on the source image and
-// uploads the result to the session-scoped `watermarked/` prefix.
+// temporalLogo is the decoded source logo, cached at package init.
+var temporalLogo = mustDecodeLogo()
+
+func mustDecodeLogo() image.Image {
+	img, err := png.Decode(bytes.NewReader(temporalLogoPNG))
+	if err != nil {
+		panic(fmt.Errorf("watermark: decode embedded logo: %w", err))
+	}
+	return img
+}
+
+// ApplyWatermark composites the Temporal logo on a rounded translucent plate at
+// the bottom-right corner and uploads the result to the session's
+// `watermarked/` prefix.
 func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (manifest.S3Ref, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("watermark start", "imageId", in.ImageID, "size", in.SizeName)
@@ -44,7 +57,7 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 	}
 
 	activity.RecordHeartbeat(ctx, "stamp")
-	stamped := stampWatermark(src, watermarkText)
+	stamped := stampWatermark(src)
 
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, stamped, &jpeg.Options{Quality: jpegQuality}); err != nil {
@@ -61,50 +74,125 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 	return manifest.S3Ref{Bucket: a.ImagesBucket, Key: key}, nil
 }
 
-// stampWatermark draws white text on a semi-transparent black pill at the
-// bottom-right corner. basicfont.Face7x13 is fixed-width, no font file
-// shipping required.
-func stampWatermark(src image.Image, label string) image.Image {
-	face := basicfont.Face7x13
-	textWidth := font.MeasureString(face, label).Ceil()
-	textHeight := face.Metrics().Ascent.Ceil() + face.Metrics().Descent.Ceil()
-
-	padX, padY := 6, 4
+// stampWatermark draws the Temporal logo on a rounded translucent plate at the
+// bottom-right corner of src.
+func stampWatermark(src image.Image) image.Image {
+	const (
+		minLogoH = 14
+		maxLogoH = 96
+		padX     = 8
+		padY     = 6
+	)
 	margin := 8
-	boxW := textWidth + 2*padX
-	boxH := textHeight + 2*padY
 
 	bounds := src.Bounds()
+	imgW, imgH := bounds.Dx(), bounds.Dy()
+
+	logoBounds := temporalLogo.Bounds()
+	logoOrigW, logoOrigH := logoBounds.Dx(), logoBounds.Dy()
+
+	// Target logo height: ~14% of the shorter image side, clamped.
+	logoH := min(imgW, imgH) * 14 / 100
+	logoH = clamp(logoH, minLogoH, maxLogoH)
+	logoW := logoH * logoOrigW / logoOrigH
+
+	plateW := logoW + 2*padX
+	plateH := logoH + 2*padY
+
+	// Tiny image: shrink margin, then shrink the logo proportionally rather
+	// than overflow the canvas.
+	if plateW > imgW-2*margin || plateH > imgH-2*margin {
+		margin = 2
+	}
+	if maxW, maxH := imgW-2*margin, imgH-2*margin; plateW > maxW || plateH > maxH {
+		scaleW := float64(maxW-2*padX) / float64(logoW)
+		scaleH := float64(maxH-2*padY) / float64(logoH)
+		scale := min(scaleW, scaleH)
+		if scale < 0 {
+			scale = 0
+		}
+		logoW = int(float64(logoW) * scale)
+		logoH = int(float64(logoH) * scale)
+		plateW = logoW + 2*padX
+		plateH = logoH + 2*padY
+	}
+
 	dst := image.NewRGBA(bounds)
 	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
 
-	// Center the pill within the bottom-right corner; clamp to image size
-	// for very small thumbnails (the small variant is only 150px wide).
-	if boxW > bounds.Dx()-2*margin {
-		margin = 2
-	}
-	x0 := bounds.Max.X - boxW - margin
-	y0 := bounds.Max.Y - boxH - margin
-	if x0 < bounds.Min.X {
-		x0 = bounds.Min.X
-	}
-	if y0 < bounds.Min.Y {
-		y0 = bounds.Min.Y
+	if logoW <= 0 || logoH <= 0 {
+		return dst
 	}
 
-	pillRect := image.Rect(x0, y0, x0+boxW, y0+boxH)
-	pillColor := color.NRGBA{R: 0, G: 0, B: 0, A: 160}
-	draw.Draw(dst, pillRect, &image.Uniform{C: pillColor}, image.Point{}, draw.Over)
-
-	drawer := &font.Drawer{
-		Dst:  dst,
-		Src:  image.NewUniform(color.White),
-		Face: face,
-		Dot: fixed.Point26_6{
-			X: fixed.I(x0 + padX),
-			Y: fixed.I(y0 + padY + face.Metrics().Ascent.Ceil()),
-		},
+	radius := max(4, logoH/4)
+	if m := min(plateW, plateH) / 2; radius > m {
+		radius = m
 	}
-	drawer.DrawString(label)
+
+	plateX0 := bounds.Max.X - plateW - margin
+	plateY0 := bounds.Max.Y - plateH - margin
+	plateRect := image.Rect(plateX0, plateY0, plateX0+plateW, plateY0+plateH)
+
+	mask := roundedRectMask(plateW, plateH, radius)
+	plateColor := &image.Uniform{C: color.NRGBA{R: 0, G: 0, B: 0, A: 160}}
+	draw.DrawMask(dst, plateRect, plateColor, image.Point{}, mask, image.Point{}, draw.Over)
+
+	logo := image.NewNRGBA(image.Rect(0, 0, logoW, logoH))
+	xdraw.CatmullRom.Scale(logo, logo.Bounds(), temporalLogo, logoBounds, xdraw.Over, nil)
+
+	logoRect := image.Rect(plateX0+padX, plateY0+padY, plateX0+padX+logoW, plateY0+padY+logoH)
+	draw.Draw(dst, logoRect, logo, image.Point{}, draw.Over)
+
 	return dst
+}
+
+// roundedRectMask returns an alpha mask of size w×h with rounded corners of
+// radius r. Corners are aliased; the plate is small enough that this is fine.
+func roundedRectMask(w, h, r int) *image.Alpha {
+	mask := image.NewAlpha(image.Rect(0, 0, w, h))
+	if r <= 0 {
+		for i := range mask.Pix {
+			mask.Pix[i] = 255
+		}
+		return mask
+	}
+	r2 := r * r
+	for y := 0; y < h; y++ {
+		// Distance to the nearest horizontal edge of the inner rect.
+		var dy int
+		switch {
+		case y < r:
+			dy = r - y
+		case y >= h-r:
+			dy = y - (h - r - 1)
+		}
+		for x := 0; x < w; x++ {
+			var dx int
+			switch {
+			case x < r:
+				dx = r - x
+			case x >= w-r:
+				dx = x - (w - r - 1)
+			}
+			var a uint8
+			switch {
+			case dx == 0 || dy == 0:
+				a = 255
+			case dx*dx+dy*dy <= r2:
+				a = 255
+			}
+			mask.Pix[y*mask.Stride+x] = a
+		}
+	}
+	return mask
+}
+
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
