@@ -63,7 +63,7 @@ func New(deps Dependencies) *Handler {
 	h := &Handler{deps: deps, mux: http.NewServeMux()}
 	h.mux.HandleFunc("POST /api/uploads/presign", h.handlePresign)
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
-	h.mux.HandleFunc("GET /api/sessions/{sessionId}", h.handleSession)
+	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
 	h.mux.HandleFunc("GET /api/healthz", h.handleHealth)
 	return h
 }
@@ -162,7 +162,7 @@ type startRequest struct {
 }
 
 type startResponse struct {
-	SessionID   string   `json:"sessionId"`
+	PipelineID  string   `json:"pipelineId"`
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
@@ -182,7 +182,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID := newSessionID()
+	pipelineID := newPipelineID()
 
 	// Pre-allocate IDs sequentially so the response preserves input order
 	// regardless of which goroutine finishes its ExecuteWorkflow first.
@@ -190,7 +190,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	imageIDs := make([]string, len(req.Images))
 	for i := range req.Images {
 		imageIDs[i] = newImageID()
-		workflowIDs[i] = fmt.Sprintf("session-%s-%s", sessionID, imageIDs[i])
+		workflowIDs[i] = fmt.Sprintf("pipeline-%s-%s", pipelineID, imageIDs[i])
 	}
 
 	g, gctx := errgroup.WithContext(r.Context())
@@ -203,9 +203,9 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 				WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 			}
 			in := manifest.ProcessImageInput{
-				SessionID: sessionID,
-				ImageID:   imageIDs[i],
-				Original:  img,
+				PipelineID: pipelineID,
+				ImageID:    imageIDs[i],
+				Original:   img,
 			}
 			if _, err := h.deps.Temporal.ExecuteWorkflow(gctx, opts, workflows.ProcessImage, in); err != nil {
 				h.deps.Logger.Error("start workflow failed", "workflowId", workflowIDs[i], "err", err)
@@ -219,12 +219,12 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, startResponse{SessionID: sessionID, WorkflowIDs: workflowIDs})
+	writeJSON(w, http.StatusOK, startResponse{PipelineID: pipelineID, WorkflowIDs: workflowIDs})
 }
 
 // shortID returns the first 8 hex chars of a UUID v4.
 //
-// Why 8 chars: a burst is at most a few dozen images per session, so the
+// Why 8 chars: a burst is at most a few dozen images per pipeline, so the
 // 32-bit space leaves collision probability well under one in a million,
 // and short IDs make URLs, logs, and the Temporal UI dramatically more
 // readable. WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE surfaces the
@@ -233,12 +233,12 @@ func shortID() string {
 	return uuid.NewString()[:8]
 }
 
-func newSessionID() string { return shortID() }
-func newImageID() string   { return shortID() }
+func newPipelineID() string { return shortID() }
+func newImageID() string    { return shortID() }
 
-// --- /api/sessions/{sessionId} ----------------------------------------------
+// --- /api/pipelines/{pipelineId} --------------------------------------------
 
-type sessionWorkflow struct {
+type pipelineWorkflow struct {
 	WorkflowID      string             `json:"workflowId"`
 	ImageID         string             `json:"imageId,omitempty"`
 	Status          string             `json:"status"`
@@ -248,46 +248,46 @@ type sessionWorkflow struct {
 	Manifest        *manifest.Manifest `json:"manifest,omitempty"`
 }
 
-type sessionSummary struct {
+type pipelineSummary struct {
 	Total     int `json:"total"`
 	Running   int `json:"running"`
 	Completed int `json:"completed"`
 	Failed    int `json:"failed"`
 }
 
-type sessionResponse struct {
-	SessionID  string            `json:"sessionId"`
-	CreatedAt  time.Time         `json:"createdAt,omitempty"`
-	ImageCount int               `json:"imageCount"`
-	Summary    sessionSummary    `json:"summary"`
-	Workflows  []sessionWorkflow `json:"workflows"`
+type pipelineResponse struct {
+	PipelineID string             `json:"pipelineId"`
+	CreatedAt  time.Time          `json:"createdAt,omitempty"`
+	ImageCount int                `json:"imageCount"`
+	Summary    pipelineSummary    `json:"summary"`
+	Workflows  []pipelineWorkflow `json:"workflows"`
 }
 
-func (h *Handler) handleSession(w http.ResponseWriter, r *http.Request) {
-	sessionID := r.PathValue("sessionId")
-	if sessionID == "" {
-		writeError(w, http.StatusBadRequest, "sessionId is required")
+func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
+	pipelineID := r.PathValue("pipelineId")
+	if pipelineID == "" {
+		writeError(w, http.StatusBadRequest, "pipelineId is required")
 		return
 	}
 
-	manifests, err := h.fetchManifests(r.Context(), sessionID)
+	manifests, err := h.fetchManifests(r.Context(), pipelineID)
 	if err != nil {
-		h.deps.Logger.Error("fetch manifests failed", "sessionId", sessionID, "err", err)
-		writeError(w, http.StatusInternalServerError, "failed to read session: "+err.Error())
+		h.deps.Logger.Error("fetch manifests failed", "pipelineId", pipelineID, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to read pipeline: "+err.Error())
 		return
 	}
 
-	executions, err := h.listWorkflows(r.Context(), sessionID)
+	executions, err := h.listWorkflows(r.Context(), pipelineID)
 	if err != nil {
-		h.deps.Logger.Error("list workflows failed", "sessionId", sessionID, "err", err)
+		h.deps.Logger.Error("list workflows failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to list workflows: "+err.Error())
 		return
 	}
 
-	resp := sessionResponse{
-		SessionID:  sessionID,
+	resp := pipelineResponse{
+		PipelineID: pipelineID,
 		ImageCount: len(executions),
-		Workflows:  make([]sessionWorkflow, 0, len(executions)),
+		Workflows:  make([]pipelineWorkflow, 0, len(executions)),
 	}
 
 	// currentActivity lookups make a Temporal RPC per running workflow.
@@ -295,7 +295,7 @@ func (h *Handler) handleSession(w http.ResponseWriter, r *http.Request) {
 	// 1 s frontend poll loop.
 	currentActivityLookups := 0
 	for _, exec := range executions {
-		wf := sessionWorkflow{
+		wf := pipelineWorkflow{
 			WorkflowID: exec.GetExecution().GetWorkflowId(),
 			Status:     statusName(exec.GetStatus()),
 		}
@@ -345,13 +345,13 @@ func (h *Handler) handleSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listWorkflows(
-	ctx context.Context, sessionID string,
+	ctx context.Context, pipelineID string,
 ) ([]*workflowpb.WorkflowExecutionInfo, error) {
 	// ListWorkflow (rather than ListOpen/ListClosed) so the result set
 	// includes both running and terminal executions in one call.
 	var out []*workflowpb.WorkflowExecutionInfo
 	var pageToken []byte
-	query := fmt.Sprintf(`WorkflowId STARTS_WITH "session-%s-"`, sessionID)
+	query := fmt.Sprintf(`WorkflowId STARTS_WITH "pipeline-%s-"`, pipelineID)
 	for {
 		resp, err := h.deps.Temporal.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{
 			Namespace:     h.deps.Namespace,
@@ -372,7 +372,7 @@ func (h *Handler) listWorkflows(
 }
 
 // maxCurrentActivityLookups caps the number of DescribeWorkflowExecution
-// calls each /api/sessions/{id} poll fires. Above this threshold the
+// calls each /api/pipelines/{id} poll fires. Above this threshold the
 // currentActivity field is left empty on the remaining running workflows.
 const maxCurrentActivityLookups = 10
 
@@ -392,20 +392,20 @@ func (h *Handler) currentActivity(ctx context.Context, workflowID string) string
 	return ""
 }
 
-// fetchManifests returns the persisted manifests for a session, keyed by
+// fetchManifests returns the persisted manifests for a pipeline, keyed by
 // the workflowId attribute the StoreManifest activity records alongside
 // each item.
 func (h *Handler) fetchManifests(
-	ctx context.Context, sessionID string,
+	ctx context.Context, pipelineID string,
 ) (map[string]*manifest.Manifest, error) {
 	out := make(map[string]*manifest.Manifest)
 	var lastKey map[string]ddbtypes.AttributeValue
 	for {
 		resp, err := h.deps.Dynamo.Query(ctx, &dynamodb.QueryInput{
 			TableName:              aws.String(h.deps.ImagesTable),
-			KeyConditionExpression: aws.String("sessionId = :sid"),
+			KeyConditionExpression: aws.String("pipelineId = :pid"),
 			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-				":sid": &ddbtypes.AttributeValueMemberS{Value: sessionID},
+				":pid": &ddbtypes.AttributeValueMemberS{Value: pipelineID},
 			},
 			ExclusiveStartKey: lastKey,
 		})
@@ -419,7 +419,7 @@ func (h *Handler) fetchManifests(
 			}
 			var m manifest.Manifest
 			if err := json.Unmarshal([]byte(rawAttr.Value), &m); err != nil {
-				h.deps.Logger.Warn("dropping malformed manifest", "sessionId", sessionID, "err", err)
+				h.deps.Logger.Warn("dropping malformed manifest", "pipelineId", pipelineID, "err", err)
 				continue
 			}
 			wfAttr, ok := item["workflowId"].(*ddbtypes.AttributeValueMemberS)

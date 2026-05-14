@@ -50,7 +50,7 @@ const techStack = [
           six of them in parallel — resizing to three sizes, generating a
           Claude-powered description, watermarking each size, and persisting
           the manifest in DynamoDB. Watch workflows complete live, then
-          share the session URL for the same live view.
+          share the pipeline URL for the same live view.
         </p>
 
         <dl

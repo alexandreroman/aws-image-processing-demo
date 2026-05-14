@@ -19,7 +19,7 @@ type Size struct {
 // Manifest is the final record persisted to DynamoDB once a ProcessImage
 // workflow completes.
 type Manifest struct {
-	SessionID   string           `json:"sessionId"`
+	PipelineID  string           `json:"pipelineId"`
 	ImageID     string           `json:"imageId"`
 	Original    S3Ref            `json:"original"`
 	Sizes       map[string]Size  `json:"sizes"`
@@ -30,9 +30,9 @@ type Manifest struct {
 
 // ProcessImageInput is the input of the ProcessImage workflow.
 type ProcessImageInput struct {
-	SessionID string `json:"sessionId"`
-	ImageID   string `json:"imageId"`
-	Original  S3Ref  `json:"original"`
+	PipelineID string `json:"pipelineId"`
+	ImageID    string `json:"imageId"`
+	Original   S3Ref  `json:"original"`
 }
 
 // SizeNames is the canonical, ordered list of size keys. Workflow code MUST

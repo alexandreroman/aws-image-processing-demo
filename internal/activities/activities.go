@@ -77,11 +77,11 @@ func New(
 }
 
 // resizedKey is the canonical S3 key for a resized variant.
-func resizedKey(sessionID, imageID, size string) string {
-	return fmt.Sprintf("sessions/%s/resized/%s/%s.jpg", sessionID, imageID, size)
+func resizedKey(pipelineID, imageID, size string) string {
+	return fmt.Sprintf("pipelines/%s/resized/%s/%s.jpg", pipelineID, imageID, size)
 }
 
 // watermarkedKey is the canonical S3 key for a watermarked variant.
-func watermarkedKey(sessionID, imageID, size string) string {
-	return fmt.Sprintf("sessions/%s/watermarked/%s/%s.jpg", sessionID, imageID, size)
+func watermarkedKey(pipelineID, imageID, size string) string {
+	return fmt.Sprintf("pipelines/%s/watermarked/%s/%s.jpg", pipelineID, imageID, size)
 }

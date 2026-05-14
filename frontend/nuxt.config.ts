@@ -42,13 +42,13 @@ export default defineNuxtConfig({
 
   // SSG configuration.
   // - Only `/` is prerendered at build time (full static page).
-  // - `/sessions/**` is served as a client-rendered SPA fallback so the
-  //   dynamic sessionId can be read from `useRoute()` and the API can be
+  // - `/pipelines/**` is served as a client-rendered SPA fallback so the
+  //   dynamic pipelineId can be read from `useRoute()` and the API can be
   //   polled client-side. Combined with CloudFront's "404 -> /index.html"
-  //   custom error response, any /sessions/{id} URL resolves correctly.
+  //   custom error response, any /pipelines/{id} URL resolves correctly.
   nitro: {
     prerender: { routes: ['/'], crawlLinks: false },
-    routeRules: { '/sessions/**': { ssr: false } },
+    routeRules: { '/pipelines/**': { ssr: false } },
   },
 
   typescript: {

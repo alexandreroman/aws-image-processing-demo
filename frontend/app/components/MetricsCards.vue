@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { SessionSummary } from '~/composables/useApi';
+import type { PipelineSummary } from '~/composables/useApi';
 
 const props = defineProps<{
-  summary: SessionSummary;
+  summary: PipelineSummary;
 }>();
 
 interface CardSpec {
-  key: keyof SessionSummary;
+  key: keyof PipelineSummary;
   label: string;
   text: string;
   bar: string;
@@ -44,7 +44,7 @@ const cards: CardSpec[] = [
   },
 ];
 
-function value(key: keyof SessionSummary): number {
+function value(key: keyof PipelineSummary): number {
   return props.summary[key];
 }
 </script>

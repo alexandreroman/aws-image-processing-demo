@@ -7,24 +7,24 @@ definePageMeta({
 
 const route = useRoute();
 
-const sessionId = computed(() => String(route.params.id ?? ''));
+const pipelineId = computed(() => String(route.params.id ?? ''));
 
-const { summary, workflows, error, refresh } = useSession(sessionId);
+const { summary, workflows, error, refresh } = usePipeline(pipelineId);
 
 useHead(() => ({
-  title: `Session ${sessionId.value} — AWS Image Processing Demo`,
+  title: `Pipeline ${pipelineId.value} — AWS Image Processing Demo`,
 }));
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
     <div
       v-if="error"
       class="card border-rose-500/40 bg-rose-500/10 text-rose-200
         px-4 py-3 text-sm"
     >
       <strong class="font-semibold text-rose-100">
-        Couldn't load session:
+        Couldn't load pipeline:
       </strong>
       {{ error.message }}
       <button
@@ -42,7 +42,7 @@ useHead(() => ({
       </section>
 
       <aside class="lg:col-span-4 space-y-4">
-        <SessionCharts :workflows="workflows" :summary="summary" />
+        <PipelineCharts :workflows="workflows" :summary="summary" />
       </aside>
     </div>
   </div>

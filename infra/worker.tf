@@ -78,10 +78,10 @@ data "aws_iam_policy_document" "worker_task" {
   # Originals under `uploads/` and `samples/` are read-only for the worker.
   # Deletes are handled by S3 lifecycle rules; the worker never deletes.
   statement {
-    sid     = "ImagesBucketWriteSessions"
+    sid     = "ImagesBucketWritePipelines"
     actions = ["s3:PutObject"]
     resources = [
-      "${aws_s3_bucket.images.arn}/sessions/*",
+      "${aws_s3_bucket.images.arn}/pipelines/*",
     ]
   }
 

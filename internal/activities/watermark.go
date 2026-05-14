@@ -18,10 +18,10 @@ import (
 
 // WatermarkInput is the input of the ApplyWatermark activity.
 type WatermarkInput struct {
-	SessionID string
-	ImageID   string
-	SizeName  string
-	Source    manifest.S3Ref
+	PipelineID string
+	ImageID    string
+	SizeName   string
+	Source     manifest.S3Ref
 }
 
 //go:embed assets/temporal-logo.png
@@ -40,7 +40,7 @@ func mustDecodeLogo() image.Image {
 
 // ApplyWatermark composites the Temporal logo on a rounded translucent plate at
 // the bottom edge, centered horizontally, and uploads the result to the
-// session's `watermarked/` prefix.
+// pipeline's `watermarked/` prefix.
 func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (manifest.S3Ref, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("watermark start", "imageId", in.ImageID, "size", in.SizeName)
@@ -64,7 +64,7 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 		return manifest.S3Ref{}, fmt.Errorf("watermark: encode: %w", err)
 	}
 
-	key := watermarkedKey(in.SessionID, in.ImageID, in.SizeName)
+	key := watermarkedKey(in.PipelineID, in.ImageID, in.SizeName)
 	activity.RecordHeartbeat(ctx, "upload")
 	if err := a.upload(ctx, key, buf.Bytes(), "image/jpeg"); err != nil {
 		return manifest.S3Ref{}, fmt.Errorf("watermark: upload: %w", err)

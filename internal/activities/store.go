@@ -16,17 +16,17 @@ import (
 // StoreManifest persists the final manifest as a single DynamoDB item.
 // Schema matches what compose.yaml `init` provisions:
 //
-//	sessionId (HASH) + imageId (RANGE), plus description, manifest (JSON),
+//	pipelineId (HASH) + imageId (RANGE), plus description, manifest (JSON),
 //	workflowId, createdAt.
 //
 // workflowId is stored so the API can map manifests back to executions
-// when listing a session (workflow IDs are not present in the manifest
+// when listing a pipeline (workflow IDs are not present in the manifest
 // otherwise).
 func (a *Activities) StoreManifest(ctx context.Context, m manifest.Manifest) error {
 	logger := activity.GetLogger(ctx)
 	info := activity.GetInfo(ctx)
 	wfID := info.WorkflowExecution.ID
-	logger.Info("store manifest", "sessionId", m.SessionID, "imageId", m.ImageID, "workflowId", wfID)
+	logger.Info("store manifest", "pipelineId", m.PipelineID, "imageId", m.ImageID, "workflowId", wfID)
 
 	raw, err := json.Marshal(m)
 	if err != nil {
@@ -38,7 +38,7 @@ func (a *Activities) StoreManifest(ctx context.Context, m manifest.Manifest) err
 	_, err = a.Dynamo.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(a.ImagesTable),
 		Item: map[string]ddbtypes.AttributeValue{
-			"sessionId":   &ddbtypes.AttributeValueMemberS{Value: m.SessionID},
+			"pipelineId":  &ddbtypes.AttributeValueMemberS{Value: m.PipelineID},
 			"imageId":     &ddbtypes.AttributeValueMemberS{Value: m.ImageID},
 			"description": &ddbtypes.AttributeValueMemberS{Value: m.Description},
 			"manifest":    &ddbtypes.AttributeValueMemberS{Value: string(raw)},

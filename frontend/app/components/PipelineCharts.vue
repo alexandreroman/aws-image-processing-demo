@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useNow } from '@vueuse/core';
-import type { SessionSummary, WorkflowItem } from '~/composables/useApi';
+import type { PipelineSummary, WorkflowItem } from '~/composables/useApi';
 
 const props = defineProps<{
   workflows: WorkflowItem[];
-  summary: SessionSummary;
+  summary: PipelineSummary;
 }>();
 
-// Component is rendered under `ssr: false` on the session page, so `useNow`
+// Component is rendered under `ssr: false` on the pipeline page, so `useNow`
 // (which relies on `window`) is safe. It ticks once per second so the
 // trailing "running" data point keeps moving even between polls.
 const now = useNow({ interval: 1_000 });

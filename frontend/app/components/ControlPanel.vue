@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { SessionSummary } from '~/composables/useApi';
+import type { PipelineSummary } from '~/composables/useApi';
 
 const props = defineProps<{
-  summary?: SessionSummary;
+  summary?: PipelineSummary;
   readOnly?: boolean;
 }>();
 
@@ -42,9 +42,9 @@ async function startBurst() {
     const res = await api.startWorkflows(images);
     toast.success(
       'Burst started',
-      `Session ${res.sessionId} — ${res.workflowIds.length} workflows`,
+      `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows`,
     );
-    await navigateTo(`/sessions/${res.sessionId}`);
+    await navigateTo(`/pipelines/${res.pipelineId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     toast.error('Failed to start burst', message);

@@ -115,7 +115,7 @@ resource "aws_cloudfront_distribution" "demo" {
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
-  # SPA fallback: Nuxt /sessions/[id] is client-rendered, so S3 returns 403
+  # SPA fallback: Nuxt /pipelines/[id] is client-rendered, so S3 returns 403
   # for any unknown key. CloudFront rewrites to /index.html so the SPA can
   # take over.
   custom_error_response {

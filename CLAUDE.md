@@ -44,7 +44,7 @@ make teardown          # tofu destroy + cleanup
 - `internal/api` — HTTP handlers for the three
   endpoints under `/api/*`.
 - `frontend/` — Nuxt 4 SSG, two pages: `/` and
-  `/sessions/[id]`.
+  `/pipelines/[id]`.
 - `infra/` — OpenTofu modules (network, storage,
   worker, backend, frontend, dns).
 
@@ -110,7 +110,7 @@ not shared with the team.
   work cleanly (`/api/*` → API Gateway, `/*` → S3).
 - **S3 prefix convention:** uploads under
   `uploads/` (flat), derived artifacts under
-  `sessions/{sessionId}/...`. Lifecycle rules expire
-  `uploads/` after 7 days and `sessions/` after 30.
+  `pipelines/{pipelineId}/...`. Lifecycle rules expire
+  `uploads/` after 7 days and `pipelines/` after 30.
 - **Anthropic API direct, not Bedrock.** Keeps local
   dev simple (LocalStack does not mock Bedrock).

@@ -46,17 +46,17 @@ func (s *ProcessImageSuite) TearDownTest() {
 
 func (s *ProcessImageSuite) TestHappyPath() {
 	const (
-		sessionID = "deadbeef"
-		imageID   = "img-1"
+		pipelineID = "deadbeef"
+		imageID    = "img-1"
 	)
 	original := manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"}
 
 	// Expect one resize per size name.
 	for _, name := range manifest.SizeNames {
 		size := name
-		key := "sessions/" + sessionID + "/resized/" + imageID + "/" + size + ".jpg"
+		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + size + ".jpg"
 		s.env.OnActivity(s.acts.ResizeAndUpload, mock.Anything, mock.MatchedBy(func(in activities.ResizeInput) bool {
-			return in.SessionID == sessionID && in.ImageID == imageID && in.SizeName == size
+			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == size
 		})).Return(manifest.Size{
 			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
 			Width:  manifest.SizeWidths[size],
@@ -66,7 +66,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 	}
 
 	// One describe call on the medium size.
-	mediumKey := "sessions/" + sessionID + "/resized/" + imageID + "/medium.jpg"
+	mediumKey := "pipelines/" + pipelineID + "/resized/" + imageID + "/medium.jpg"
 	s.env.OnActivity(s.acts.GenerateDescription, mock.Anything, mock.MatchedBy(func(ref manifest.S3Ref) bool {
 		return ref.Key == mediumKey
 	})).Return(activities.DescribeResult{
@@ -78,16 +78,16 @@ func (s *ProcessImageSuite) TestHappyPath() {
 	for _, name := range manifest.SizeNames {
 		size := name
 		s.env.OnActivity(s.acts.ApplyWatermark, mock.Anything, mock.MatchedBy(func(in activities.WatermarkInput) bool {
-			return in.SessionID == sessionID && in.ImageID == imageID && in.SizeName == size
+			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == size
 		})).Return(manifest.S3Ref{
 			Bucket: "test-bucket",
-			Key:    "sessions/" + sessionID + "/watermarked/" + imageID + "/" + size + ".jpg",
+			Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/" + size + ".jpg",
 		}, nil).Once()
 	}
 
 	// One store call.
 	s.env.OnActivity(s.acts.StoreManifest, mock.Anything, mock.MatchedBy(func(m manifest.Manifest) bool {
-		return m.SessionID == sessionID &&
+		return m.PipelineID == pipelineID &&
 			m.ImageID == imageID &&
 			len(m.Sizes) == len(manifest.SizeNames) &&
 			len(m.Watermarked) == len(manifest.SizeNames) &&
@@ -95,9 +95,9 @@ func (s *ProcessImageSuite) TestHappyPath() {
 	})).Return(nil).Once()
 
 	s.env.ExecuteWorkflow(workflows.ProcessImage, manifest.ProcessImageInput{
-		SessionID: sessionID,
-		ImageID:   imageID,
-		Original:  original,
+		PipelineID: pipelineID,
+		ImageID:    imageID,
+		Original:   original,
 	})
 
 	s.True(s.env.IsWorkflowCompleted())
@@ -105,7 +105,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 
 	var got manifest.Manifest
 	require.NoError(s.T(), s.env.GetWorkflowResult(&got))
-	s.Equal(sessionID, got.SessionID)
+	s.Equal(pipelineID, got.PipelineID)
 	s.Equal(imageID, got.ImageID)
 	s.Equal("a dog catching a frisbee", got.Description)
 	for _, name := range manifest.SizeNames {
@@ -144,7 +144,7 @@ func runAndRecordActivities(t *testing.T) []string {
 	env.RegisterActivity(acts)
 
 	var (
-		mu         sync.Mutex
+		mu          sync.Mutex
 		invocations []string
 	)
 	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
@@ -154,12 +154,12 @@ func runAndRecordActivities(t *testing.T) []string {
 	})
 
 	const (
-		sessionID = "deadbeef"
-		imageID   = "img-1"
+		pipelineID = "deadbeef"
+		imageID    = "img-1"
 	)
 	for _, name := range manifest.SizeNames {
 		size := name
-		key := "sessions/" + sessionID + "/resized/" + imageID + "/" + size + ".jpg"
+		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + size + ".jpg"
 		env.OnActivity(acts.ResizeAndUpload, mock.Anything, mock.Anything).Return(manifest.Size{
 			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
 			Width:  manifest.SizeWidths[size],
@@ -173,14 +173,14 @@ func runAndRecordActivities(t *testing.T) []string {
 	}, nil)
 	env.OnActivity(acts.ApplyWatermark, mock.Anything, mock.Anything).Return(manifest.S3Ref{
 		Bucket: "test-bucket",
-		Key:    "sessions/" + sessionID + "/watermarked/" + imageID + "/medium.jpg",
+		Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/medium.jpg",
 	}, nil)
 	env.OnActivity(acts.StoreManifest, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(workflows.ProcessImage, manifest.ProcessImageInput{
-		SessionID: sessionID,
-		ImageID:   imageID,
-		Original:  manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"},
+		PipelineID: pipelineID,
+		ImageID:    imageID,
+		Original:   manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"},
 	})
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())

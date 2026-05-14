@@ -20,7 +20,7 @@ architects and developers.
   labeled by Claude Haiku 4.5 vision.
 - **Direct-to-S3 uploads** — the backend signs PUT
   URLs; bytes never touch the API.
-- **Shareable sessions** — every burst gets a session
+- **Shareable pipelines** — every burst gets a pipeline
   ID, threaded through the URL, workflow IDs, S3
   prefixes, and DynamoDB items.
 - **Single-domain deploy** — CloudFront fronts both
@@ -68,7 +68,7 @@ Once the stack is up:
 
 Open the frontend, pick a number of images, and click
 **Start burst**. You will be redirected to
-`/sessions/{sessionId}` where the gallery fills in as
+`/pipelines/{pipelineId}` where the gallery fills in as
 workflows complete.
 
 ## Usage
@@ -164,9 +164,9 @@ with 8 activities, 6 of which run in parallel:
 4. 1 × `StoreManifest` to DynamoDB
 
 The workflow ID format is
-`session-<sessionId>-<imageId>` (where `<sessionId>` and
+`pipeline-<pipelineId>-<imageId>` (where `<pipelineId>` and
 `<imageId>` are short 8-char hex IDs) so the Temporal UI
-can filter a whole burst with a `session-<sessionId>`
+can filter a whole burst with a `pipeline-<pipelineId>`
 prefix search.
 
 ### Modules

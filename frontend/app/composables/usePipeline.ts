@@ -1,9 +1,9 @@
-// Poll a single session with adaptive backoff: start at 1s, slow to 2s after
+// Poll a single pipeline with adaptive backoff: start at 1s, slow to 2s after
 // 10s, then 3s after 30s. Stops once everything is done (running === 0 &&
 // total > 0) or when the component using it unmounts.
 
 import { useIntervalFn } from '@vueuse/core';
-import type { Session, SessionSummary, WorkflowItem } from './useApi';
+import type { Pipeline, PipelineSummary, WorkflowItem } from './useApi';
 
 const POLL_FAST_MS = 1_000;
 const POLL_MEDIUM_MS = 2_000;
@@ -11,9 +11,9 @@ const POLL_SLOW_MS = 3_000;
 const SLOW_AFTER_MS = 30_000;
 const MEDIUM_AFTER_MS = 10_000;
 
-export interface UseSessionReturn {
-  session: Ref<Session | null>;
-  summary: ComputedRef<SessionSummary>;
+export interface UsePipelineReturn {
+  pipeline: Ref<Pipeline | null>;
+  summary: ComputedRef<PipelineSummary>;
   workflows: ComputedRef<WorkflowItem[]>;
   loading: Ref<boolean>;
   error: Ref<Error | null>;
@@ -22,35 +22,35 @@ export interface UseSessionReturn {
   stop: () => void;
 }
 
-const EMPTY_SUMMARY: SessionSummary = {
+const EMPTY_SUMMARY: PipelineSummary = {
   total: 0,
   running: 0,
   completed: 0,
   failed: 0,
 };
 
-export function useSession(sessionId: MaybeRefOrGetter<string>): UseSessionReturn {
+export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineReturn {
   const api = useApi();
 
-  const session = ref<Session | null>(null);
+  const pipeline = ref<Pipeline | null>(null);
   const loading = ref(false);
   const error = ref<Error | null>(null);
 
-  const summary = computed<SessionSummary>(
-    () => session.value?.summary ?? EMPTY_SUMMARY,
+  const summary = computed<PipelineSummary>(
+    () => pipeline.value?.summary ?? EMPTY_SUMMARY,
   );
   const workflows = computed<WorkflowItem[]>(
-    () => session.value?.workflows ?? [],
+    () => pipeline.value?.workflows ?? [],
   );
 
   async function refresh() {
-    const id = toValue(sessionId);
+    const id = toValue(pipelineId);
     if (!id) {
       return;
     }
     loading.value = true;
     try {
-      session.value = await api.getSession(id);
+      pipeline.value = await api.getPipeline(id);
       error.value = null;
     } catch (err) {
       error.value = err instanceof Error ? err : new Error(String(err));
@@ -98,7 +98,7 @@ export function useSession(sessionId: MaybeRefOrGetter<string>): UseSessionRetur
   });
 
   watch(
-    () => toValue(sessionId),
+    () => toValue(pipelineId),
     (id) => {
       if (!id) {
         pause();
@@ -115,7 +115,7 @@ export function useSession(sessionId: MaybeRefOrGetter<string>): UseSessionRetur
   });
 
   return {
-    session,
+    pipeline,
     summary,
     workflows,
     loading,

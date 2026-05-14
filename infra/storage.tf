@@ -1,9 +1,9 @@
 # --- S3 images bucket ------------------------------------------------------
 #
 # Holds three logical sets of objects (see BRIEF.md):
-#   uploads/   — visitor uploads, expire after 7 days
-#   sessions/  — derived artifacts (resized + watermarked), expire after 30
-#   samples/   — preloaded demo pool, never expires
+#   uploads/    — visitor uploads, expire after 7 days
+#   pipelines/  — derived artifacts (resized + watermarked), expire after 30
+#   samples/    — preloaded demo pool, never expires
 
 resource "aws_s3_bucket" "images" {
   bucket_prefix = "${local.name_prefix}-images-"
@@ -87,11 +87,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
   }
 
   rule {
-    id     = "expire-sessions"
+    id     = "expire-pipelines"
     status = "Enabled"
 
     filter {
-      prefix = "sessions/"
+      prefix = "pipelines/"
     }
 
     expiration {
@@ -104,18 +104,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
 
 # --- DynamoDB image manifests ---------------------------------------------
 #
-# Composite key (sessionId, imageId) — matches the LocalStack init schema
+# Composite key (pipelineId, imageId) — matches the LocalStack init schema
 # in compose.yaml so the same Go code path works against both backends.
 
 resource "aws_dynamodb_table" "images" {
   name         = "${local.name_prefix}-images-${random_id.suffix.hex}"
   billing_mode = "PAY_PER_REQUEST"
 
-  hash_key  = "sessionId"
+  hash_key  = "pipelineId"
   range_key = "imageId"
 
   attribute {
-    name = "sessionId"
+    name = "pipelineId"
     type = "S"
   }
 

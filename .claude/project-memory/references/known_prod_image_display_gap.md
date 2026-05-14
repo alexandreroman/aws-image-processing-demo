@@ -35,7 +35,7 @@ candidates discussed and let them pick:
 - (a) Add a CloudFront `/images/*` behavior with an OAC pointing
   at the images bucket. Cleanest: same-origin URLs, no presigning,
   no CORS, bucket stays private. Requires deciding the URL scheme
-  exposed to the frontend (probably `/images/sessions/...` mapped
+  exposed to the frontend (probably `/images/pipelines/...` mapped
   to the bucket prefix).
 - (b) Add a `GET /api/images/{bucket}/{key}` proxy in
   `internal/api`. Trivial; loads the Lambda for every thumbnail.

@@ -20,10 +20,10 @@ import (
 
 // ResizeInput is the input of the ResizeAndUpload activity.
 type ResizeInput struct {
-	SessionID string
-	ImageID   string
-	SizeName  string
-	Original  manifest.S3Ref
+	PipelineID string
+	ImageID    string
+	SizeName   string
+	Original   manifest.S3Ref
 }
 
 // jpegQuality is intentionally on the lower side: this is a demo, and the
@@ -38,7 +38,7 @@ const maxImageBytes = 25 * 1024 * 1024
 
 // ResizeAndUpload downloads the original image, scales it to the target
 // width (keeping aspect), re-encodes as JPEG, and uploads it to a
-// session-scoped S3 key.
+// pipeline-scoped S3 key.
 func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manifest.Size, error) {
 	width, ok := manifest.SizeWidths[in.SizeName]
 	if !ok {
@@ -69,7 +69,7 @@ func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manif
 		return manifest.Size{}, fmt.Errorf("resize: encode: %w", err)
 	}
 
-	key := resizedKey(in.SessionID, in.ImageID, in.SizeName)
+	key := resizedKey(in.PipelineID, in.ImageID, in.SizeName)
 	activity.RecordHeartbeat(ctx, "upload")
 	if err := a.upload(ctx, key, buf.Bytes(), "image/jpeg"); err != nil {
 		return manifest.Size{}, fmt.Errorf("resize: upload: %w", err)

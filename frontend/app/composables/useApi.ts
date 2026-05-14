@@ -17,7 +17,7 @@ export interface StartWorkflowsRequest {
 }
 
 export interface StartWorkflowsResponse {
-  sessionId: string;
+  pipelineId: string;
   workflowIds: string[];
 }
 
@@ -38,7 +38,7 @@ export interface ManifestSize {
 }
 
 export interface Manifest {
-  sessionId: string;
+  pipelineId: string;
   imageId: string;
   original: S3Ref;
   sizes: Record<string, ManifestSize>;
@@ -57,18 +57,18 @@ export interface WorkflowItem {
   manifest?: Manifest;
 }
 
-export interface SessionSummary {
+export interface PipelineSummary {
   total: number;
   running: number;
   completed: number;
   failed: number;
 }
 
-export interface Session {
-  sessionId: string;
+export interface Pipeline {
+  pipelineId: string;
   createdAt: string;
   imageCount: number;
-  summary: SessionSummary;
+  summary: PipelineSummary;
   workflows: WorkflowItem[];
 }
 
@@ -99,8 +99,8 @@ export function useApi() {
     });
   }
 
-  function getSession(sessionId: string): Promise<Session> {
-    return apiFetch<Session>(`/sessions/${encodeURIComponent(sessionId)}`);
+  function getPipeline(pipelineId: string): Promise<Pipeline> {
+    return apiFetch<Pipeline>(`/pipelines/${encodeURIComponent(pipelineId)}`);
   }
 
   return {
@@ -108,6 +108,6 @@ export function useApi() {
     apiFetch,
     presignUploads,
     startWorkflows,
-    getSession,
+    getPipeline,
   };
 }

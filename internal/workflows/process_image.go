@@ -22,7 +22,7 @@ import (
 // is deterministic across replays.
 func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest.Manifest, error) {
 	logger := workflow.GetLogger(ctx)
-	logger.Info("ProcessImage start", "sessionId", in.SessionID, "imageId", in.ImageID)
+	logger.Info("ProcessImage start", "pipelineId", in.PipelineID, "imageId", in.ImageID)
 
 	cpuOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -57,10 +57,10 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	resizeCtx := workflow.WithActivityOptions(ctx, cpuOpts)
 	for _, sizeName := range manifest.SizeNames {
 		f := workflow.ExecuteActivity(resizeCtx, (*activities.Activities).ResizeAndUpload, activities.ResizeInput{
-			SessionID: in.SessionID,
-			ImageID:   in.ImageID,
-			SizeName:  sizeName,
-			Original:  in.Original,
+			PipelineID: in.PipelineID,
+			ImageID:    in.ImageID,
+			SizeName:   sizeName,
+			Original:   in.Original,
 		})
 		resizeFutures[sizeName] = f
 	}
@@ -90,10 +90,10 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	watermarkCtx := workflow.WithActivityOptions(ctx, cpuOpts)
 	for _, sizeName := range manifest.SizeNames {
 		f := workflow.ExecuteActivity(watermarkCtx, (*activities.Activities).ApplyWatermark, activities.WatermarkInput{
-			SessionID: in.SessionID,
-			ImageID:   in.ImageID,
-			SizeName:  sizeName,
-			Source:    sizes[sizeName].S3Ref,
+			PipelineID: in.PipelineID,
+			ImageID:    in.ImageID,
+			SizeName:   sizeName,
+			Source:     sizes[sizeName].S3Ref,
 		})
 		watermarkFutures[sizeName] = f
 	}
@@ -110,7 +110,7 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 
 	// 6) Persist.
 	m := manifest.Manifest{
-		SessionID:   in.SessionID,
+		PipelineID:  in.PipelineID,
 		ImageID:     in.ImageID,
 		Original:    in.Original,
 		Sizes:       sizes,
