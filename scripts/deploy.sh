@@ -35,6 +35,9 @@ echo "==> Provisioning infra with OpenTofu"
 tofu -chdir="${infra_dir}" init
 tofu -chdir="${infra_dir}" apply "${tofu_apply_args[@]}"
 
+echo "==> Uploading sample images"
+"${repo_root}/scripts/upload-samples.sh"
+
 echo "==> Building frontend"
 pnpm -C "${frontend_dir}" install --frozen-lockfile
 
