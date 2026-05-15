@@ -10,9 +10,13 @@
 # so the return still aborts them.
 
 load_env() {
-  local lib_dir
-  lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  local repo_root="${lib_dir%/scripts/lib}"
+  # Resolve the repo root by walking up from PWD until we find a .env.
+  # Works regardless of whether the caller is bash or zsh — BASH_SOURCE
+  # isn't set when sourced from a zsh interactive shell.
+  local repo_root="${PWD}"
+  while [[ ! -f "${repo_root}/.env" && "${repo_root}" != "/" ]]; do
+    repo_root="$(dirname "${repo_root}")"
+  done
   local env_file="${repo_root}/.env"
 
   # Protect against dev-overlay leakage: if a parent shell exported
@@ -35,9 +39,10 @@ load_env() {
 
   local required=(TEMPORAL_ADDRESS TEMPORAL_NAMESPACE ANTHROPIC_API_KEY)
   local missing=()
-  local var
+  local var _check
   for var in "${required[@]}"; do
-    if [[ -z "${!var:-}" ]]; then
+    eval "_check=\${${var}:-}"
+    if [[ -z "${_check}" ]]; then
       missing+=("${var}")
     fi
   done
@@ -96,5 +101,19 @@ load_env() {
   local banner="Loaded .env (AWS deploy mode)"
   (( mtls_enabled )) && banner+=" (mTLS)"
   (( custom_domain )) && banner+=" (custom domain)"
+
+  # Optional AWS identity check — silently skips if AWS CLI is missing
+  # or credentials aren't usable. Helps catch wrong-account deploys.
+  local _aws_who
+  if _aws_who="$(aws sts get-caller-identity --query '[Account, Arn]' --output text 2>/dev/null)"; then
+    local _account _arn _who
+    _account="$(printf '%s' "${_aws_who}" | cut -f1)"
+    _arn="$(printf '%s' "${_aws_who}" | cut -f2)"
+    # `${arn##*/}` extracts the trailing principal name from an assumed-role
+    # ARN (e.g. `.../AWSReservedSSO_.../alice@example.com` → `alice@example.com`)
+    # or the user name from a long-term-IAM-user ARN.
+    _who="${_arn##*/}"
+    banner+=" — AWS ${_account} (${_who})"
+  fi
   echo "${banner}"
 }
