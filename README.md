@@ -63,12 +63,24 @@ make dev
 ```
 
 For a fully containerized stack (everything in Docker,
-no host processes), use `make app-up` instead.
+no host processes), use `make app-up` instead. The
+compose stack runs an additional Caddy-fronted frontend
+container that serves the prebuilt Nuxt SSG bundle on
+`:3000` and reverse-proxies `/api/*` to the backend —
+single-origin, mirroring the prod CloudFront topology.
+The stack is self-contained: it uses a local Temporal
+dev server and Moto, independent of the Cloud creds in
+`.env`. Only `ANTHROPIC_API_KEY` is sourced from `.env`
+(compose-time interpolation).
 
 Once the stack is up:
 
 - Frontend — <http://localhost:3000>
-- Backend API — <http://localhost:8000/api>
+- Backend API — <http://localhost:8000/api> in
+  `make dev` (split origin); <http://localhost:3000/api>
+  in `make app-up` (proxied by Caddy). The `:8000` port
+  stays published in both modes for direct backend
+  probing.
 - Temporal UI — <http://localhost:8233>
 - Moto Server endpoint — <http://localhost:4566>
 
@@ -145,21 +157,39 @@ to point at Moto + a Temporal dev server. Deploy targets
 load only `.env`. Both files are gitignored — copy from
 `.env.example` / `.env.local.example`.
 
-| Variable                | Description                                   | Default                  |
-| ----------------------- | --------------------------------------------- | ------------------------ |
-| `TEMPORAL_ADDRESS`      | Temporal frontend address                     | `localhost:7233`         |
-| `TEMPORAL_NAMESPACE`    | Temporal namespace                            | `default`                |
-| `TEMPORAL_TLS_CERT`     | Path to client cert (Temporal Cloud only)     | (empty)                  |
-| `TEMPORAL_TLS_KEY`      | Path to client key (Temporal Cloud only)      | (empty)                  |
-| `TEMPORAL_TASK_QUEUE`   | Worker task queue                             | `image-processing`       |
-| `AWS_ENDPOINT_URL`      | Override AWS endpoint (set for Moto Server)   | `http://localhost:4566`  |
-| `AWS_REGION`            | AWS region                                    | `eu-west-3`              |
-| `IMAGES_BUCKET`         | S3 bucket holding uploads and derivatives     | (Tofu-injected in AWS)   |
-| `IMAGES_TABLE`          | DynamoDB table holding image manifests        | (Tofu-injected in AWS)   |
-| `ALLOWED_ORIGIN`        | CORS allow-origin for the backend             | `*` (dev), set in prod   |
-| `ANTHROPIC_API_KEY`     | Anthropic API key (used in dev and prod)      | (required)               |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token (only for `tofu apply`)  | (empty)                  |
-| `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID                            | (empty)                  |
+**Canonical (`.env`)** — required for `make deploy`:
+
+| Variable                | Description                                          | Default              |
+| ----------------------- | ---------------------------------------------------- | -------------------- |
+| `TEMPORAL_ADDRESS`      | Temporal Cloud gRPC endpoint                         | (required)           |
+| `TEMPORAL_NAMESPACE`    | Temporal Cloud namespace                             | (required)           |
+| `TEMPORAL_TLS_CERT`     | Path to mTLS client cert (PEM)                       | (required for Cloud) |
+| `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
+| `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
+| `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
+| `AWS_REGION`            | AWS region for the deployment                        | `eu-west-3`          |
+| `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
+| `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token; required only when `DOMAIN_NAME` is set | (empty)     |
+| `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID for the demo domain               | (empty)              |
+| `WORKER_IMAGE`          | Override the Fargate worker image                    | (GHCR `:latest`)     |
+
+**Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make app-up`, `make infra-up`, `make test`, `make check`):
+
+| Variable                | Description                                          | Value                |
+| ----------------------- | ---------------------------------------------------- | -------------------- |
+| `AWS_ENDPOINT_URL`      | Point the AWS SDK at the local Moto Server           | `http://localhost:4566` |
+| `AWS_ACCESS_KEY_ID`     | Moto's dummy access key                              | `test`               |
+| `AWS_SECRET_ACCESS_KEY` | Moto's dummy secret                                  | `test`               |
+| `IMAGES_BUCKET`         | Fixed bucket name used by the dev stack              | `aws-image-processing-demo-images-local` |
+| `IMAGES_TABLE`          | Fixed DynamoDB table name used by the dev stack      | `aws-image-processing-demo-images-local` |
+| `NUXT_PUBLIC_API_BASE`  | Absolute backend URL baked into the Nuxt bundle for host-mode dev (split-origin) | `http://localhost:8000` |
+| `TEMPORAL_ADDRESS`      | Override Temporal Cloud with the local dev server    | `localhost:7233` (optional, commented by default) |
+| `TEMPORAL_NAMESPACE`    | Namespace on the local dev server                    | `default` (optional) |
+| `TEMPORAL_TLS_CERT`     | Disable mTLS for the local dev server                | empty (optional)     |
+| `TEMPORAL_TLS_KEY`      | Disable mTLS for the local dev server                | empty (optional)     |
+
+In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants directly — `.env.local` is not consulted. Only `ANTHROPIC_API_KEY` is interpolated from `.env` at compose-time.
 
 ## Architecture
 
@@ -176,6 +206,23 @@ graph TD
     Worker --> S3
     Worker --> DDB
     Worker --> Anthropic[Anthropic API]
+```
+
+The same shape applies locally in `make app-up`: Caddy
+plays the role of CloudFront, fronting both the static
+Nuxt SSG bundle and the API.
+
+```mermaid
+graph TD
+    Browser -->|GET /, GET /api/*| Caddy
+    Caddy -->|/| StaticSSG[(Nuxt SSG files)]
+    Caddy -->|/api/*| Backend
+    Backend -->|StartWorkflow / Query| Temporal[Temporal dev server]
+    Backend --> DDB[(Moto DynamoDB)]
+    Worker -->|long-poll| Temporal
+    Worker --> Moto[(Moto S3)]
+    Worker --> DDB
+    Worker --> Anthropic
 ```
 
 A burst is orchestrated by a parent `LaunchPipelines`

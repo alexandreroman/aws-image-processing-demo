@@ -11,6 +11,7 @@ configuration, and architecture.
 
 - Go (Temporal SDK, AWS SDK v2, Anthropic SDK)
 - Nuxt 4 SSG, Tailwind, pnpm
+- Caddy (compose-mode reverse proxy fronting SSG + /api/*)
 - Temporal Cloud (workflow orchestration)
 - AWS — ECS Fargate, Lambda, API Gateway, S3,
   DynamoDB, CloudFront
@@ -22,6 +23,7 @@ configuration, and architecture.
 
 ```bash
 make dev               # infra in Docker + worker/backend/frontend on host
+make app-up            # full stack in Docker (Caddy-fronted, single origin)
 make test              # unit tests
 make deploy            # tofu init + apply + frontend-deploy
 make frontend-deploy   # build Nuxt + sync to S3 + invalidate CloudFront
@@ -120,3 +122,10 @@ not shared with the team.
   `uploads/` after 7 days and `pipelines/` after 30.
 - **Anthropic API direct, not Bedrock.** Keeps local
   dev simple (Moto Server does not mock Bedrock).
+- **Env split:** `.env` is the canonical, deploy-shaped
+  configuration (Temporal Cloud, Anthropic, AWS region).
+  `.env.local` is an opt-in dev overlay layered on top by
+  host-mode dev targets only. Deploy targets load only
+  `.env`. The compose stack (`make app-up`) is self-
+  contained and does NOT read either file beyond
+  `ANTHROPIC_API_KEY` (compose-time interpolation).
