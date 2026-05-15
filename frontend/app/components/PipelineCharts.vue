@@ -169,14 +169,6 @@ const paths = computed<BuiltPaths>(() => {
 
 const hasData = computed(() => series.value.points.length > 0);
 
-const xTickLabel = computed(() => {
-  const d = series.value.duration;
-  if (d < 60) return `${d.toFixed(0)}s`;
-  const m = Math.floor(d / 60);
-  const s = Math.round(d % 60);
-  return `${m}m${s.toString().padStart(2, '0')}s`;
-});
-
 type StageKey = 'ResizeAndUpload' | 'GenerateDescription' | 'ApplyWatermark' | 'StoreManifest' | 'Queued';
 
 interface StageRow {
@@ -238,11 +230,8 @@ const summaryRows = computed(() => [
 <template>
   <section class="space-y-4">
     <article class="card p-4 space-y-3 animate-fade-in">
-      <header class="flex items-baseline justify-between">
+      <header>
         <h2 class="stat-label">Pipeline timeline</h2>
-        <span v-if="hasData" class="text-[11px] text-ink-400 font-mono tabular-nums">
-          {{ xTickLabel }}
-        </span>
       </header>
 
       <div class="relative">
@@ -288,15 +277,6 @@ const summaryRows = computed(() => [
             vector-effect="non-scaling-stroke"
           />
         </svg>
-
-        <div
-          v-if="hasData"
-          class="pointer-events-none absolute inset-0 flex flex-col
-            justify-between text-[10px] text-ink-400 font-mono tabular-nums px-1"
-        >
-          <span>{{ summary.total }}</span>
-          <span>0</span>
-        </div>
 
         <div
           v-if="!hasData"
