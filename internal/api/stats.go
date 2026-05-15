@@ -16,6 +16,7 @@ const statsWindowDays = 30
 var (
 	queryImagesProcessed = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Completed"`
 	queryBurstsLaunched  = `WorkflowType = "LaunchPipelines" AND ExecutionStatus = "Completed"`
+	queryImagesFailed    = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Failed"`
 )
 
 // StatsResponse is the JSON payload of GET /api/stats. Counts are
@@ -23,6 +24,7 @@ var (
 // for that field could not be fetched (logged but not fatal).
 type StatsResponse struct {
 	ImagesProcessed int64 `json:"imagesProcessed"`
+	ImagesFailed    int64 `json:"imagesFailed"`
 	BurstsLaunched  int64 `json:"burstsLaunched"`
 	WindowDays      int   `json:"windowDays"`
 }
@@ -45,15 +47,24 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	processedCh := make(chan statResult, 1)
+	failedCh := make(chan statResult, 1)
 	burstsCh := make(chan statResult, 1)
 	go run(queryImagesProcessed, processedCh)
+	go run(queryImagesFailed, failedCh)
 	go run(queryBurstsLaunched, burstsCh)
 
 	resp := StatsResponse{WindowDays: statsWindowDays}
 	resp.ImagesProcessed = h.collectStat(<-processedCh, queryImagesProcessed)
+	resp.ImagesFailed = h.collectStat(<-failedCh, queryImagesFailed)
 	resp.BurstsLaunched = h.collectStat(<-burstsCh, queryBurstsLaunched)
 
-	w.Header().Set("Cache-Control", "public, max-age=5")
+	// Browsers respect max-age; CloudFront and Cloudflare honor s-maxage and
+	// serve stale during refresh / origin failure (stale-while-revalidate /
+	// stale-if-error) so a Lambda hiccup never breaks the landing page.
+	w.Header().Set(
+		"Cache-Control",
+		"public, max-age=5, s-maxage=15, stale-while-revalidate=30, stale-if-error=300",
+	)
 	writeJSON(w, http.StatusOK, resp)
 }
 

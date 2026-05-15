@@ -45,6 +45,7 @@ func TestHandleStats_HappyPath(t *testing.T) {
 
 	temporal := &fakeTemporal{counts: map[string]int64{
 		`WorkflowType = "ProcessImage" AND ExecutionStatus = "Completed"`:    1234,
+		`WorkflowType = "ProcessImage" AND ExecutionStatus = "Failed"`:       9,
 		`WorkflowType = "LaunchPipelines" AND ExecutionStatus = "Completed"`: 42,
 	}}
 	h := newStatsHandler(temporal)
@@ -56,8 +57,9 @@ func TestHandleStats_HappyPath(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want 200 (body=%s)", rec.Code, rec.Body.String())
 	}
-	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=5" {
-		t.Fatalf("Cache-Control: got %q, want %q", got, "public, max-age=5")
+	wantCC := "public, max-age=5, s-maxage=15, stale-while-revalidate=30, stale-if-error=300"
+	if got := rec.Header().Get("Cache-Control"); got != wantCC {
+		t.Fatalf("Cache-Control: got %q, want %q", got, wantCC)
 	}
 
 	var got StatsResponse
@@ -66,6 +68,7 @@ func TestHandleStats_HappyPath(t *testing.T) {
 	}
 	want := StatsResponse{
 		ImagesProcessed: 1234,
+		ImagesFailed:    9,
 		BurstsLaunched:  42,
 		WindowDays:      30,
 	}
@@ -92,6 +95,7 @@ func TestHandleStats_IssuesExpectedQueries(t *testing.T) {
 	}
 	want := []string{
 		queryImagesProcessed,
+		queryImagesFailed,
 		queryBurstsLaunched,
 	}
 	seen := rec.queries()
@@ -148,6 +152,7 @@ func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {
 	temporal := &fakeTemporal{
 		counts: map[string]int64{
 			queryBurstsLaunched: 10,
+			queryImagesFailed:   3,
 			// queryImagesProcessed intentionally absent — see errs below.
 		},
 		errs: map[string]error{
@@ -169,6 +174,7 @@ func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {
 	}
 	want := StatsResponse{
 		ImagesProcessed: -1,
+		ImagesFailed:    3,
 		BurstsLaunched:  10,
 		WindowDays:      30,
 	}
