@@ -102,8 +102,7 @@ func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 // --- /api/uploads/presign ---------------------------------------------------
 
 type presignRequest struct {
-	Count int   `json:"count"`
-	Size  int64 `json:"size,omitempty"`
+	Count int `json:"count"`
 }
 
 type presignedURL struct {
@@ -114,11 +113,6 @@ type presignedURL struct {
 const (
 	presignTTL    = 15 * time.Minute
 	maxPresignCnt = 50
-	// maxPresignSize mirrors maxImageBytes in internal/activities/resize.go.
-	// S3 PUT presigned URLs cannot fully enforce object size at the SDK
-	// level — a client can ignore Content-Length — so the worker also
-	// enforces the cap as defense in depth when it downloads the object.
-	maxPresignSize = 25 * 1024 * 1024
 )
 
 func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
@@ -130,11 +124,6 @@ func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
 	if req.Count <= 0 || req.Count > maxPresignCnt {
 		writeError(w, http.StatusBadRequest,
 			fmt.Sprintf("count must be between 1 and %d, got %d", maxPresignCnt, req.Count))
-		return
-	}
-	if req.Size > maxPresignSize {
-		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("size must be <= %d bytes, got %d", maxPresignSize, req.Size))
 		return
 	}
 

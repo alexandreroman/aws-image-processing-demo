@@ -7,11 +7,6 @@ export interface S3Ref {
   key: string;
 }
 
-export interface PresignedUpload {
-  url: string;
-  key: string;
-}
-
 export interface StartWorkflowsRequest {
   images: S3Ref[];
 }
@@ -83,13 +78,6 @@ export function useApi() {
     return $fetch<T>(url, opts);
   }
 
-  function presignUploads(count: number): Promise<PresignedUpload[]> {
-    return apiFetch<PresignedUpload[]>('/uploads/presign', {
-      method: 'POST',
-      body: { count },
-    });
-  }
-
   function startWorkflows(
     images: S3Ref[],
   ): Promise<StartWorkflowsResponse> {
@@ -104,9 +92,6 @@ export function useApi() {
   }
 
   return {
-    baseUrl,
-    apiFetch,
-    presignUploads,
     startWorkflows,
     getPipeline,
   };

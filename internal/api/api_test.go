@@ -54,12 +54,6 @@ func TestHandlePresign_Validation(t *testing.T) {
 			wantErrSubstr: "invalid body",
 		},
 		{
-			name:          "size above limit",
-			body:          fmt.Sprintf(`{"count":1,"size":%d}`, maxPresignSize+1),
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "size must be",
-		},
-		{
 			name:          "malformed json",
 			body:          `{"count":`,
 			wantStatus:    http.StatusBadRequest,
