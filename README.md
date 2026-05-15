@@ -64,9 +64,10 @@ make dev
 
 For a fully containerized stack (everything in Docker,
 no host processes), use `make app-up` instead. The
-compose stack runs an additional Caddy-fronted frontend
-container that serves the prebuilt Nuxt SSG bundle on
-`:3000` and reverse-proxies `/api/*` to the backend —
+compose stack runs a Caddy-fronted frontend container
+that serves the prebuilt Nuxt SSG bundle on `:3000`,
+reverse-proxies `/api/*` to the backend, and reverse-
+proxies `/images/*` to Moto (S3 images bucket) —
 single-origin, mirroring the prod CloudFront topology.
 The stack is self-contained: it uses a local Temporal
 dev server and Moto, independent of the Cloud creds in
@@ -75,12 +76,11 @@ dev server and Moto, independent of the Cloud creds in
 
 Once the stack is up:
 
-- Frontend — <http://localhost:3000>
-- Backend API — <http://localhost:8000/api> in
-  `make dev` (split origin); <http://localhost:3000/api>
-  in `make app-up` (proxied by Caddy). The `:8000` port
-  stays published in both modes for direct backend
-  probing.
+- Frontend — <http://localhost:3000> serves the UI and
+  proxies `/api/*` + `/images/*` internally (Nuxt
+  devProxy in `make dev`, Caddy in `make app-up`).
+- Backend API — <http://localhost:8000/api> stays
+  published in both modes for direct probing.
 - Temporal UI — <http://localhost:8233>
 - Moto Server endpoint — <http://localhost:4566>
 
@@ -174,7 +174,7 @@ load only `.env`. Both files are gitignored — copy from
 | `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID for the demo domain               | (empty)              |
 | `WORKER_IMAGE`          | Override the Fargate worker image                    | (GHCR `:latest`)     |
 
-**Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make app-up`, `make infra-up`, `make test`, `make check`):
+**Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make infra-up`, `make test`, `make check`):
 
 | Variable                | Description                                          | Value                |
 | ----------------------- | ---------------------------------------------------- | -------------------- |
@@ -183,7 +183,6 @@ load only `.env`. Both files are gitignored — copy from
 | `AWS_SECRET_ACCESS_KEY` | Moto's dummy secret                                  | `test`               |
 | `IMAGES_BUCKET`         | Fixed bucket name used by the dev stack              | `aws-image-processing-demo-images-local` |
 | `IMAGES_TABLE`          | Fixed DynamoDB table name used by the dev stack      | `aws-image-processing-demo-images-local` |
-| `NUXT_PUBLIC_API_BASE`  | Absolute backend URL baked into the Nuxt bundle for host-mode dev (split-origin) | `http://localhost:8000` |
 | `TEMPORAL_ADDRESS`      | Override Temporal Cloud with the local dev server    | `localhost:7233` (optional, commented by default) |
 | `TEMPORAL_NAMESPACE`    | Namespace on the local dev server                    | `default` (optional) |
 | `TEMPORAL_TLS_CERT`     | Disable mTLS for the local dev server                | empty (optional)     |
@@ -195,10 +194,11 @@ In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants 
 
 ```mermaid
 graph TD
-    User[Browser] -->|PUT presigned| S3[(S3 images bucket)]
+    User[Browser] -->|PUT presigned upload| S3[(S3 images bucket)]
     User -->|POST /api/*| CF[CloudFront]
     CF -->|/api/*| APIGW[API Gateway]
     APIGW --> BE[Backend Lambda]
+    CF -->|/images/*| S3
     CF -->|/*| FE[(S3 Nuxt SSG)]
     BE -->|StartWorkflow / Query| TC[Temporal Cloud]
     BE --> DDB[(DynamoDB metadata)]
@@ -214,13 +214,14 @@ Nuxt SSG bundle and the API.
 
 ```mermaid
 graph TD
-    Browser -->|GET /, GET /api/*| Caddy
+    Browser -->|GET /, /api/*, /images/*| Caddy
     Caddy -->|/| StaticSSG[(Nuxt SSG files)]
     Caddy -->|/api/*| Backend
+    Caddy -->|/images/*| Moto[(Moto S3)]
     Backend -->|StartWorkflow / Query| Temporal[Temporal dev server]
     Backend --> DDB[(Moto DynamoDB)]
     Worker -->|long-poll| Temporal
-    Worker --> Moto[(Moto S3)]
+    Worker --> Moto
     Worker --> DDB
     Worker --> Anthropic
 ```

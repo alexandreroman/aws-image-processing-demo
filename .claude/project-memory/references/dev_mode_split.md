@@ -15,21 +15,22 @@ Two ways to bring up the stack, both via
   `docker-compose up -d temporal moto init`,
   then runs `cmd/backend`, `cmd/worker`, and
   the Nuxt dev server on the host via
-  `make -j backend worker frontend`. Split-
-  origin: frontend on `:3000`, backend on
-  `:8000`. The Nuxt bundle is built with
-  `NUXT_PUBLIC_API_BASE=http://localhost:8000`
-  (set in `.env.local`). Stopping is Ctrl-C
-  for the host processes, then `make infra-
-  down` to stop Docker.
+  `make -j backend worker frontend`. Single-
+  origin: the Nuxt dev server on `:3000`
+  proxies `/api/*` to `localhost:8000` and
+  `/images/*` to Moto via `nitro.devProxy`
+  (see `frontend/nuxt.config.ts`). Stopping is
+  Ctrl-C for the host processes, then
+  `make infra-down` to stop Docker.
 - **`make app-up`** (parity mode): brings up
   the full stack in Docker, including the
   `worker`, `backend`, and a Caddy-fronted
   `frontend` container (built from
   `frontend/Dockerfile`). Caddy serves the
-  Nuxt SSG bundle on `:3000` and reverse-
-  proxies `/api/*` to `backend:8000` — same-
-  origin from the browser, mirroring the prod
+  Nuxt SSG bundle on `:3000`, reverse-proxies
+  `/api/*` to `backend:8000`, and `/images/*`
+  to `moto:5000/<dev-bucket>` — same-origin
+  from the browser, mirroring the prod
   CloudFront topology. The compose stack is
   self-contained: it does not consult
   `.env.local`, only pulls `ANTHROPIC_API_KEY`

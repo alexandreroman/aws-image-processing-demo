@@ -115,7 +115,9 @@ not shared with the team.
   equivalents.
 - **All backend routes are prefixed with `/api`.**
   This is what makes CloudFront path-based routing
-  work cleanly (`/api/*` → API Gateway, `/*` → S3).
+  work cleanly (`/api/*` → API Gateway,
+  `/images/*` → S3 images bucket via OAC,
+  `/*` → S3 frontend bucket).
 - **S3 prefix convention:** uploads under
   `uploads/` (flat), derived artifacts under
   `pipelines/{pipelineId}/...`. Lifecycle rules expire
