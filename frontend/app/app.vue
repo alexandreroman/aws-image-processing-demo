@@ -31,10 +31,18 @@
               <rect x="6" y="2" width="16" height="16" rx="2" />
             </svg>
           </span>
+          <img
+            src="/aws-logo.png"
+            alt="AWS"
+            class="h-5 w-auto shrink-0 ml-1 translate-y-[5px]"
+            loading="lazy"
+            decoding="async"
+            draggable="false"
+          >
           <span
             class="font-semibold text-ink-100 text-sm sm:text-[15px] truncate"
           >
-            AWS Image Processing Demo
+            Image Processing Demo
           </span>
         </NuxtLink>
 
