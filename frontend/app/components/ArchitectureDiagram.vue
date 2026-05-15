@@ -3,10 +3,10 @@
 // and intentionally decoupled from any live state — it teaches the
 // reading order, not the current activity level.
 const activities = [
-  { y: 110, label: 'Resize' },
-  { y: 170, label: 'Describe with AI' },
-  { y: 230, label: 'Watermark' },
-  { y: 290, label: 'Store' },
+  { y: 105, label: 'Resize' },
+  { y: 155, label: 'Describe with AI' },
+  { y: 205, label: 'Watermark' },
+  { y: 255, label: 'Store' },
 ] as const;
 </script>
 
@@ -15,7 +15,7 @@ const activities = [
     <h2 class="stat-label mb-4">Architecture</h2>
 
     <svg
-      viewBox="0 0 1000 360"
+      viewBox="0 80 1000 210"
       class="w-full h-auto select-none"
       role="img"
       aria-label="Browser to App to Temporal Cloud to Workers to four activities"
