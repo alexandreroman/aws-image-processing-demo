@@ -3,11 +3,19 @@ useHead({
   title: 'AWS Image Processing Demo — Image Processing Burst',
 });
 
-const techStack = [
-  { label: 'Orchestration', value: 'Temporal Cloud', accent: 'primary' },
-  { label: 'Compute', value: 'ECS Fargate + Lambda', accent: 'accent' },
-  { label: 'Storage', value: 'S3 + DynamoDB', accent: 'accent' },
-  { label: 'AI', value: 'Claude Haiku 4.5', accent: 'iris' },
+const reasons = [
+  {
+    title: 'Durable execution',
+    body: 'One image = one workflow. Crashes, deploys, scale-downs: Temporal replays from history, no progress is lost.',
+  },
+  {
+    title: 'Elastic compute, zero servers',
+    body: 'Fargate workers, scaled by a single lever (min/max-capacity). No nodes, no AMIs, no patching.',
+  },
+  {
+    title: 'Lifecycle baked into S3',
+    body: 'Uploads expire after 7 days, derivatives after 30. Cost is bounded by design, not by a cron.',
+  },
 ] as const;
 </script>
 
@@ -18,7 +26,6 @@ const techStack = [
         class="lg:col-span-8 card relative overflow-hidden p-5 sm:p-6
           flex flex-col gap-4"
       >
-        <!-- subtle dotted background -->
         <div
           class="absolute inset-0 bg-grid opacity-40 [background-size:24px_24px]
             pointer-events-none"
@@ -52,21 +59,6 @@ const techStack = [
           the manifest in DynamoDB. Watch workflows complete live, then
           share the pipeline URL for the same live view.
         </p>
-
-        <dl
-          class="relative grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1
-            border-t border-surface-border mt-1 pt-3"
-        >
-          <div v-for="t in techStack" :key="t.label" class="min-w-0">
-            <dt class="stat-label">{{ t.label }}</dt>
-            <dd
-              class="mt-1 text-sm font-semibold text-ink-100 truncate"
-              :title="t.value"
-            >
-              {{ t.value }}
-            </dd>
-          </div>
-        </dl>
       </div>
 
       <div class="lg:col-span-4">
@@ -76,5 +68,12 @@ const techStack = [
 
     <LiveCounters />
     <ArchitectureDiagram />
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <article v-for="r in reasons" :key="r.title" class="card p-5 sm:p-6">
+        <h3 class="text-base font-semibold text-ink-100 mb-2">{{ r.title }}</h3>
+        <p class="text-sm text-ink-200 leading-relaxed">{{ r.body }}</p>
+      </article>
+    </section>
   </div>
 </template>
