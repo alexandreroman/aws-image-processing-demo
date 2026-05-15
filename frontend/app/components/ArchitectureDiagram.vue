@@ -3,10 +3,10 @@
 // and intentionally decoupled from any live state — it teaches the
 // reading order, not the current activity level.
 const activities = [
-  { y: 105, label: 'Resize' },
+  { y: 105, label: 'Resize image' },
   { y: 155, label: 'Describe with AI' },
-  { y: 205, label: 'Watermark' },
-  { y: 255, label: 'Store' },
+  { y: 205, label: 'Add watermark' },
+  { y: 255, label: 'Store results' },
 ] as const;
 </script>
 
