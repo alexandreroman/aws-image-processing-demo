@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"go.temporal.io/api/workflowservice/v1"
@@ -69,4 +70,73 @@ func TestHandleStats_HappyPath(t *testing.T) {
 	if got != want {
 		t.Fatalf("response: got %+v, want %+v", got, want)
 	}
+}
+
+func TestHandleStats_IssuesExpectedQueries(t *testing.T) {
+	t.Parallel()
+
+	temporal := &fakeTemporal{
+		counts: map[string]int64{},
+	}
+	rec := &recordingTemporal{fakeTemporal: temporal}
+	h := newStatsHandler(rec)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", w.Code)
+	}
+	want := []string{
+		queryImagesProcessed,
+		queryImagesInFlight,
+		queryBurstsLaunched,
+	}
+	seen := rec.queries()
+	for _, q := range want {
+		if !containsString(seen, q) {
+			t.Errorf("missing query %q in %v", q, seen)
+		}
+	}
+}
+
+// recordingTemporal embeds *fakeTemporal (not client.Client directly)
+// so the fake's embedded client.Client still satisfies the
+// Dependencies.Temporal interface type. The CountWorkflow override
+// here shadows the fake's when invoked through the recorder. The
+// stats handler fans the three queries out across goroutines, so
+// accesses to the slice are guarded by a mutex.
+type recordingTemporal struct {
+	*fakeTemporal
+
+	mu   sync.Mutex
+	seen []string
+}
+
+func (r *recordingTemporal) CountWorkflow(
+	ctx context.Context,
+	req *workflowservice.CountWorkflowExecutionsRequest,
+) (*workflowservice.CountWorkflowExecutionsResponse, error) {
+	r.mu.Lock()
+	r.seen = append(r.seen, req.Query)
+	r.mu.Unlock()
+	return r.fakeTemporal.CountWorkflow(ctx, req)
+}
+
+func (r *recordingTemporal) queries() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, len(r.seen))
+	copy(out, r.seen)
+	return out
+}
+
+func containsString(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
