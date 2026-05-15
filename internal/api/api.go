@@ -66,6 +66,7 @@ func New(deps Dependencies) *Handler {
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
 	h.mux.HandleFunc("GET /api/healthz", h.handleHealth)
+	h.mux.HandleFunc("GET /api/stats", h.handleStats)
 	return h
 }
 
