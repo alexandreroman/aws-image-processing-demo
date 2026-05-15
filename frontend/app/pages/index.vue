@@ -75,5 +75,6 @@ const techStack = [
     </section>
 
     <LiveCounters />
+    <ArchitectureDiagram />
   </div>
 </template>
