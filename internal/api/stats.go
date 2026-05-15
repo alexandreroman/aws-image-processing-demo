@@ -59,6 +59,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	resp.ImagesInFlight = h.collectStat(<-inFlightCh, queryImagesInFlight)
 	resp.BurstsLaunched = h.collectStat(<-burstsCh, queryBurstsLaunched)
 
+	w.Header().Set("Cache-Control", "public, max-age=5")
 	writeJSON(w, http.StatusOK, resp)
 }
 

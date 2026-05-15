@@ -57,6 +57,9 @@ func TestHandleStats_HappyPath(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want 200 (body=%s)", rec.Code, rec.Body.String())
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=5" {
+		t.Fatalf("Cache-Control: got %q, want %q", got, "public, max-age=5")
+	}
 
 	var got StatsResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
