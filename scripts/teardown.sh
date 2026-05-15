@@ -13,16 +13,11 @@
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-env_file="${repo_root}/.env"
 infra_dir="${repo_root}/infra"
 
-if [[ -f "${env_file}" ]]; then
-  echo "Loading environment from ${env_file}"
-  set -a
-  # shellcheck disable=SC1090
-  . "${env_file}"
-  set +a
-fi
+# shellcheck disable=SC1091
+source "${repo_root}/scripts/lib/env.sh"
+load_env
 
 interactive="${INTERACTIVE:-1}"
 tofu_destroy_args=()

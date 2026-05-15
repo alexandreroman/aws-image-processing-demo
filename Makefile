@@ -1,11 +1,22 @@
 .DEFAULT_GOAL := dev
 
-# Load .env into Make's environment so host-mode targets (make dev,
-# make backend, make worker) see the same vars as the Docker stack.
+# Canonical environment. Required for deploy targets, baseline for dev.
 # Optional: missing .env is not an error.
 ifneq (,$(wildcard .env))
 include .env
 export
+endif
+
+# Local dev overlay: only loaded for dev/test targets so deploy
+# targets see only `.env`. Sequential include → later assignments win.
+DEV_TARGETS := dev backend worker frontend app-up app-down app-logs \
+               infra-up infra-down infra-logs test check
+GOALS := $(or $(MAKECMDGOALS),$(.DEFAULT_GOAL))
+ifneq (,$(filter $(DEV_TARGETS),$(GOALS)))
+ifneq (,$(wildcard .env.local))
+include .env.local
+export
+endif
 endif
 
 ##@ Infra
@@ -71,26 +82,16 @@ check: ## Run static checks across modules
 ##@ Deploy
 
 .PHONY: deploy
-deploy: ## Provision AWS infra (tofu init + apply) and deploy the frontend
-	tofu -chdir=infra init
-	tofu -chdir=infra apply
-	$(MAKE) frontend-deploy
+deploy: ## Provision AWS infra and deploy the frontend (uses .env)
+	./scripts/deploy.sh
 
 .PHONY: frontend-deploy
-frontend-deploy: ## Build the frontend, sync to S3, invalidate CloudFront
-	pnpm -C frontend install
-	NUXT_PUBLIC_API_BASE="" \
-	NUXT_PUBLIC_SAMPLES_BUCKET=$$(tofu -chdir=infra output -raw images_bucket) \
-		pnpm -C frontend generate
-	aws s3 sync frontend/.output/public/ \
-		s3://$$(tofu -chdir=infra output -raw frontend_bucket)/ --delete
-	aws cloudfront create-invalidation \
-		--distribution-id $$(tofu -chdir=infra output -raw cloudfront_distribution_id) \
-		--paths '/*'
+frontend-deploy: ## Rebuild and sync the frontend (uses .env)
+	./scripts/frontend-deploy.sh
 
 .PHONY: teardown
-teardown: ## Destroy all AWS infrastructure
-	tofu -chdir=infra destroy
+teardown: ## Destroy all AWS infrastructure (uses .env)
+	./scripts/teardown.sh
 
 ##@ Helpers
 

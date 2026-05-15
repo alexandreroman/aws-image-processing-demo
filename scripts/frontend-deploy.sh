@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# Deploy the demo to AWS.
+# Rebuild the Nuxt frontend, sync to S3, and invalidate CloudFront.
 #
-# Steps:
-#   1. Load .env and validate required vars.
-#   2. Build the Lambda bootstrap binary.
-#   3. tofu init && tofu apply.
-#   4. Build the Nuxt frontend.
-#   5. Sync to S3 and invalidate CloudFront.
-#   6. Print the demo URL.
-#
-# Set INTERACTIVE=0 to skip the tofu approval
-# prompt (useful in CI). Default is interactive.
+# Skips `tofu apply`: assumes the infra is already provisioned and
+# pulls bucket/distribution names from Tofu outputs. Use this for
+# fast iteration on the frontend only.
 
 set -euo pipefail
 
@@ -21,19 +14,6 @@ frontend_dir="${repo_root}/frontend"
 # shellcheck disable=SC1091
 source "${repo_root}/scripts/lib/env.sh"
 load_env
-
-interactive="${INTERACTIVE:-1}"
-tofu_apply_args=()
-if [[ "${interactive}" == "0" ]]; then
-  tofu_apply_args+=(-auto-approve)
-fi
-
-echo "==> Building Lambda bootstrap"
-"${repo_root}/scripts/build-lambda.sh"
-
-echo "==> Provisioning infra with OpenTofu"
-tofu -chdir="${infra_dir}" init
-tofu -chdir="${infra_dir}" apply "${tofu_apply_args[@]}"
 
 echo "==> Building frontend"
 pnpm -C "${frontend_dir}" install --frozen-lockfile
@@ -58,5 +38,5 @@ aws cloudfront create-invalidation \
 
 demo_url="$(tofu -chdir="${infra_dir}" output -raw demo_url)"
 echo
-echo "Deployment complete."
+echo "Frontend deployment complete."
 echo "Demo URL: ${demo_url}"

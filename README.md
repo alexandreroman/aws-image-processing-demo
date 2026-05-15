@@ -50,7 +50,10 @@ cd aws-image-processing-demo
 
 # Configure secrets
 cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY
+# edit .env and set ANTHROPIC_API_KEY (the only var dev needs from .env)
+
+cp .env.local.example .env.local
+# .env.local overrides .env with Moto + local Temporal settings
 
 # Local dev — Temporal dev server and Moto Server
 # (S3 + DynamoDB) in Docker; worker, backend, and
@@ -106,9 +109,14 @@ GHCR by a GitHub Actions workflow on every push to
 `main`. Then, from a clone:
 
 ```bash
+# Configure secrets for deployment
+cp .env.example .env
+# edit .env — set TEMPORAL_*, ANTHROPIC_API_KEY, paths to Temporal Cloud certs.
+# AWS auth comes from your CLI profile (`aws sts get-caller-identity`).
+
 make deploy
-# runs: tofu init, tofu apply (interactive), frontend build,
-#       S3 sync, CloudFront invalidation
+# runs: scripts/deploy.sh
+#       (build-lambda, tofu init+apply, frontend build+sync, CF invalidation)
 ```
 
 To re-deploy only the frontend (typical iteration):
@@ -125,8 +133,17 @@ make teardown
 
 ## Configuration
 
-All configuration is via environment variables. Copy
-`.env.example` to `.env` and adjust.
+All configuration is via environment variables, loaded
+through two layers of files: `.env` is the canonical,
+deploy-shaped configuration (Temporal Cloud, Anthropic,
+AWS region). `.env.local` is an opt-in overlay that
+local-dev Make targets (`make dev`, `make backend`,
+`make worker`, `make frontend`, `make app-up`,
+`make infra-up`, `make test`, `make check`) layer on top
+to point at Moto + a Temporal dev server. Deploy targets
+(`make deploy`, `make frontend-deploy`, `make teardown`)
+load only `.env`. Both files are gitignored — copy from
+`.env.example` / `.env.local.example`.
 
 | Variable                | Description                                   | Default                  |
 | ----------------------- | --------------------------------------------- | ------------------------ |
