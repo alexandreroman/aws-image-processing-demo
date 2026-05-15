@@ -23,24 +23,28 @@ const activities = [
       <!-- nodes -->
       <g class="text-ink-100" font-family="ui-sans-serif, system-ui" font-size="14">
         <g class="node">
-          <rect x="20"  y="160" width="120" height="40" rx="8"
+          <rect
+x="20"  y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-surface-border" stroke-width="1"/>
           <text x="80"  y="184" text-anchor="middle" class="fill-ink-100">Browser</text>
         </g>
         <g class="node">
-          <rect x="220" y="160" width="120" height="40" rx="8"
+          <rect
+x="220" y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-surface-border" stroke-width="1"/>
           <text x="280" y="184" text-anchor="middle" class="fill-ink-100">App</text>
         </g>
         <g class="node">
-          <rect x="420" y="160" width="170" height="40" rx="8"
+          <rect
+x="420" y="160" width="170" height="40" rx="8"
             class="fill-surface-elevated stroke-primary" stroke-width="1.5"/>
           <text x="505" y="184" text-anchor="middle" class="fill-primary font-semibold">
             Temporal Cloud
           </text>
         </g>
         <g class="node">
-          <rect x="670" y="160" width="120" height="40" rx="8"
+          <rect
+x="670" y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-accent" stroke-width="1.5"/>
           <text x="730" y="184" text-anchor="middle" class="fill-accent font-semibold">
             Workers
@@ -49,7 +53,8 @@ const activities = [
 
         <!-- activity branches -->
         <g v-for="(a, i) in activities" :key="a.label">
-          <rect :x="850" :y="a.y - 16" width="130" height="32" rx="6"
+          <rect
+:x="850" :y="a.y - 16" width="130" height="32" rx="6"
             class="fill-surface stroke-surface-border" stroke-width="1"/>
           <text :x="915" :y="a.y + 4" text-anchor="middle" class="fill-ink-200" font-size="12">
             {{ a.label }}
