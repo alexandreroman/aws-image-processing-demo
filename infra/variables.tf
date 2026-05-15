@@ -54,12 +54,6 @@ variable "worker_image" {
   default     = "ghcr.io/alexandreroman/aws-image-processing-demo-worker:latest"
 }
 
-variable "worker_desired_count" {
-  description = "Number of Fargate worker tasks (v1: fixed)."
-  type        = number
-  default     = 1
-}
-
 variable "anthropic_api_key" {
   description = "Anthropic API key — stored in Secrets Manager and injected into the worker."
   type        = string

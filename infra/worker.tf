@@ -191,7 +191,7 @@ resource "aws_ecs_service" "worker" {
   name            = "${local.name_prefix}-worker"
   cluster         = aws_ecs_cluster.worker.id
   task_definition = aws_ecs_task_definition.worker.arn
-  desired_count   = var.worker_desired_count
+  desired_count   = 1
   launch_type     = "FARGATE"
 
   network_configuration {
