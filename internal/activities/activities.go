@@ -29,7 +29,6 @@ const ClaudeInvalidInputErrorType = "ClaudeInvalidInput"
 // activity method. It is constructed once at worker startup.
 type Activities struct {
 	S3        *s3.Client
-	Presigner *s3.PresignClient
 	Dynamo    *dynamodb.Client
 	Anthropic *anthropicclient.Client
 	// Temporal is used by the StartProcessImage starter activity to schedule
@@ -54,7 +53,6 @@ type Config struct {
 // from the environment when Config leaves them empty.
 func New(
 	s3c *s3.Client,
-	presigner *s3.PresignClient,
 	ddb *dynamodb.Client,
 	ac *anthropicclient.Client,
 	tc client.Client,
@@ -86,7 +84,6 @@ func New(
 	}
 	return &Activities{
 		S3:           s3c,
-		Presigner:    presigner,
 		Dynamo:       ddb,
 		Anthropic:    ac,
 		Temporal:     tc,

@@ -12,7 +12,6 @@ import (
 	"github.com/alexandreroman/aws-image-processing-demo/internal/awsclient"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/temporalclient"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"go.temporal.io/sdk/worker"
 )
 
@@ -37,7 +36,6 @@ func run(logger *slog.Logger) error {
 	}
 	s3c := awsclient.NewS3(awsCfg)
 	ddb := awsclient.NewDynamoDB(awsCfg)
-	presigner := s3.NewPresignClient(s3c)
 
 	anth, err := anthropicclient.New()
 	if err != nil {
@@ -51,7 +49,7 @@ func run(logger *slog.Logger) error {
 	defer tc.Close()
 
 	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
-	acts, err := activities.New(s3c, presigner, ddb, anth, tc, activities.Config{TaskQueue: taskQueue})
+	acts, err := activities.New(s3c, ddb, anth, tc, activities.Config{TaskQueue: taskQueue})
 	if err != nil {
 		return err
 	}
