@@ -54,10 +54,8 @@ fi
 
 interactive="${INTERACTIVE:-1}"
 tofu_apply_args=()
-tofu_destroy_args=()
 if [[ "${interactive}" == "0" ]]; then
   tofu_apply_args+=(-auto-approve)
-  tofu_destroy_args+=(-auto-approve)
 fi
 
 echo "==> Building Lambda bootstrap"
