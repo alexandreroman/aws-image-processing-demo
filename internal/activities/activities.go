@@ -17,8 +17,6 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-const defaultTaskQueue = "image-processing"
-
 // ClaudeInvalidInputErrorType is the application error type returned by
 // GenerateDescription when the model rejects or cannot parse the image.
 // Exported so the workflow can reference the same literal in its
@@ -44,13 +42,11 @@ type Activities struct {
 
 // Config carries optional overrides. Empty values fall back to env vars.
 type Config struct {
-	ImagesBucket string
-	ImagesTable  string
-	TaskQueue    string
+	TaskQueue string
 }
 
 // New builds an Activities struct, resolving IMAGES_BUCKET and IMAGES_TABLE
-// from the environment when Config leaves them empty.
+// from the environment.
 func New(
 	s3c *s3.Client,
 	ddb *dynamodb.Client,
@@ -58,21 +54,9 @@ func New(
 	tc client.Client,
 	cfg Config,
 ) (*Activities, error) {
-	bucket := cfg.ImagesBucket
-	if bucket == "" {
-		bucket = os.Getenv("IMAGES_BUCKET")
-	}
-	table := cfg.ImagesTable
-	if table == "" {
-		table = os.Getenv("IMAGES_TABLE")
-	}
+	bucket := os.Getenv("IMAGES_BUCKET")
+	table := os.Getenv("IMAGES_TABLE")
 	taskQueue := cfg.TaskQueue
-	if taskQueue == "" {
-		taskQueue = os.Getenv("TEMPORAL_TASK_QUEUE")
-	}
-	if taskQueue == "" {
-		taskQueue = defaultTaskQueue
-	}
 	if bucket == "" {
 		return nil, errors.New("activities: IMAGES_BUCKET is required")
 	}
