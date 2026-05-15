@@ -71,12 +71,6 @@ const tiles = computed(() => [
 
 <template>
   <section class="card p-5 sm:p-6">
-    <div class="flex items-baseline justify-between mb-4">
-      <h2 class="stat-label">Live activity</h2>
-      <span class="text-[11px] text-ink-400">
-        Last {{ stats?.windowDays ?? 30 }} days
-      </span>
-    </div>
     <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="t in tiles" :key="t.label" class="min-w-0">
         <dt class="stat-label">{{ t.label }}</dt>
