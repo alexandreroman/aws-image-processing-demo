@@ -177,6 +177,28 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "images must not be empty")
 		return
 	}
+	// Cap the burst at the same limit as presign so a caller cannot bypass
+	// it by signing URLs elsewhere and posting a larger batch here.
+	if len(req.Images) > maxPresignCnt {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("images: at most %d allowed, got %d", maxPresignCnt, len(req.Images)))
+		return
+	}
+	// Pin each S3Ref to the configured bucket and to prefixes the demo
+	// actually produces (presigned uploads or curated samples). Without
+	// this, a caller could queue workflows against arbitrary objects.
+	for i, img := range req.Images {
+		if img.Bucket != h.deps.ImagesBucket {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("images[%d].bucket: must match the configured images bucket", i))
+			return
+		}
+		if !strings.HasPrefix(img.Key, "uploads/") && !strings.HasPrefix(img.Key, "samples/") {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("images[%d].key: must start with uploads/ or samples/", i))
+			return
+		}
+	}
 
 	pipelineID := newPipelineID()
 
