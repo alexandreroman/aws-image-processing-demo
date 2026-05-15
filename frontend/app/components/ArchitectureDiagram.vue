@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="card p-5 sm:p-6">
-    <h2 class="stat-label mb-4">Architecture</h2>
+    <h2 class="stat-label mb-4">Workflow</h2>
 
     <svg
       viewBox="0 80 1080 210"

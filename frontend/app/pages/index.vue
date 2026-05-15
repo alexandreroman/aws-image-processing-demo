@@ -59,11 +59,10 @@ const reasons = [
 
         <p class="relative text-ink-200 text-sm sm:text-[15px] leading-relaxed">
           Trigger a burst of <em class="text-ink-100 not-italic font-medium">N</em>
-          images. For each one, a Temporal workflow runs eight activities —
-          six of them in parallel — resizing to three sizes, generating an
-          AI-powered description, watermarking each size, and persisting
-          the manifest in DynamoDB. Watch workflows complete live, then
-          share the pipeline URL for the same live view.
+          images. For each one, a Temporal workflow runs eight activities:
+          resizing to three sizes, generating an AI-powered description,
+          watermarking each size, and persisting the manifest in DynamoDB.
+          Watch workflows complete live.
         </p>
       </div>
 
