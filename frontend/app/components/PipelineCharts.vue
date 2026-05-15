@@ -167,6 +167,8 @@ const paths = computed<BuiltPaths>(() => {
   return { completedArea, failedArea, runningLine, targetY: yScale(yMax, yMax) };
 });
 
+const hasData = computed(() => series.value.points.length > 0);
+
 const xTickLabel = computed(() => {
   const d = series.value.duration;
   if (d < 60) return `${d.toFixed(0)}s`;
@@ -238,20 +240,12 @@ const summaryRows = computed(() => [
     <article class="card p-4 space-y-3 animate-fade-in">
       <header class="flex items-baseline justify-between">
         <h2 class="stat-label">Pipeline timeline</h2>
-        <span class="text-[11px] text-ink-400 font-mono tabular-nums">
+        <span v-if="hasData" class="text-[11px] text-ink-400 font-mono tabular-nums">
           {{ xTickLabel }}
         </span>
       </header>
 
-      <div
-        v-if="workflows.length === 0"
-        class="text-xs text-ink-400 py-10 text-center border border-dashed
-          border-surface-border rounded-lg"
-      >
-        Timeline will appear once workflows start.
-      </div>
-
-      <div v-else class="relative">
+      <div class="relative">
         <svg
           :viewBox="`0 0 ${VB_W} ${VB_H}`"
           preserveAspectRatio="none"
@@ -260,6 +254,7 @@ const summaryRows = computed(() => [
           aria-label="Pipeline timeline chart"
         >
           <line
+            v-if="hasData"
             :x1="PAD_L"
             :x2="VB_W - PAD_R"
             :y1="paths.targetY"
@@ -271,6 +266,7 @@ const summaryRows = computed(() => [
             vector-effect="non-scaling-stroke"
           />
           <path
+            v-if="paths.completedArea"
             :d="paths.completedArea"
             fill="rgb(52 211 153 / 0.35)"
             stroke="rgb(52 211 153)"
@@ -278,10 +274,12 @@ const summaryRows = computed(() => [
             vector-effect="non-scaling-stroke"
           />
           <path
+            v-if="paths.failedArea"
             :d="paths.failedArea"
             fill="rgb(244 63 94 / 0.35)"
           />
           <path
+            v-if="paths.runningLine"
             :d="paths.runningLine"
             fill="none"
             stroke="rgb(167 139 250)"
@@ -292,11 +290,20 @@ const summaryRows = computed(() => [
         </svg>
 
         <div
+          v-if="hasData"
           class="pointer-events-none absolute inset-0 flex flex-col
             justify-between text-[10px] text-ink-400 font-mono tabular-nums px-1"
         >
           <span>{{ summary.total }}</span>
           <span>0</span>
+        </div>
+
+        <div
+          v-if="!hasData"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <div class="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         </div>
       </div>
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { WorkflowItem } from '~/composables/useApi';
 
+const DEFAULT_PLACEHOLDER_SLOTS = 20;
+
 const props = withDefaults(
   defineProps<{
     workflows: WorkflowItem[];
@@ -178,9 +180,12 @@ const completedTiles = computed<CompletedTile[]>(() =>
   tiles.value.filter((t): t is CompletedTile => t.image != null && t.status === 'completed'),
 );
 
-const slotCount = computed<number>(() =>
-  Math.max(props.expectedCount, tiles.value.length),
-);
+const slotCount = computed<number>(() => {
+  if (props.expectedCount === 0 && tiles.value.length === 0) {
+    return DEFAULT_PLACEHOLDER_SLOTS;
+  }
+  return Math.max(props.expectedCount, tiles.value.length);
+});
 
 type Slot = { kind: 'tile'; tile: Tile } | { kind: 'pending'; index: number };
 
@@ -283,10 +288,7 @@ onBeforeUnmount(() => {
       </span>
     </header>
 
-    <div
-      v-if="slotCount > 0"
-      class="grid grid-cols-3 sm:grid-cols-4 gap-2"
-    >
+    <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
       <template
         v-for="slot in slots"
         :key="slot.kind === 'tile' ? slot.tile.workflowId : `pending-${slot.index}`"
