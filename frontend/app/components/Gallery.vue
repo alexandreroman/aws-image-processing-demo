@@ -416,88 +416,90 @@ onBeforeUnmount(() => {
           class="card-elevated relative w-full max-w-5xl max-h-[90vh]
             overflow-y-auto p-4 sm:p-6"
         >
-          <button
-            ref="closeButton"
-            type="button"
-            class="absolute top-3 right-3 z-10 inline-flex h-9 w-9
-              items-center justify-center rounded-full bg-surface/80
-              border-2 border-surface-border text-ink-200
-              hover:border-primary hover:ring-2 hover:ring-primary/60
-              hover:shadow-glow hover:text-primary transition-colors
-              text-2xl leading-none focus-visible:outline-none
-              focus-visible:ring-2 focus-visible:ring-primary/60"
-            aria-label="Close"
-            @click="closeModal"
-          >
-            ×
-          </button>
+          <div class="flex justify-center">
+            <div class="relative bg-bg/40 rounded-lg">
+              <img
+                :src="selected.largeUrl"
+                :alt="selected.description || selected.imageId"
+                class="block max-h-[80vh] max-w-full object-contain rounded-lg"
+              >
 
-          <button
-            v-if="completedTiles.length > 1"
-            ref="prevButton"
-            type="button"
-            class="absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex
-              h-10 w-10 items-center justify-center rounded-full bg-surface/80
-              border-2 border-surface-border text-ink-200
-              hover:border-primary hover:ring-2 hover:ring-primary/60
-              hover:shadow-glow hover:text-primary transition-colors
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-primary/60"
-            aria-label="Previous image"
-            @click="prev"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
+              <button
+                ref="closeButton"
+                type="button"
+                class="absolute top-2 right-2 z-10 inline-flex h-9 w-9
+                  items-center justify-center rounded-full bg-surface/80
+                  border-2 border-surface-border text-ink-200
+                  hover:border-primary hover:ring-2 hover:ring-primary/60
+                  hover:shadow-glow hover:text-primary transition-colors
+                  text-2xl leading-none focus-visible:outline-none
+                  focus-visible:ring-2 focus-visible:ring-primary/60"
+                aria-label="Close"
+                @click="closeModal"
+              >
+                ×
+              </button>
 
-          <button
-            v-if="completedTiles.length > 1"
-            ref="nextButton"
-            type="button"
-            class="absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex
-              h-10 w-10 items-center justify-center rounded-full bg-surface/80
-              border-2 border-surface-border text-ink-200
-              hover:border-primary hover:ring-2 hover:ring-primary/60
-              hover:shadow-glow hover:text-primary transition-colors
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-primary/60"
-            aria-label="Next image"
-            @click="next"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
+              <button
+                v-if="completedTiles.length > 1"
+                ref="prevButton"
+                type="button"
+                class="absolute left-2 top-1/2 -translate-y-1/2 z-10 inline-flex
+                  h-10 w-10 items-center justify-center rounded-full bg-surface/80
+                  border-2 border-surface-border text-ink-200
+                  hover:border-primary hover:ring-2 hover:ring-primary/60
+                  hover:shadow-glow hover:text-primary transition-colors
+                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:ring-primary/60"
+                aria-label="Previous image"
+                @click="prev"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
 
-          <div class="flex justify-center bg-bg/40 rounded-lg overflow-hidden">
-            <img
-              :src="selected.largeUrl"
-              :alt="selected.description || selected.imageId"
-              class="max-h-[80vh] max-w-full object-contain"
-            >
+              <button
+                v-if="completedTiles.length > 1"
+                ref="nextButton"
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 z-10 inline-flex
+                  h-10 w-10 items-center justify-center rounded-full bg-surface/80
+                  border-2 border-surface-border text-ink-200
+                  hover:border-primary hover:ring-2 hover:ring-primary/60
+                  hover:shadow-glow hover:text-primary transition-colors
+                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:ring-primary/60"
+                aria-label="Next image"
+                @click="next"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div class="mt-4 space-y-3">
