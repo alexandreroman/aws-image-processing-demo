@@ -1,0 +1,65 @@
+# Build context for the worker and backend Dockerfile targets.
+# Keep it as lean as possible — Go binaries only need the source tree.
+
+# Env files are symlinks to outside the worktree (../../.env*) and the
+# build daemon refuses out-of-context symlinks.
+.env
+.env.*
+.env.local
+.env.*.local
+
+# Secrets / mTLS material — never bake into images.
+ca.pem
+ca.key
+*.pem
+*.key
+
+# Git plumbing and worktrees.
+.git/
+.gitignore
+.worktrees/
+
+# Node / Nuxt — frontend has its own context.
+node_modules/
+.nuxt/
+.output/
+.data/
+.pnpm-store/
+
+# OpenTofu / Terraform state and plans.
+infra/.terraform/
+infra/terraform.tfstate*
+infra/*.tfplan
+*.tfstate
+*.tfstate.*
+
+# Build artifacts.
+dist/
+bin/
+tmp/
+*.test
+*.out
+coverage.out
+*.log
+
+# Editor / OS noise.
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude / dev tooling.
+.claude/
+CLAUDE.md
+README.md
+BRIEF.md
+
+# Scripts (build artifacts, not needed inside the worker/backend images).
+scripts/
+
+# The worker and backend Dockerfile targets only build Go binaries from
+# cmd/ and internal/, so the frontend and infra trees just bloat the
+# context. The frontend image has its own context (./frontend).
+frontend/
+infra/
