@@ -15,6 +15,10 @@ const config = useRuntimeConfig();
 
 function publicUrl(bucket: string, key: string): string {
   const base = config.public.s3PublicUrl.replace(/\/$/, '');
+  if (!base) {
+    // Same-origin via reverse proxy (/images/* → S3 in prod, Moto in compose).
+    return `/images/${key}`;
+  }
   return `${base}/${bucket}/${key}`;
 }
 

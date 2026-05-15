@@ -1,6 +1,12 @@
 # Single-origin front door for the compose stack. Mirrors the prod
 # CloudFront topology: /api/* → backend, /* → SSG bundle with SPA fallback.
 :3000 {
+    handle_path /images/* {
+        # Mirror of the prod CloudFront /images/* behavior: strip the prefix,
+        # prepend the fixed dev bucket name, and forward to Moto.
+        rewrite * /aws-image-processing-demo-images-local{uri}
+        reverse_proxy moto:5000
+    }
     handle /api/* {
         reverse_proxy backend:8000
     }

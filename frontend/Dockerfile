@@ -20,7 +20,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 COPY . .
 ENV NUXT_PUBLIC_API_BASE="" \
     NUXT_PUBLIC_SAMPLES_BUCKET=aws-image-processing-demo-images-local \
-    NUXT_PUBLIC_S3_PUBLIC_URL=http://localhost:4566
+    NUXT_PUBLIC_S3_PUBLIC_URL=""
 RUN pnpm generate
 
 # ----- runtime ------------------------------------------------------------

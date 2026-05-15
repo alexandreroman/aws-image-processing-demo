@@ -36,6 +36,34 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_origin_access_control" "images" {
+  name                              = "${local.name_prefix}-images-oac"
+  description                       = "OAC for the images bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# --- CloudFront Function: strip /images/ prefix at viewer-request -----------
+#
+# The bundle uses relative /images/{key} URLs so the gallery loads same-origin.
+# This function rewrites those to the raw S3 key (pipelines/..., samples/...)
+# before CloudFront hits the images origin.
+
+resource "aws_cloudfront_function" "images_rewrite" {
+  name    = "${local.name_prefix}-images-rewrite"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  comment = "Strip /images/ prefix so the S3 origin sees the raw key"
+  code    = <<-EOT
+    function handler(event) {
+      var req = event.request;
+      req.uri = req.uri.replace(/^\/images\//, '/');
+      return req;
+    }
+  EOT
+}
+
 # --- CloudFront distribution ----------------------------------------------
 #
 # Two origins, two behaviours:
@@ -43,8 +71,9 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 #   /*      → S3 + OAC, with SPA fallback (404 → 200 /index.html)
 
 locals {
-  s3_origin_id  = "s3-frontend"
-  api_origin_id = "api-gateway"
+  s3_origin_id     = "s3-frontend"
+  api_origin_id    = "api-gateway"
+  images_origin_id = "s3-images"
 
   # API Gateway URLs look like https://<id>.execute-api.<region>.amazonaws.com.
   # CloudFront origins want a bare host name.
@@ -87,6 +116,12 @@ resource "aws_cloudfront_distribution" "demo" {
     }
   }
 
+  origin {
+    origin_id                = local.images_origin_id
+    domain_name              = aws_s3_bucket.images.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.images.id
+  }
+
   # Default: serve the static site from S3.
   default_cache_behavior {
     target_origin_id       = local.s3_origin_id
@@ -113,6 +148,25 @@ resource "aws_cloudfront_distribution" "demo" {
     #   AllViewerExceptHostHeader    b689b0a8-53d0-40ab-baf2-68738e2966ac
     cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+  }
+
+  # /images/* → S3 images bucket. CloudFront Function strips the
+  # /images/ prefix so the origin sees the raw key (pipelines/..., samples/...).
+  ordered_cache_behavior {
+    path_pattern           = "/images/*"
+    target_origin_id       = local.images_origin_id
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+
+    # CachingOptimized — derived images are immutable per key.
+    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.images_rewrite.arn
+    }
   }
 
   # SPA fallback: Nuxt /pipelines/[id] is client-rendered, so S3 returns 403
@@ -185,4 +239,32 @@ data "aws_iam_policy_document" "frontend_oac" {
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   policy = data.aws_iam_policy_document.frontend_oac.json
+}
+
+# --- S3 bucket policy: grant CloudFront OAC read on the images bucket -----
+
+data "aws_iam_policy_document" "images_oac" {
+  statement {
+    sid     = "AllowCloudFrontOACRead"
+    actions = ["s3:GetObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/*",
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.demo.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "images" {
+  bucket = aws_s3_bucket.images.id
+  policy = data.aws_iam_policy_document.images_oac.json
 }

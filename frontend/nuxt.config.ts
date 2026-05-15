@@ -29,8 +29,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE ?? '',
-      s3PublicUrl:
-        process.env.NUXT_PUBLIC_S3_PUBLIC_URL ?? 'http://localhost:4566',
+      s3PublicUrl: process.env.NUXT_PUBLIC_S3_PUBLIC_URL ?? '',
       githubUrl:
         process.env.NUXT_PUBLIC_GITHUB_URL ??
         'https://github.com/alexandreroman/aws-image-processing-demo',
@@ -49,6 +48,18 @@ export default defineNuxtConfig({
   nitro: {
     prerender: { routes: ['/'], crawlLinks: false },
     routeRules: { '/pipelines/**': { ssr: false } },
+    // Host-mode `make dev` only — production and `make app-up` use
+    // CloudFront / Caddy for the same single-origin routing.
+    devProxy: {
+      '/api': {
+        target: 'http://localhost:8000/api',
+        changeOrigin: true,
+      },
+      '/images': {
+        target: 'http://localhost:4566/aws-image-processing-demo-images-local',
+        changeOrigin: true,
+      },
+    },
   },
 
   typescript: {
