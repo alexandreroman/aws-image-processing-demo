@@ -30,13 +30,13 @@ architects and developers.
 ## Prerequisites
 
 - **Go** 1.26 or newer
-- **Node.js** 24 LTS (or newer) and **pnpm** 11 (or newer)
+- **Node.js** 24 LTS (or newer) and **pnpm** 9 (or newer)
 - **Docker** and **Docker Compose**
 - **OpenTofu** 1.8 or newer (for AWS deployment)
 - **AWS CLI v2** (for AWS deployment)
 - **Temporal CLI** — `brew install temporal`
 - An **Anthropic API key** — used in both local dev
-  and production (LocalStack does not mock Bedrock)
+  and production (Moto Server does not mock Bedrock)
 
 For AWS deployment you also need an AWS account in
 `eu-west-3`, plus a Cloudflare account and API token
@@ -52,19 +52,22 @@ cd aws-image-processing-demo
 cp .env.example .env
 # edit .env and set ANTHROPIC_API_KEY
 
-# Local dev — Temporal dev server and LocalStack
+# Local dev — Temporal dev server and Moto Server
 # (S3 + DynamoDB) in Docker; worker, backend, and
 # frontend as host processes with hot reload.
 # Frontend deps install automatically on first run.
 make dev
 ```
 
+For a fully containerized stack (everything in Docker,
+no host processes), use `make app-up` instead.
+
 Once the stack is up:
 
 - Frontend — <http://localhost:3000>
 - Backend API — <http://localhost:8000/api>
 - Temporal UI — <http://localhost:8233>
-- LocalStack endpoint — <http://localhost:4566>
+- Moto Server endpoint — <http://localhost:4566>
 
 Open the frontend, pick a number of images, and click
 **Start burst**. You will be redirected to
@@ -132,8 +135,11 @@ All configuration is via environment variables. Copy
 | `TEMPORAL_TLS_CERT`     | Path to client cert (Temporal Cloud only)     | (empty)                  |
 | `TEMPORAL_TLS_KEY`      | Path to client key (Temporal Cloud only)      | (empty)                  |
 | `TEMPORAL_TASK_QUEUE`   | Worker task queue                             | `image-processing`       |
-| `AWS_ENDPOINT_URL`      | Override AWS endpoint (set for LocalStack)    | `http://localhost:4566`  |
+| `AWS_ENDPOINT_URL`      | Override AWS endpoint (set for Moto Server)   | `http://localhost:4566`  |
 | `AWS_REGION`            | AWS region                                    | `eu-west-3`              |
+| `IMAGES_BUCKET`         | S3 bucket holding uploads and derivatives     | (Tofu-injected in AWS)   |
+| `IMAGES_TABLE`          | DynamoDB table holding image manifests        | (Tofu-injected in AWS)   |
+| `ALLOWED_ORIGIN`        | CORS allow-origin for the backend             | `*` (dev), set in prod   |
 | `ANTHROPIC_API_KEY`     | Anthropic API key (used in dev and prod)      | (required)               |
 | `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token (only for `tofu apply`)  | (empty)                  |
 | `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID                            | (empty)                  |
@@ -155,8 +161,10 @@ graph TD
     Worker --> Anthropic[Anthropic API]
 ```
 
-Each image is processed by one `ProcessImage` workflow
-with 8 activities, 6 of which run in parallel:
+A burst is orchestrated by a parent `LaunchPipelines`
+workflow that fans out one child `ProcessImage` workflow
+per image. Each `ProcessImage` runs 8 activities,
+6 of which execute in parallel:
 
 1. Fan-out 3 × `ResizeAndUpload` (small / medium / large)
 2. 1 × `GenerateDescription` on the medium size
@@ -175,12 +183,13 @@ prefix search.
 | -------------------------- | -------------------------------------------------------- |
 | `cmd/worker`               | Temporal worker for ECS Fargate                          |
 | `cmd/backend`              | Backend service — Lambda or local HTTP server            |
-| `internal/workflows`       | `ProcessImage` workflow definition                       |
+| `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows           |
 | `internal/activities`      | Resize, describe, watermark, store activities            |
 | `internal/manifest`        | Shared manifest types and canonical size list            |
-| `internal/awsclient`       | AWS SDK config (LocalStack-aware)                        |
+| `internal/awsclient`       | AWS SDK config (Moto-aware)                              |
 | `internal/anthropicclient` | Anthropic API wrapper                                    |
-| `internal/api`             | HTTP handlers for `/api/uploads/presign`, `/workflows/*` |
+| `internal/temporalclient`  | Temporal SDK client (mTLS-aware for Temporal Cloud)      |
+| `internal/api`             | HTTP handlers under `/api/*` (presign, workflows, …)     |
 | `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
 | `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                |
 | `scripts`                  | Deploy, teardown, and sample-upload helpers              |

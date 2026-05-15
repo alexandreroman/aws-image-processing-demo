@@ -16,7 +16,7 @@ configuration, and architecture.
   DynamoDB, CloudFront
 - OpenTofu (IaC) — AWS provider in `eu-west-3` +
   alias in `us-east-1` for ACM, plus Cloudflare DNS
-- LocalStack + Temporal CLI dev server for local dev
+- Moto Server + Temporal CLI dev server for local dev
 
 ## Build & run
 
@@ -32,17 +32,23 @@ make teardown          # tofu destroy + cleanup
 
 - `cmd/` — entry points: `worker` (Fargate),
   `backend` (Lambda + local HTTP).
-- `internal/workflows` — `ProcessImage` workflow.
+- `internal/workflows` — `LaunchPipelines` parent
+  workflow that fans out one child `ProcessImage`
+  workflow per image.
 - `internal/activities` — resize, describe, watermark,
   store.
 - `internal/manifest` — shared types; **always**
   iterate `manifest.SizeNames`, never the maps.
 - `internal/awsclient` — single AWS config that
   honors `AWS_ENDPOINT_URL` so the same code runs
-  against LocalStack and real AWS.
+  against Moto Server and real AWS.
 - `internal/anthropicclient` — Anthropic API wrapper.
-- `internal/api` — HTTP handlers for the three
-  endpoints under `/api/*`.
+- `internal/temporalclient` — Temporal SDK client
+  shared by worker and backend; honors mTLS env
+  vars for Temporal Cloud.
+- `internal/api` — HTTP handlers under `/api/*`:
+  `presign`, `workflows/start`, `pipelines/{id}`,
+  `healthz`.
 - `frontend/` — Nuxt 4 SSG, two pages: `/` and
   `/pipelines/[id]`.
 - `infra/` — OpenTofu modules (network, storage,
@@ -113,4 +119,4 @@ not shared with the team.
   `pipelines/{pipelineId}/...`. Lifecycle rules expire
   `uploads/` after 7 days and `pipelines/` after 30.
 - **Anthropic API direct, not Bedrock.** Keeps local
-  dev simple (LocalStack does not mock Bedrock).
+  dev simple (Moto Server does not mock Bedrock).
