@@ -48,18 +48,9 @@
       focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
-  .btn-primary {
-    @apply btn bg-primary text-bg hover:bg-primary-300 px-4 py-2 text-sm font-semibold;
-  }
-
   .btn-primary-lg {
     @apply btn bg-primary text-bg hover:bg-primary-300 px-5 py-2.5 text-sm
       font-semibold shadow-glow;
-  }
-
-  .btn-ghost {
-    @apply btn text-primary hover:bg-primary/10 px-3 py-1.5 text-sm
-      border border-surface-border hover:border-primary/40;
   }
 
   .chip {
