@@ -69,7 +69,6 @@ export interface Pipeline {
 
 export interface Stats {
   imagesProcessed: number;
-  imagesInFlight: number;
   burstsLaunched: number;
   windowDays: number;
 }

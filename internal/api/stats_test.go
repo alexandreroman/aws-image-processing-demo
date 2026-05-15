@@ -45,7 +45,6 @@ func TestHandleStats_HappyPath(t *testing.T) {
 
 	temporal := &fakeTemporal{counts: map[string]int64{
 		`WorkflowType = "ProcessImage" AND ExecutionStatus = "Completed"`:    1234,
-		`WorkflowType = "ProcessImage" AND ExecutionStatus = "Running"`:      7,
 		`WorkflowType = "LaunchPipelines" AND ExecutionStatus = "Completed"`: 42,
 	}}
 	h := newStatsHandler(temporal)
@@ -67,7 +66,6 @@ func TestHandleStats_HappyPath(t *testing.T) {
 	}
 	want := StatsResponse{
 		ImagesProcessed: 1234,
-		ImagesInFlight:  7,
 		BurstsLaunched:  42,
 		WindowDays:      30,
 	}
@@ -94,7 +92,6 @@ func TestHandleStats_IssuesExpectedQueries(t *testing.T) {
 	}
 	want := []string{
 		queryImagesProcessed,
-		queryImagesInFlight,
 		queryBurstsLaunched,
 	}
 	seen := rec.queries()
@@ -109,8 +106,8 @@ func TestHandleStats_IssuesExpectedQueries(t *testing.T) {
 // so the fake's embedded client.Client still satisfies the
 // Dependencies.Temporal interface type. The CountWorkflow override
 // here shadows the fake's when invoked through the recorder. The
-// stats handler fans the three queries out across goroutines, so
-// accesses to the slice are guarded by a mutex.
+// stats handler fans the queries out across goroutines, so accesses
+// to the slice are guarded by a mutex.
 type recordingTemporal struct {
 	*fakeTemporal
 
@@ -150,12 +147,11 @@ func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {
 
 	temporal := &fakeTemporal{
 		counts: map[string]int64{
-			queryImagesProcessed: 100,
-			queryBurstsLaunched:  10,
-			// queryImagesInFlight intentionally absent — see errs below.
+			queryBurstsLaunched: 10,
+			// queryImagesProcessed intentionally absent — see errs below.
 		},
 		errs: map[string]error{
-			queryImagesInFlight: errors.New("temporal unreachable"),
+			queryImagesProcessed: errors.New("temporal unreachable"),
 		},
 	}
 	h := newStatsHandler(temporal)
@@ -172,8 +168,7 @@ func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	want := StatsResponse{
-		ImagesProcessed: 100,
-		ImagesInFlight:  -1,
+		ImagesProcessed: -1,
 		BurstsLaunched:  10,
 		WindowDays:      30,
 	}

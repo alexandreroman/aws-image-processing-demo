@@ -29,7 +29,6 @@ function format(value: number | undefined): string {
 
 const tiles = computed(() => [
   { label: 'Images processed', value: format(stats.value?.imagesProcessed) },
-  { label: 'Images in flight', value: format(stats.value?.imagesInFlight) },
   { label: 'Bursts launched',  value: format(stats.value?.burstsLaunched) },
 ]);
 </script>
@@ -42,7 +41,7 @@ const tiles = computed(() => [
         Last {{ stats?.windowDays ?? 30 }} days
       </span>
     </div>
-    <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div v-for="t in tiles" :key="t.label" class="min-w-0">
         <dt class="stat-label">{{ t.label }}</dt>
         <dd

@@ -11,12 +11,10 @@ import (
 // it lets the frontend caption counter values honestly.
 const statsWindowDays = 30
 
-// Visibility queries powering the three counters. Kept as package
-// vars so tests can compare against the exact strings the handler
-// issues.
+// Visibility queries powering the counters. Kept as package vars so
+// tests can compare against the exact strings the handler issues.
 var (
 	queryImagesProcessed = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Completed"`
-	queryImagesInFlight  = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Running"`
 	queryBurstsLaunched  = `WorkflowType = "LaunchPipelines" AND ExecutionStatus = "Completed"`
 )
 
@@ -25,15 +23,14 @@ var (
 // for that field could not be fetched (logged but not fatal).
 type StatsResponse struct {
 	ImagesProcessed int64 `json:"imagesProcessed"`
-	ImagesInFlight  int64 `json:"imagesInFlight"`
 	BurstsLaunched  int64 `json:"burstsLaunched"`
 	WindowDays      int   `json:"windowDays"`
 }
 
 // statResult carries one count's value-or-error from a goroutine back
 // to the handler. We use a per-result struct rather than errgroup so a
-// single Visibility failure cannot poison the other two counts: each
-// field is decided independently via collectStat.
+// single Visibility failure cannot poison the other count: each field
+// is decided independently via collectStat.
 type statResult struct {
 	value int64
 	err   error
@@ -48,15 +45,12 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	processedCh := make(chan statResult, 1)
-	inFlightCh := make(chan statResult, 1)
 	burstsCh := make(chan statResult, 1)
 	go run(queryImagesProcessed, processedCh)
-	go run(queryImagesInFlight, inFlightCh)
 	go run(queryBurstsLaunched, burstsCh)
 
 	resp := StatsResponse{WindowDays: statsWindowDays}
 	resp.ImagesProcessed = h.collectStat(<-processedCh, queryImagesProcessed)
-	resp.ImagesInFlight = h.collectStat(<-inFlightCh, queryImagesInFlight)
 	resp.BurstsLaunched = h.collectStat(<-burstsCh, queryBurstsLaunched)
 
 	w.Header().Set("Cache-Control", "public, max-age=5")
