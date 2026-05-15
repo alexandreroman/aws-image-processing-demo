@@ -88,11 +88,8 @@ data "aws_iam_policy_document" "worker_task" {
   statement {
     sid = "ImagesTableRW"
     actions = [
-      "dynamodb:GetItem",
       "dynamodb:PutItem",
-      "dynamodb:UpdateItem",
       "dynamodb:Query",
-      "dynamodb:Scan",
     ]
     resources = [aws_dynamodb_table.images.arn]
   }

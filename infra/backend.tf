@@ -48,12 +48,8 @@ data "aws_iam_policy_document" "backend" {
   }
 
   statement {
-    sid = "ImagesTableRead"
-    actions = [
-      "dynamodb:GetItem",
-      "dynamodb:Query",
-      "dynamodb:Scan",
-    ]
+    sid       = "ImagesTableRead"
+    actions   = ["dynamodb:Query"]
     resources = [aws_dynamodb_table.images.arn]
   }
 
