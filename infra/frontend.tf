@@ -89,6 +89,44 @@ locals {
   )
 }
 
+# --- CloudFront cache policy: honor origin Cache-Control on /api/* ----------
+#
+# The backend sets max-age / s-maxage / stale-while-revalidate / stale-if-error
+# on selected endpoints (e.g. /api/stats). Managed-CachingDisabled would force
+# CloudFront to ignore those directives, so we ship a minimal custom policy
+# that lets the origin pick the TTL. Endpoints without Cache-Control still go
+# uncached because default_ttl is 0.
+#
+# Cache key contains nothing viewer-specific: the API is anonymous, GETs are
+# idempotent, and /api/stats has no query strings that vary the response.
+# Headers like Authorization are still forwarded to Lambda via the existing
+# AllViewerExceptHostHeader origin request policy.
+
+resource "aws_cloudfront_cache_policy" "api" {
+  name        = "${local.name_prefix}-api-origin-cache"
+  comment     = "Honor origin Cache-Control on /api/*; minimal cache key"
+  min_ttl     = 0
+  default_ttl = 0
+  max_ttl     = 31536000
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
+    headers_config {
+      header_behavior = "none"
+    }
+
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "demo" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -143,10 +181,10 @@ resource "aws_cloudfront_distribution" "demo" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    # Managed policies:
-    #   CachingDisabled              4135ea2d-6df8-44a3-9df3-4b5a84be39ad
-    #   AllViewerExceptHostHeader    b689b0a8-53d0-40ab-baf2-68738e2966ac
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    # Origin Cache-Control drives the TTL via the custom policy above.
+    # AllViewerExceptHostHeader (managed: b689b0a8-…) keeps forwarding the
+    # full request envelope to Lambda regardless of cache-key shape.
+    cache_policy_id          = aws_cloudfront_cache_policy.api.id
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
