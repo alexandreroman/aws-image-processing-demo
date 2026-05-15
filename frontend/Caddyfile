@@ -6,7 +6,10 @@
     }
     handle {
         root * /srv
-        try_files {path} /index.html
+        # 200.html is Nuxt's lightweight SPA fallback (no prerendered
+        # route baked in). Serving index.html instead would hydrate the
+        # home page on /pipelines/{id} refreshes.
+        try_files {path} /200.html
         file_server
     }
 }

@@ -116,19 +116,21 @@ resource "aws_cloudfront_distribution" "demo" {
   }
 
   # SPA fallback: Nuxt /pipelines/[id] is client-rendered, so S3 returns 403
-  # for any unknown key. CloudFront rewrites to /index.html so the SPA can
-  # take over.
+  # for any unknown key. CloudFront rewrites to /200.html — Nuxt's lightweight
+  # SPA fallback with no prerendered route baked in. Serving /index.html would
+  # hydrate the home page on /pipelines/{id} refreshes. See frontend/Caddyfile
+  # for the matching local compose-stack rule.
   custom_error_response {
     error_code            = 403
     response_code         = 200
-    response_page_path    = "/index.html"
+    response_page_path    = "/200.html"
     error_caching_min_ttl = 10
   }
 
   custom_error_response {
     error_code            = 404
     response_code         = 200
-    response_page_path    = "/index.html"
+    response_page_path    = "/200.html"
     error_caching_min_ttl = 10
   }
 
