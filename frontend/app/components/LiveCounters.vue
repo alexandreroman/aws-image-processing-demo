@@ -2,7 +2,6 @@
 const api = useApi();
 
 const stats = ref<Stats | null>(null);
-let timer: ReturnType<typeof setInterval> | null = null;
 
 async function refresh() {
   try {
@@ -13,14 +12,7 @@ async function refresh() {
   }
 }
 
-onMounted(() => {
-  refresh();
-  timer = setInterval(refresh, 5000);
-});
-
-onBeforeUnmount(() => {
-  if (timer !== null) clearInterval(timer);
-});
+onMounted(refresh);
 
 const DASH = '—';
 
