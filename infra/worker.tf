@@ -166,7 +166,7 @@ resource "aws_ecs_task_definition" "worker" {
       secrets     = local.worker_secrets
 
       healthCheck = {
-        command     = ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
+        command     = ["CMD", "wget", "-qO-", "http://localhost:8001/healthz"]
         interval    = 10
         timeout     = 3
         retries     = 5

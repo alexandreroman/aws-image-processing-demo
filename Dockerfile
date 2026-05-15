@@ -38,7 +38,7 @@ COPY --from=build /out/worker /worker
 # HTTP healthcheck. Distroless static ships no shell or userland.
 COPY --from=busybox:1.37-musl /bin/wget /usr/bin/wget
 USER nonroot:nonroot
-EXPOSE 8000
+EXPOSE 8001
 ENTRYPOINT ["/worker"]
 
 # ----- backend ------------------------------------------------------------

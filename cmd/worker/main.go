@@ -81,7 +81,7 @@ func run(logger *slog.Logger) error {
 	// The worker speaks to Temporal over gRPC; this HTTP listener exists
 	// purely as a liveness probe for the container orchestrator (compose
 	// healthcheck, ECS container healthCheck).
-	healthAddr := envOr("HEALTH_ADDR", ":8000")
+	healthAddr := envOr("HEALTH_ADDR", ":8001")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
