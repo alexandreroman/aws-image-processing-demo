@@ -64,13 +64,16 @@ resource "aws_iam_role" "worker_task" {
 }
 
 data "aws_iam_policy_document" "worker_task" {
-  # Reads: visitor uploads + the preloaded sample pool.
+  # Reads: visitor uploads, the preloaded sample pool, and read-back of
+  # derived artifacts (GenerateDescription + ApplyWatermark both fetch
+  # the resized variant before processing it).
   statement {
     sid     = "ImagesBucketRead"
     actions = ["s3:GetObject"]
     resources = [
       "${aws_s3_bucket.images.arn}/uploads/*",
       "${aws_s3_bucket.images.arn}/samples/*",
+      "${aws_s3_bucket.images.arn}/pipelines/*",
     ]
   }
 
