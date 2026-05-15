@@ -34,7 +34,7 @@
           <img
             src="/aws-logo.png"
             alt="AWS"
-            class="h-5 w-auto shrink-0 ml-1 translate-y-[5px]"
+            class="h-5 w-auto shrink-0 ml-1 mb-2 translate-y-[5px]"
             loading="lazy"
             decoding="async"
             draggable="false"
