@@ -38,7 +38,7 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 
 # --- CloudFront distribution ----------------------------------------------
 #
-# Two origins, two behaviours (BRIEF.md §"CloudFront origin routing"):
+# Two origins, two behaviours:
 #   /api/*  → API Gateway, no caching, forward viewer headers
 #   /*      → S3 + OAC, with SPA fallback (404 → 200 /index.html)
 

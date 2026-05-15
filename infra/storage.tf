@@ -1,6 +1,6 @@
 # --- S3 images bucket ------------------------------------------------------
 #
-# Holds three logical sets of objects (see BRIEF.md):
+# Holds three logical sets of objects:
 #   uploads/    — visitor uploads, expire after 7 days
 #   pipelines/  — derived artifacts (resized + watermarked), expire after 30
 #   samples/    — preloaded demo pool, never expires

@@ -53,14 +53,13 @@ func (s *ProcessImageSuite) TestHappyPath() {
 
 	// Expect one resize per size name.
 	for _, name := range manifest.SizeNames {
-		size := name
-		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + size + ".jpg"
+		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + name + ".jpg"
 		s.env.OnActivity(s.acts.ResizeAndUpload, mock.Anything, mock.MatchedBy(func(in activities.ResizeInput) bool {
-			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == size
+			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == name
 		})).Return(manifest.Size{
 			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
-			Width:  manifest.SizeWidths[size],
-			Height: manifest.SizeWidths[size] * 3 / 4,
+			Width:  manifest.SizeWidths[name],
+			Height: manifest.SizeWidths[name] * 3 / 4,
 			Bytes:  1000,
 		}, nil).Once()
 	}
@@ -76,12 +75,11 @@ func (s *ProcessImageSuite) TestHappyPath() {
 
 	// One watermark per size.
 	for _, name := range manifest.SizeNames {
-		size := name
 		s.env.OnActivity(s.acts.ApplyWatermark, mock.Anything, mock.MatchedBy(func(in activities.WatermarkInput) bool {
-			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == size
+			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == name
 		})).Return(manifest.S3Ref{
 			Bucket: "test-bucket",
-			Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/" + size + ".jpg",
+			Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/" + name + ".jpg",
 		}, nil).Once()
 	}
 
@@ -169,12 +167,11 @@ func runAndRecordActivities(t *testing.T) []string {
 		imageID    = "img-1"
 	)
 	for _, name := range manifest.SizeNames {
-		size := name
-		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + size + ".jpg"
+		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + name + ".jpg"
 		env.OnActivity(acts.ResizeAndUpload, mock.Anything, mock.Anything).Return(manifest.Size{
 			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
-			Width:  manifest.SizeWidths[size],
-			Height: manifest.SizeWidths[size] * 3 / 4,
+			Width:  manifest.SizeWidths[name],
+			Height: manifest.SizeWidths[name] * 3 / 4,
 			Bytes:  1000,
 		}, nil)
 	}

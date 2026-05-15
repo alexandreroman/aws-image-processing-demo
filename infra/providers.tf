@@ -30,7 +30,7 @@ provider "aws" {
 }
 
 # Aliased provider in us-east-1 — ACM certificates consumed by CloudFront
-# MUST be issued there. See BRIEF.md decision #17.
+# MUST be issued there.
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"

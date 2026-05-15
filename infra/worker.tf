@@ -153,7 +153,7 @@ resource "aws_ecs_task_definition" "worker" {
       image     = var.worker_image
       essential = true
 
-      # BRIEF.md decision #6: default 30s is not enough to drain a Temporal
+      # default 30s is not enough to drain a Temporal
       # worker with concurrent activities. 120s gives in-flight activities
       # time to complete or heartbeat-fail cleanly.
       stopTimeout = 120

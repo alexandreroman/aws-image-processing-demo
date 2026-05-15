@@ -43,7 +43,7 @@ func (a *Activities) StoreManifest(ctx context.Context, m manifest.Manifest) err
 			"description": &ddbtypes.AttributeValueMemberS{Value: m.Description},
 			"manifest":    &ddbtypes.AttributeValueMemberS{Value: string(raw)},
 			"workflowId":  &ddbtypes.AttributeValueMemberS{Value: wfID},
-			"createdAt":   &ddbtypes.AttributeValueMemberS{Value: createdAt.UTC().Format(time.RFC3339)},
+			"createdAt":   &ddbtypes.AttributeValueMemberS{Value: createdAt.Format(time.RFC3339)},
 		},
 	})
 	if err != nil {

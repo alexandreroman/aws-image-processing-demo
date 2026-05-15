@@ -2,9 +2,9 @@
 #
 # Gated on var.enable_custom_domain so the project can also ship on the
 # default *.cloudfront.net hostname. ACM cert lives in us-east-1 — non-
-# negotiable AWS constraint for CloudFront (BRIEF.md decision #17).
+# negotiable AWS constraint for CloudFront.
 #
-# Cloudflare proxy MUST stay OFF (DNS only) — see BRIEF.md decision #16.
+# Cloudflare proxy MUST stay OFF (DNS only).
 # Two CDNs in cascade break HTTPS validation and add no value.
 
 locals {
