@@ -165,6 +165,14 @@ resource "aws_ecs_task_definition" "worker" {
       environment = local.worker_env
       secrets     = local.worker_secrets
 
+      healthCheck = {
+        command     = ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
+        interval    = 10
+        timeout     = 3
+        retries     = 5
+        startPeriod = 10
+      }
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -202,7 +210,8 @@ resource "aws_ecs_service" "worker" {
     rollback = true
   }
 
-  # Workers are stateless and have no health check — the Temporal SDK
-  # handles graceful shutdown via SIGTERM and the stopTimeout above.
+  # Worker tasks expose a /healthz liveness probe (see the container
+  # healthCheck above); ECS will replace tasks that fail it. Graceful
+  # shutdown still goes through SIGTERM and the stopTimeout above.
   enable_execute_command = false
 }

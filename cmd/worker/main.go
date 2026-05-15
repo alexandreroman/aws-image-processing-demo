@@ -4,9 +4,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
@@ -74,6 +77,32 @@ func run(logger *slog.Logger) error {
 		"table", acts.ImagesTable,
 		"maxConcurrentActivities", maxConcurrent,
 	)
+
+	// The worker speaks to Temporal over gRPC; this HTTP listener exists
+	// purely as a liveness probe for the container orchestrator (compose
+	// healthcheck, ECS container healthCheck).
+	healthAddr := envOr("HEALTH_ADDR", ":8000")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	srv := &http.Server{
+		Addr:              healthAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		logger.Info("health server listening", "addr", healthAddr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("health server failed", "err", err)
+		}
+	}()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
 
 	// worker.InterruptCh closes on SIGINT/SIGTERM; no goroutine to leak.
 	return w.Run(worker.InterruptCh())

@@ -1,8 +1,10 @@
 // Package api exposes the HTTP handlers backing the demo's REST endpoints.
 //
-// All routes live under /api/* so a single CloudFront distribution can
+// All API routes live under /api/* so a single CloudFront distribution can
 // dispatch by path (api → API Gateway, everything else → S3 frontend) with
-// no CORS gymnastics in production.
+// no CORS gymnastics in production. The /healthz endpoint is the lone
+// exception: it sits at the root so container orchestrators can probe it
+// directly without a path-rewriting proxy in the way.
 package api
 
 import (
@@ -65,7 +67,7 @@ func New(deps Dependencies) *Handler {
 	h.mux.HandleFunc("POST /api/uploads/presign", h.handlePresign)
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
-	h.mux.HandleFunc("GET /api/healthz", h.handleHealth)
+	h.mux.HandleFunc("GET /healthz", h.handleHealth)
 	h.mux.HandleFunc("GET /api/stats", h.handleStats)
 	return h
 }
@@ -94,7 +96,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mux.ServeHTTP(w, r)
 }
 
-// --- /api/healthz -----------------------------------------------------------
+// --- /healthz ---------------------------------------------------------------
 
 func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

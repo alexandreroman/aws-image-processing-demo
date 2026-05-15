@@ -34,7 +34,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # ----- worker -------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot AS worker
 COPY --from=build /out/worker /worker
+# Bring in a static wget binary so docker-compose / ECS can run an
+# HTTP healthcheck. Distroless static ships no shell or userland.
+COPY --from=busybox:1.37-musl /bin/wget /usr/bin/wget
 USER nonroot:nonroot
+EXPOSE 8000
 ENTRYPOINT ["/worker"]
 
 # ----- backend ------------------------------------------------------------

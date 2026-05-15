@@ -132,6 +132,14 @@ services:
       IMAGES_BUCKET: aws-image-processing-demo-images-local
       IMAGES_TABLE: aws-image-processing-demo-images-local
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set in .env or shell}
+    # The worker image is distroless static; the Dockerfile bakes in a
+    # static wget binary from busybox specifically for this probe.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       temporal:
         condition: service_healthy
@@ -167,7 +175,7 @@ services:
     # The backend image is distroless static; the Dockerfile bakes in a
     # static wget binary from busybox specifically for this probe.
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/api/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/healthz"]
       interval: 10s
       timeout: 3s
       retries: 5

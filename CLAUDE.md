@@ -48,9 +48,10 @@ make teardown          # tofu destroy + cleanup
 - `internal/temporalclient` — Temporal SDK client
   shared by worker and backend; honors mTLS env
   vars for Temporal Cloud.
-- `internal/api` — HTTP handlers under `/api/*`:
-  `presign`, `workflows/start`, `pipelines/{id}`,
-  `healthz`.
+- `internal/api` — HTTP handlers under `/api/*`
+  (`presign`, `workflows/start`, `pipelines/{id}`)
+  plus `/healthz` at the root for container health
+  probes.
 - `frontend/` — Nuxt 4 SSG, two pages: `/` and
   `/pipelines/[id]`.
 - `infra/` — OpenTofu modules (network, storage,
@@ -113,11 +114,14 @@ not shared with the team.
   `workflow.Now()` / `workflow.GetLogger()` /
   `workflow.Sleep()`, never the `time` or `log`
   equivalents.
-- **All backend routes are prefixed with `/api`.**
+- **All backend API routes are prefixed with `/api`.**
   This is what makes CloudFront path-based routing
   work cleanly (`/api/*` → API Gateway,
   `/images/*` → S3 images bucket via OAC,
-  `/*` → S3 frontend bucket).
+  `/*` → S3 frontend bucket). The `/healthz`
+  endpoint is the deliberate exception — it is a
+  container-internal probe and is not exposed
+  through CloudFront.
 - **S3 prefix convention:** uploads under
   `uploads/` (flat), derived artifacts under
   `pipelines/{pipelineId}/...`. Lifecycle rules expire
