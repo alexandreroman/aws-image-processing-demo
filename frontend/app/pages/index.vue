@@ -73,5 +73,7 @@ const techStack = [
         <ControlPanel />
       </div>
     </section>
+
+    <LiveCounters />
   </div>
 </template>
