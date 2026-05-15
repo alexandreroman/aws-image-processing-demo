@@ -63,7 +63,7 @@ const tiles = computed(() => [
 
 <template>
   <section class="card p-5 sm:p-6">
-    <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <dl class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="t in tiles" :key="t.label" class="min-w-0">
         <dt class="stat-label">{{ t.label }}</dt>
         <dd
