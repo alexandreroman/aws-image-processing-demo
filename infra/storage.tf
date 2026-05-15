@@ -55,14 +55,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
 # Post-deploy hardening (run after the first successful apply):
 #   1. Set `allowed_origins` to the CloudFront / custom-domain URL only
 #      (e.g. ["https://demo.example.com"]).
-#   2. Drop `GET` and `HEAD` from `allowed_methods` — only `PUT` is needed
-#      for the upload flow; downloads go through CloudFront, not S3 CORS.
-#   3. Re-apply; nothing else depends on the wide-open rule.
+#   2. Re-apply; nothing else depends on the wide-open rule.
 resource "aws_s3_bucket_cors_configuration" "images" {
   bucket = aws_s3_bucket.images.id
 
   cors_rule {
-    allowed_methods = ["PUT", "GET", "HEAD"]
+    allowed_methods = ["PUT"]
     allowed_origins = ["*"]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
