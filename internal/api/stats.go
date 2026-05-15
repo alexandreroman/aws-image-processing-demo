@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"go.temporal.io/api/workflowservice/v1"
-	"golang.org/x/sync/errgroup"
 )
 
 // statsWindowDays is the Temporal Cloud default retention. Surfacing
@@ -31,34 +30,46 @@ type StatsResponse struct {
 	WindowDays      int   `json:"windowDays"`
 }
 
+// statResult carries one count's value-or-error from a goroutine back
+// to the handler. We use a per-result struct rather than errgroup so a
+// single Visibility failure cannot poison the other two counts: each
+// field is decided independently via collectStat.
+type statResult struct {
+	value int64
+	err   error
+}
+
 func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var processed, inFlight, bursts int64
-	g, gctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		n, err := h.countWorkflows(gctx, queryImagesProcessed)
-		processed = n
-		return err
-	})
-	g.Go(func() error {
-		n, err := h.countWorkflows(gctx, queryImagesInFlight)
-		inFlight = n
-		return err
-	})
-	g.Go(func() error {
-		n, err := h.countWorkflows(gctx, queryBurstsLaunched)
-		bursts = n
-		return err
-	})
-	_ = g.Wait() // partial failures tolerated; sentinel handling lands in Task 3.
+	run := func(query string, out chan<- statResult) {
+		n, err := h.countWorkflows(ctx, query)
+		out <- statResult{value: n, err: err}
+	}
 
-	writeJSON(w, http.StatusOK, StatsResponse{
-		ImagesProcessed: processed,
-		ImagesInFlight:  inFlight,
-		BurstsLaunched:  bursts,
-		WindowDays:      statsWindowDays,
-	})
+	processedCh := make(chan statResult, 1)
+	inFlightCh := make(chan statResult, 1)
+	burstsCh := make(chan statResult, 1)
+	go run(queryImagesProcessed, processedCh)
+	go run(queryImagesInFlight, inFlightCh)
+	go run(queryBurstsLaunched, burstsCh)
+
+	resp := StatsResponse{WindowDays: statsWindowDays}
+	resp.ImagesProcessed = h.collectStat(<-processedCh, queryImagesProcessed)
+	resp.ImagesInFlight = h.collectStat(<-inFlightCh, queryImagesInFlight)
+	resp.BurstsLaunched = h.collectStat(<-burstsCh, queryBurstsLaunched)
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// collectStat returns the count value, or the -1 sentinel after logging
+// a warning when the underlying CountWorkflow call failed.
+func (h *Handler) collectStat(r statResult, query string) int64 {
+	if r.err != nil {
+		h.deps.Logger.Warn("stats count failed", "query", query, "err", r.err)
+		return -1
+	}
+	return r.value
 }
 
 // countWorkflows wraps client.CountWorkflow with the demo's

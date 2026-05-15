@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -139,4 +140,41 @@ func containsString(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {
+	t.Parallel()
+
+	temporal := &fakeTemporal{
+		counts: map[string]int64{
+			queryImagesProcessed: 100,
+			queryBurstsLaunched:  10,
+			// queryImagesInFlight intentionally absent — see errs below.
+		},
+		errs: map[string]error{
+			queryImagesInFlight: errors.New("temporal unreachable"),
+		},
+	}
+	h := newStatsHandler(temporal)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	var got StatsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := StatsResponse{
+		ImagesProcessed: 100,
+		ImagesInFlight:  -1,
+		BurstsLaunched:  10,
+		WindowDays:      30,
+	}
+	if got != want {
+		t.Fatalf("response: got %+v, want %+v", got, want)
+	}
 }
