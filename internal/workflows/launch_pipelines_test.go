@@ -26,7 +26,6 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	acts := &activities.Activities{
 		ImagesBucket: "test-bucket",
 		ImagesTable:  "test-table",
-		TaskQueue:    "test-queue",
 	}
 	env.RegisterActivity(acts)
 
@@ -67,7 +66,6 @@ func TestLaunchPipelines_PropagatesActivityError(t *testing.T) {
 	acts := &activities.Activities{
 		ImagesBucket: "test-bucket",
 		ImagesTable:  "test-table",
-		TaskQueue:    "test-queue",
 	}
 	env.RegisterActivity(acts)
 
