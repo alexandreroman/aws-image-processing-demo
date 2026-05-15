@@ -7,14 +7,20 @@ const reasons = [
   {
     title: 'Durable execution',
     body: 'One image = one workflow. Crashes, deploys, scale-downs: Temporal replays from history, no progress is lost.',
+    iconKey: 'shield',
+    accent: 'text-primary',
   },
   {
     title: 'Elastic compute, zero servers',
     body: 'Fargate workers, scaled by a single lever (min/max-capacity). No nodes, no AMIs, no patching.',
+    iconKey: 'bolt',
+    accent: 'text-accent',
   },
   {
     title: 'Lifecycle baked into S3',
     body: 'Uploads expire after 7 days, derivatives after 30. Cost is bounded by design, not by a cron.',
+    iconKey: 'cycle',
+    accent: 'text-iris',
   },
 ] as const;
 </script>
@@ -71,6 +77,36 @@ const reasons = [
 
     <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <article v-for="r in reasons" :key="r.title" class="card p-5 sm:p-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-surface-elevated flex items-center
+            justify-center mb-3"
+          :class="r.accent"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-5 h-5"
+            aria-hidden="true"
+          >
+            <template v-if="r.iconKey === 'shield'">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="M9 12l2 2 4-4" />
+            </template>
+            <template v-else-if="r.iconKey === 'bolt'">
+              <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+            </template>
+            <template v-else-if="r.iconKey === 'cycle'">
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+              <path d="M3 22v-6h6" />
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+              <path d="M21 2v6h-6" />
+            </template>
+          </svg>
+        </div>
         <h3 class="text-base font-semibold text-ink-100 mb-2">{{ r.title }}</h3>
         <p class="text-sm text-ink-200 leading-relaxed">{{ r.body }}</p>
       </article>
