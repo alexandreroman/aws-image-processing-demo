@@ -11,23 +11,35 @@ Two ways to bring up the stack, both via
 
 - **`make dev`** (default, daily workflow):
   brings up only the infra services in Docker
-  (`temporal`, `localstack`, `init`) via
-  `docker-compose up -d temporal localstack
-  init`, then runs `cmd/backend`, `cmd/worker`,
-  and the Nuxt dev server on the host via
-  `make -j backend worker frontend`. Stopping
-  is Ctrl-C for the host processes, then
-  `make infra-down` to stop Docker.
+  (`temporal`, `moto`, `init`) via
+  `docker-compose up -d temporal moto init`,
+  then runs `cmd/backend`, `cmd/worker`, and
+  the Nuxt dev server on the host via
+  `make -j backend worker frontend`. Split-
+  origin: frontend on `:3000`, backend on
+  `:8000`. The Nuxt bundle is built with
+  `NUXT_PUBLIC_API_BASE=http://localhost:8000`
+  (set in `.env.local`). Stopping is Ctrl-C
+  for the host processes, then `make infra-
+  down` to stop Docker.
 - **`make app-up`** (parity mode): brings up
   the full stack in Docker, including the
-  `worker`, `backend`, and `frontend` app
-  containers (built from local Dockerfiles).
+  `worker`, `backend`, and a Caddy-fronted
+  `frontend` container (built from
+  `frontend/Dockerfile`). Caddy serves the
+  Nuxt SSG bundle on `:3000` and reverse-
+  proxies `/api/*` to `backend:8000` — same-
+  origin from the browser, mirroring the prod
+  CloudFront topology. The compose stack is
+  self-contained: it does not consult
+  `.env.local`, only pulls `ANTHROPIC_API_KEY`
+  from `.env` (compose-time interpolation).
   `make app-down` tears it down completely.
 
-`compose.yaml` defines six services:
-three infra (`temporal`, `localstack`, `init`)
-and three app (`worker`, `backend`, `frontend`).
-The Make targets pick subsets.
+`compose.yaml` defines six services: three
+infra (`temporal`, `moto`, `init`) and three
+app (`worker`, `backend`, `frontend`). The Make
+targets pick subsets.
 
 **Why:** the user wants hot reload, fast Go
 rebuilds, and attachable debuggers on the
@@ -41,7 +53,7 @@ machine without local toolchains).
 
 - Keep `compose.yaml` containing both
   infra and app services. `infra-up` uses
-  explicit service names (`temporal localstack
+  explicit service names (`temporal moto
   init`) to avoid bringing app containers up
   by accident.
 - Do not collapse `make dev` and `make app-up`
