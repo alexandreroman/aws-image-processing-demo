@@ -16,6 +16,7 @@ import (
 func newTestHandler() *Handler {
 	return New(Dependencies{
 		ImagesBucket: "test-bucket",
+		TaskQueue:    "image-processing",
 	})
 }
 

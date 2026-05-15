@@ -56,9 +56,6 @@ func New(deps Dependencies) *Handler {
 	if deps.Logger == nil {
 		deps.Logger = slog.Default()
 	}
-	if deps.TaskQueue == "" {
-		deps.TaskQueue = "image-processing"
-	}
 	if deps.Namespace == "" {
 		deps.Namespace = client.DefaultNamespace
 	}
@@ -567,6 +564,3 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
-
-// Compile-time sanity check that *Handler implements http.Handler.
-var _ http.Handler = (*Handler)(nil)
