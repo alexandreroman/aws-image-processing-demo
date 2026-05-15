@@ -51,7 +51,7 @@ async function startBurst() {
 </script>
 
 <template>
-  <section class="card p-4 space-y-4">
+  <section class="card p-4 flex flex-col gap-4 lg:h-full">
     <header class="flex items-center justify-between">
       <h2 class="stat-label">Control panel</h2>
       <span class="chip-primary">
@@ -59,40 +59,38 @@ async function startBurst() {
       </span>
     </header>
 
-    <div class="space-y-3">
-      <label class="block">
-        <span
-          class="flex items-baseline justify-between text-xs font-medium
-            text-ink-200"
-        >
-          <span>Images in burst</span>
-          <span class="font-mono text-primary text-lg font-bold tabular-nums">
-            {{ count }}
-          </span>
-        </span>
-        <input
-          v-model.number="count"
-          type="range"
-          min="1"
-          max="48"
-          step="1"
-          class="mt-2 w-full accent-primary cursor-pointer"
-        >
-        <div class="flex justify-between text-[10px] text-ink-400 mt-0.5">
-          <span>1</span>
-          <span>48</span>
-        </div>
-      </label>
-
-      <button
-        type="button"
-        class="btn-primary-lg w-full"
-        :disabled="submitting"
-        @click="startBurst"
+    <label class="block">
+      <span
+        class="flex items-baseline justify-between text-xs font-medium
+          text-ink-200"
       >
-        <span v-if="submitting">Starting…</span>
-        <span v-else>Start burst →</span>
-      </button>
-    </div>
+        <span>Images in burst</span>
+        <span class="font-mono text-primary text-lg font-bold tabular-nums">
+          {{ count }}
+        </span>
+      </span>
+      <input
+        v-model.number="count"
+        type="range"
+        min="1"
+        max="48"
+        step="1"
+        class="mt-2 w-full accent-primary cursor-pointer"
+      >
+      <div class="flex justify-between text-[10px] text-ink-400 mt-0.5">
+        <span>1</span>
+        <span>48</span>
+      </div>
+    </label>
+
+    <button
+      type="button"
+      class="btn-primary-lg w-full lg:mt-auto"
+      :disabled="submitting"
+      @click="startBurst"
+    >
+      <span v-if="submitting">Starting…</span>
+      <span v-else>Start burst →</span>
+    </button>
   </section>
 </template>
