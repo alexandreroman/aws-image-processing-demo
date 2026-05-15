@@ -4,7 +4,7 @@
 // reading order, not the current activity level.
 const activities = [
   { y: 110, label: 'Resize' },
-  { y: 170, label: 'Describe (Anthropic)' },
+  { y: 170, label: 'Describe with AI' },
   { y: 230, label: 'Watermark' },
   { y: 290, label: 'Store' },
 ] as const;
