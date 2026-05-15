@@ -93,8 +93,10 @@ x="20"  y="160" width="120" height="40" rx="8"
         <g class="node">
           <rect
 x="200" y="160" width="120" height="40" rx="8"
-            class="fill-surface-elevated stroke-surface-border" stroke-width="1"/>
-          <text x="260" y="184" text-anchor="middle" class="fill-ink-100">App</text>
+            class="fill-surface-elevated stroke-accent" stroke-width="1.5"/>
+          <text x="260" y="184" text-anchor="middle" class="fill-accent font-semibold">
+            App
+          </text>
         </g>
         <g class="node">
           <rect
