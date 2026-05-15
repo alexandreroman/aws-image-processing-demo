@@ -1,3 +1,9 @@
+# Local-only dev stack. Self-contained: Temporal dev server, Moto, worker,
+# backend, frontend. Stack-internal constants live in each service's
+# `environment:` block — compose does NOT read `.env` via `env_file:`.
+# Only `ANTHROPIC_API_KEY` is interpolated from `.env` at compose-time
+# (since compose auto-loads `.env` for ${VAR} substitution).
+
 services:
   temporal:
     image: temporalio/temporal:latest
@@ -45,7 +51,12 @@ services:
 
   init:
     image: amazon/aws-cli:latest
-    env_file: .env
+    environment:
+      AWS_REGION: eu-west-3
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      IMAGES_BUCKET: aws-image-processing-demo-images-local
+      IMAGES_TABLE: aws-image-processing-demo-images-local
     volumes:
       - ./frontend/public/sample-images:/samples:ro
     depends_on:
@@ -55,15 +66,18 @@ services:
     # Single-element array form of `command:` prevents docker-compose v5
     # from word-splitting the block scalar across whitespace/newlines.
     # The block scalar is passed as one argv to `/bin/sh -c`.
+    # `$$VAR` escapes compose's parse-time interpolation so the literal
+    # `$VAR` reaches the container shell, which resolves it against the
+    # `environment:` block above.
     command:
       - |
         set -eux
-        : "${IMAGES_BUCKET:?IMAGES_BUCKET must be set in .env}"
-        : "${IMAGES_TABLE:?IMAGES_TABLE must be set in .env}"
+        : "$${IMAGES_BUCKET:?IMAGES_BUCKET must be set}"
+        : "$${IMAGES_TABLE:?IMAGES_TABLE must be set}"
 
         if ! aws --endpoint-url=http://moto:5000 s3api head-bucket \
-          --bucket "$IMAGES_BUCKET" 2>/dev/null; then
-          aws --endpoint-url=http://moto:5000 s3 mb "s3://$IMAGES_BUCKET"
+          --bucket "$$IMAGES_BUCKET" 2>/dev/null; then
+          aws --endpoint-url=http://moto:5000 s3 mb "s3://$$IMAGES_BUCKET"
         fi
 
         # Dev-only: moto refuses anonymous GETs without a bucket policy; the
@@ -71,7 +85,7 @@ services:
         # public read. Production uses CloudFront + OAC and keeps the bucket
         # fully private (see infra/storage.tf).
         aws --endpoint-url=http://moto:5000 s3api put-bucket-policy \
-          --bucket "$IMAGES_BUCKET" \
+          --bucket "$$IMAGES_BUCKET" \
           --policy "{
             \"Version\": \"2012-10-17\",
             \"Statement\": [{
@@ -79,14 +93,14 @@ services:
               \"Effect\": \"Allow\",
               \"Principal\": \"*\",
               \"Action\": \"s3:GetObject\",
-              \"Resource\": \"arn:aws:s3:::${IMAGES_BUCKET}/*\"
+              \"Resource\": \"arn:aws:s3:::$${IMAGES_BUCKET}/*\"
             }]
           }"
 
         if ! aws --endpoint-url=http://moto:5000 dynamodb describe-table \
-          --table-name "$IMAGES_TABLE" >/dev/null 2>&1; then
+          --table-name "$$IMAGES_TABLE" >/dev/null 2>&1; then
           aws --endpoint-url=http://moto:5000 dynamodb create-table \
-            --table-name "$IMAGES_TABLE" \
+            --table-name "$$IMAGES_TABLE" \
             --attribute-definitions \
               AttributeName=pipelineId,AttributeType=S \
               AttributeName=imageId,AttributeType=S \
@@ -96,7 +110,7 @@ services:
             --billing-mode PAY_PER_REQUEST
         fi
 
-        aws --endpoint-url=http://moto:5000 s3 sync /samples "s3://$IMAGES_BUCKET/samples/" \
+        aws --endpoint-url=http://moto:5000 s3 sync /samples "s3://$$IMAGES_BUCKET/samples/" \
           --exclude '*.md' --exclude '.*' --content-type image/jpeg
     restart: "no"
 
@@ -105,10 +119,19 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    env_file: .env
     environment:
       TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: image-processing
+      TEMPORAL_TLS_CERT: ""
+      TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
+      AWS_REGION: eu-west-3
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      IMAGES_BUCKET: aws-image-processing-demo-images-local
+      IMAGES_TABLE: aws-image-processing-demo-images-local
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set in .env or shell}
     depends_on:
       temporal:
         condition: service_healthy
@@ -127,10 +150,18 @@ services:
       context: .
       dockerfile: Dockerfile
       target: backend
-    env_file: .env
     environment:
       TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      TEMPORAL_TASK_QUEUE: image-processing
+      TEMPORAL_TLS_CERT: ""
+      TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
+      AWS_REGION: eu-west-3
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      IMAGES_BUCKET: aws-image-processing-demo-images-local
+      IMAGES_TABLE: aws-image-processing-demo-images-local
     ports:
       - "8000:8000"  # HTTP API
     # The backend image is distroless static; the Dockerfile bakes in a
@@ -155,17 +186,18 @@ services:
     restart: unless-stopped
 
   frontend:
+    # Caddy serves the Nuxt SSG bundle on :3000 and reverse-proxies
+    # /api/* to backend:8000 — same-origin browser-side, mirroring the
+    # prod CloudFront topology (CloudFront → S3 + API Gateway).
     build:
       context: ./frontend
-    environment:
-      NUXT_PUBLIC_API_BASE: http://localhost:8000
     ports:
-      - "3000:3000"  # Nuxt
+      - "3000:3000"
     depends_on:
       backend:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
     restart: unless-stopped

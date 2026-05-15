@@ -1,0 +1,12 @@
+# Single-origin front door for the compose stack. Mirrors the prod
+# CloudFront topology: /api/* → backend, /* → SSG bundle with SPA fallback.
+:3000 {
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
