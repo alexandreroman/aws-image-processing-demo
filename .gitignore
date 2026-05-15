@@ -46,5 +46,5 @@ ca.*
 # Claude Code
 .claude/scheduled_tasks.lock
 
-worker
-backend
+/worker
+/backend
