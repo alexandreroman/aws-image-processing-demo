@@ -22,14 +22,50 @@ onBeforeUnmount(() => {
   if (timer !== null) clearInterval(timer);
 });
 
-function format(value: number | undefined): string {
-  if (value === undefined || value === -1) return '—';
+const DASH = '—';
+
+function formatCount(value: number | undefined): string {
+  if (value === undefined || value === -1) return DASH;
   return value.toLocaleString('en-US');
 }
 
+function formatActivities(processed: number | undefined): string {
+  if (processed === undefined || processed === -1) return DASH;
+  return (processed * 8).toLocaleString('en-US');
+}
+
+function formatSuccessRate(
+  processed: number | undefined,
+  failed: number | undefined,
+): string {
+  if (processed === undefined || processed === -1) return DASH;
+  if (failed === undefined || failed === -1) return DASH;
+  const total = processed + failed;
+  if (total === 0) return DASH;
+  const pct = (processed / total) * 100;
+  return `${pct.toFixed(1)}%`;
+}
+
 const tiles = computed(() => [
-  { label: 'Images processed', value: format(stats.value?.imagesProcessed) },
-  { label: 'Bursts launched',  value: format(stats.value?.burstsLaunched) },
+  {
+    label: 'Bursts launched',
+    value: formatCount(stats.value?.burstsLaunched),
+  },
+  {
+    label: 'Images processed',
+    value: formatCount(stats.value?.imagesProcessed),
+  },
+  {
+    label: 'Activities executed',
+    value: formatActivities(stats.value?.imagesProcessed),
+  },
+  {
+    label: 'Success rate',
+    value: formatSuccessRate(
+      stats.value?.imagesProcessed,
+      stats.value?.imagesFailed,
+    ),
+  },
 ]);
 </script>
 
@@ -41,11 +77,12 @@ const tiles = computed(() => [
         Last {{ stats?.windowDays ?? 30 }} days
       </span>
     </div>
-    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="t in tiles" :key="t.label" class="min-w-0">
         <dt class="stat-label">{{ t.label }}</dt>
         <dd
-          class="mt-1 text-3xl sm:text-4xl font-bold text-ink-100 tabular-nums truncate"
+          class="mt-1 text-2xl sm:text-3xl lg:text-4xl font-bold text-ink-100
+            tabular-nums truncate"
           :title="t.value"
         >
           {{ t.value }}
