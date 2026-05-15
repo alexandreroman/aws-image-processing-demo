@@ -114,6 +114,7 @@ locals {
     { name = "AWS_REGION", value = var.aws_region },
     { name = "IMAGES_BUCKET", value = aws_s3_bucket.images.bucket },
     { name = "IMAGES_TABLE", value = aws_dynamodb_table.images.name },
+    { name = "WORKER_MAX_CONCURRENT_ACTIVITIES", value = "16" },
   ]
 
   worker_secrets = concat(
@@ -140,8 +141,8 @@ resource "aws_ecs_task_definition" "worker" {
   family                   = "${local.name_prefix}-worker"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = "1024"
+  memory                   = "2048"
   execution_role_arn       = aws_iam_role.worker_execution.arn
   task_role_arn            = aws_iam_role.worker_task.arn
 

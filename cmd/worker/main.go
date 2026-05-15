@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/anthropicclient"
@@ -55,9 +56,12 @@ func run(logger *slog.Logger) error {
 	}
 
 	// Cap concurrent activities so a large burst cannot exhaust the
-	// worker's memory (each Resize holds a decoded RGBA buffer).
+	// worker's memory (each Resize holds a decoded RGBA buffer). 8 is
+	// safe for the 256 MiB compose container; prod (1+ GiB Fargate)
+	// overrides via WORKER_MAX_CONCURRENT_ACTIVITIES.
+	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 8)
 	w := worker.New(tc, taskQueue, worker.Options{
-		MaxConcurrentActivityExecutionSize: 8,
+		MaxConcurrentActivityExecutionSize: maxConcurrent,
 	})
 	w.RegisterWorkflow(workflows.ProcessImage)
 	w.RegisterWorkflow(workflows.LaunchPipelines)
@@ -68,6 +72,7 @@ func run(logger *slog.Logger) error {
 		"namespace", namespace,
 		"bucket", acts.ImagesBucket,
 		"table", acts.ImagesTable,
+		"maxConcurrentActivities", maxConcurrent,
 	)
 
 	// worker.InterruptCh closes on SIGINT/SIGTERM; no goroutine to leak.
@@ -77,6 +82,15 @@ func run(logger *slog.Logger) error {
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envIntOr(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
 	}
 	return fallback
 }
