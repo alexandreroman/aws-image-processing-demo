@@ -32,8 +32,10 @@ make teardown          # tofu destroy + cleanup
 
 ## Modules
 
-- `cmd/` — entry points: `worker` (Fargate),
-  `backend` (Lambda + local HTTP).
+- `cmd/` — entry points: `worker` (Fargate;
+  exposes `/healthz` on `:8001` as a liveness
+  probe), `backend` (Lambda or local HTTP on
+  `:8000`).
 - `internal/workflows` — `LaunchPipelines` parent
   workflow that fans out one child `ProcessImage`
   workflow per image.
@@ -119,9 +121,11 @@ not shared with the team.
   work cleanly (`/api/*` → API Gateway,
   `/images/*` → S3 images bucket via OAC,
   `/*` → S3 frontend bucket). The `/healthz`
-  endpoint is the deliberate exception — it is a
-  container-internal probe and is not exposed
-  through CloudFront.
+  liveness probe is the deliberate exception — both
+  the backend (`:8000`) and the worker (`:8001`)
+  expose it at the root for container orchestrators
+  (compose, ECS), and neither is reachable through
+  CloudFront.
 - **S3 prefix convention:** uploads under
   `uploads/` (flat), derived artifacts under
   `pipelines/{pipelineId}/...`. Lifecycle rules expire

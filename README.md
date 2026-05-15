@@ -81,6 +81,10 @@ Once the stack is up:
   devProxy in `make dev`, Caddy in `make app-up`).
 - Backend API — <http://localhost:8000/api> stays
   published in both modes for direct probing.
+- Health probes — backend on
+  <http://localhost:8000/healthz>, worker on
+  <http://localhost:8001/healthz> (liveness only,
+  used by compose and ECS healthchecks).
 - Temporal UI — <http://localhost:8233>
 - Moto Server endpoint — <http://localhost:4566>
 
@@ -246,15 +250,15 @@ prefix search.
 
 | Module                     | Description                                              |
 | -------------------------- | -------------------------------------------------------- |
-| `cmd/worker`               | Temporal worker for ECS Fargate                          |
-| `cmd/backend`              | Backend service — Lambda or local HTTP server            |
+| `cmd/worker`               | Temporal worker (Fargate); `/healthz` liveness on `:8001` |
+| `cmd/backend`              | Backend — Lambda or local HTTP server on `:8000`         |
 | `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows           |
 | `internal/activities`      | Resize, describe, watermark, store activities            |
 | `internal/manifest`        | Shared manifest types and canonical size list            |
 | `internal/awsclient`       | AWS SDK config (Moto-aware)                              |
 | `internal/anthropicclient` | Anthropic API wrapper                                    |
 | `internal/temporalclient`  | Temporal SDK client (mTLS-aware for Temporal Cloud)      |
-| `internal/api`             | HTTP handlers under `/api/*` (presign, workflows, …)     |
+| `internal/api`             | HTTP handlers — `/api/*` plus `/healthz` at the root     |
 | `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
 | `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                |
 | `scripts`                  | Deploy, teardown, and sample-upload helpers              |
