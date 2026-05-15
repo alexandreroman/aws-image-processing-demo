@@ -49,7 +49,7 @@ func main() {
 		return
 	}
 	logger.Info("starting Lambda handler")
-	lambda.Start(httpadapter.New(handler).ProxyWithContext)
+	lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)
 }
 
 func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Client, error) {
