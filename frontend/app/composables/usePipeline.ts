@@ -12,14 +12,10 @@ const SLOW_AFTER_MS = 30_000;
 const MEDIUM_AFTER_MS = 10_000;
 
 export interface UsePipelineReturn {
-  pipeline: Ref<Pipeline | null>;
   summary: ComputedRef<PipelineSummary>;
   workflows: ComputedRef<WorkflowItem[]>;
-  loading: Ref<boolean>;
   error: Ref<Error | null>;
-  isPolling: Ref<boolean>;
   refresh: () => Promise<void>;
-  stop: () => void;
 }
 
 const EMPTY_SUMMARY: PipelineSummary = {
@@ -33,7 +29,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   const api = useApi();
 
   const pipeline = ref<Pipeline | null>(null);
-  const loading = ref(false);
   const error = ref<Error | null>(null);
 
   const summary = computed<PipelineSummary>(
@@ -49,7 +44,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   // responses older than the last one we already applied.
   let nextSeq = 0;
   let lastAppliedSeq = 0;
-  let inFlight = 0;
 
   async function refresh() {
     const id = toValue(pipelineId);
@@ -57,8 +51,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
       return;
     }
     const seq = ++nextSeq;
-    inFlight++;
-    loading.value = true;
     try {
       const result = await api.getPipeline(id);
       if (seq <= lastAppliedSeq) {
@@ -73,9 +65,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
       }
       lastAppliedSeq = seq;
       error.value = err instanceof Error ? err : new Error(String(err));
-    } finally {
-      inFlight--;
-      loading.value = inFlight > 0;
     }
   }
 
@@ -95,7 +84,7 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     }
   }
 
-  const { pause, resume, isActive } = useIntervalFn(
+  const { pause, resume } = useIntervalFn(
     () => {
       updatePollInterval();
       void refresh();
@@ -135,13 +124,9 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   });
 
   return {
-    pipeline,
     summary,
     workflows,
-    loading,
     error,
-    isPolling: isActive,
     refresh,
-    stop: pause,
   };
 }

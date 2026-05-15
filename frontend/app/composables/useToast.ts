@@ -49,9 +49,5 @@ export function useToast() {
     return push(title, { kind: 'error', body });
   }
 
-  function info(title: string, body?: string) {
-    return push(title, { kind: 'info', body });
-  }
-
-  return { toasts, push, dismiss, success, error, info };
+  return { toasts, dismiss, success, error };
 }
