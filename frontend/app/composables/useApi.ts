@@ -35,7 +35,6 @@ export interface ManifestSize {
 export interface Manifest {
   pipelineId: string;
   imageId: string;
-  original: S3Ref;
   sizes: Record<string, ManifestSize>;
   description?: string;
   labels?: string[];
@@ -61,8 +60,6 @@ export interface PipelineSummary {
 
 export interface Pipeline {
   pipelineId: string;
-  createdAt: string;
-  imageCount: number;
   summary: PipelineSummary;
   workflows: WorkflowItem[];
 }

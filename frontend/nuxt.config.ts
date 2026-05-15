@@ -30,9 +30,6 @@ export default defineNuxtConfig({
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE ?? '',
       s3PublicUrl: process.env.NUXT_PUBLIC_S3_PUBLIC_URL ?? '',
-      githubUrl:
-        process.env.NUXT_PUBLIC_GITHUB_URL ??
-        'https://github.com/alexandreroman/aws-image-processing-demo',
       samplesBucket:
         process.env.NUXT_PUBLIC_SAMPLES_BUCKET ??
         'aws-image-processing-demo-images-local',
