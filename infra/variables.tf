@@ -51,7 +51,7 @@ variable "temporal_task_queue" {
 variable "worker_image" {
   description = "Container image for the Fargate worker."
   type        = string
-  default     = "ghcr.io/alexandreroman/aws-image-processing-demo:latest"
+  default     = "ghcr.io/alexandreroman/aws-image-processing-demo-worker:latest"
 }
 
 variable "worker_desired_count" {
