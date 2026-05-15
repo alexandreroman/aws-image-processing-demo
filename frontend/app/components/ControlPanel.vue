@@ -52,11 +52,8 @@ async function startBurst() {
 
 <template>
   <section class="card p-4 flex flex-col gap-4 lg:h-full">
-    <header class="flex items-center justify-between">
+    <header class="flex items-center">
       <h2 class="stat-label">Control panel</h2>
-      <span class="chip-primary">
-        Live
-      </span>
     </header>
 
     <label class="block">
