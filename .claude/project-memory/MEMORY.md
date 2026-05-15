@@ -7,6 +7,7 @@ in this directory.
 <!-- Add entries below as `- [Title](file.md) — one-line hook` -->
 
 - [AWS resource naming (S3 bucket and DynamoDB table)](references/images_bucket_naming.md) — fixed `-local` names in dev; Tofu-generated with prefix `aws-image-processing-demo-` in AWS; neither is a user knob
+- [Commit message convention](references/commit_message_convention.md) — imperative subject, capitalized, no Conventional Commits prefix (no fix:/chore:/refactor:)
 - [Backend run-mode detection](references/backend_run_mode_detection.md) — `cmd/backend` picks HTTP vs Lambda from `AWS_ENDPOINT_URL` presence; do not reintroduce `RUN_MODE`
 - [Dev mode: host processes + Docker infra split](references/dev_mode_split.md) — `make dev` runs Go + Nuxt on host with infra in Docker; `make app-up` brings the full stack up in Docker
 - [Triggering a workflow from the Temporal CLI](references/workflow_cli.md) — launch a single `ProcessImage` workflow via `temporal workflow start` for debug or scripted invocation
