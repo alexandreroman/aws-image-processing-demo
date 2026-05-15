@@ -54,7 +54,11 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	w := worker.New(tc, taskQueue, worker.Options{})
+	// Cap concurrent activities so a large burst cannot exhaust the
+	// worker's memory (each Resize holds a decoded RGBA buffer).
+	w := worker.New(tc, taskQueue, worker.Options{
+		MaxConcurrentActivityExecutionSize: 8,
+	})
 	w.RegisterWorkflow(workflows.ProcessImage)
 	w.RegisterWorkflow(workflows.LaunchPipelines)
 	w.RegisterActivity(acts)
