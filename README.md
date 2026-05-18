@@ -299,14 +299,22 @@ behavior; for spiky or low-volume workloads where cost
 matters more than steady-state latency, Lambda is the
 attractive option.
 
-To deploy the Lambda variant, first build the zip
-artifact, then pass the Tofu variable:
+To deploy the Lambda variant, set the
+`worker_runtime` Tofu variable on `make deploy`:
+
+```bash
+TF_VAR_worker_runtime=lambda make deploy
+```
+
+`scripts/deploy.sh` detects the variable and builds
+`build/worker.zip` before running `tofu apply`, so a
+single command is enough. As a manual fallback you
+can also build the zip yourself and apply Tofu
+directly:
 
 ```bash
 make worker-lambda-zip
 tofu -chdir=infra apply -var=worker_runtime=lambda
-# or, equivalently:
-TF_VAR_worker_runtime=lambda make deploy
 ```
 
 Two optional Tofu variables wire up the

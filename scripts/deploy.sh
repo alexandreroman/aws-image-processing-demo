@@ -4,10 +4,12 @@
 # Steps:
 #   1. Load .env and validate required vars.
 #   2. Build the Lambda bootstrap binary.
-#   3. tofu init && tofu apply.
-#   4. Build the Nuxt frontend.
-#   5. Sync to S3 and invalidate CloudFront.
-#   6. Print the demo URL.
+#   3. If TF_VAR_worker_runtime=lambda, build the
+#      worker Lambda zip (build/worker.zip).
+#   4. tofu init && tofu apply.
+#   5. Build the Nuxt frontend.
+#   6. Sync to S3 and invalidate CloudFront.
+#   7. Print the demo URL.
 #
 # Set INTERACTIVE=0 to skip the tofu approval
 # prompt (useful in CI). Default is interactive.
@@ -30,6 +32,12 @@ fi
 
 echo "==> Building Lambda bootstrap"
 "${repo_root}/scripts/build-lambda.sh"
+
+worker_runtime="${TF_VAR_worker_runtime:-ecs}"
+if [[ "${worker_runtime}" == "lambda" ]]; then
+  echo "==> Building worker Lambda zip (worker_runtime=lambda)"
+  make -C "${repo_root}" worker-lambda-zip
+fi
 
 echo "==> Provisioning infra with OpenTofu"
 tofu -chdir="${infra_dir}" init
