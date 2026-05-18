@@ -27,6 +27,11 @@ const submitting = ref(false);
 const availableRuntimes = ref<RuntimeName[]>(['ecs']);
 const selectedRuntime = ref<RuntimeName>('ecs');
 
+const selectedIndex = computed(() => {
+  const i = availableRuntimes.value.indexOf(selectedRuntime.value);
+  return i < 0 ? 0 : i;
+});
+
 onMounted(async () => {
   try {
     const runtimes = await api.getRuntimes();
@@ -125,9 +130,20 @@ async function startBurst() {
         v-if="availableRuntimes.length > 1"
         role="radiogroup"
         aria-label="Worker runtime"
-        class="mt-2 grid grid-cols-2 gap-1 p-1 rounded-md bg-surface-elevated
-          border border-surface-border"
+        class="relative isolate mt-2 grid gap-1 p-1 rounded-md
+          bg-surface-elevated border border-surface-border"
+        :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
       >
+        <span
+          aria-hidden="true"
+          class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
+            bg-primary shadow-glow transition-transform duration-200 ease-out
+            motion-reduce:transition-none"
+          :style="{
+            width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
+            transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
+          }"
+        />
         <button
           v-for="r in availableRuntimes"
           :key="r"
@@ -135,12 +151,12 @@ async function startBurst() {
           role="radio"
           :aria-checked="selectedRuntime === r"
           :tabindex="selectedRuntime === r ? 0 : -1"
-          class="text-xs font-medium py-1.5 rounded transition-colors
-            focus-visible:outline-none focus-visible:ring-2
+          class="relative z-10 text-xs font-medium py-1.5 rounded
+            transition-colors focus-visible:outline-none focus-visible:ring-2
             focus-visible:ring-primary/60"
           :class="selectedRuntime === r
-            ? 'bg-primary text-bg shadow-glow'
-            : 'text-ink-200 hover:text-ink-100 hover:bg-surface-hover'"
+            ? 'text-bg'
+            : 'text-ink-200 hover:text-ink-100'"
           @click="selectedRuntime = r"
         >
           {{ runtimeLabel(r) }}
