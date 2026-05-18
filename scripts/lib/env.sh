@@ -82,7 +82,6 @@ load_env() {
   export TF_VAR_temporal_address="${TEMPORAL_ADDRESS}"
   export TF_VAR_temporal_namespace="${TEMPORAL_NAMESPACE}"
   export TF_VAR_anthropic_api_key="${ANTHROPIC_API_KEY}"
-  [[ -n "${TEMPORAL_TASK_QUEUE:-}" ]] && export TF_VAR_temporal_task_queue="${TEMPORAL_TASK_QUEUE}"
   [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="${AWS_REGION}"
   [[ -n "${WORKER_IMAGE:-}" ]] && export TF_VAR_worker_image="${WORKER_IMAGE}"
 

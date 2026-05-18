@@ -122,7 +122,11 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
-      TEMPORAL_TASK_QUEUE: image-processing
+      # Compose runs a single worker process, but the demo offers two
+      # runtimes in the UI. The comma-separated list makes that one
+      # process poll BOTH queues so picking either "ecs" or "lambda"
+      # in the frontend works in local dev.
+      TEMPORAL_TASK_QUEUE: image-processing-ecs,image-processing-lambda
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
@@ -161,7 +165,8 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
-      TEMPORAL_TASK_QUEUE: image-processing
+      WORKER_TASK_QUEUE_ECS: image-processing-ecs
+      WORKER_TASK_QUEUE_LAMBDA: image-processing-lambda
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000

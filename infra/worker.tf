@@ -1,17 +1,16 @@
-# Worker is deployed either as a long-running ECS Fargate service or as a
-# Lambda function. The two paths are mutually exclusive — gated by
-# var.worker_runtime — and isolated in child modules so each can evolve
-# without dragging shared resources into the other.
+# Both worker runtimes are always provisioned — each polls its own Temporal
+# task queue so they can run side by side. The backend's runtime registry
+# routes a workflow start request to the matching queue based on the
+# `runtime` field in the POST body.
 
 module "worker_ecs" {
   source = "./worker-ecs"
-  count  = var.worker_runtime == "ecs" ? 1 : 0
 
   name_prefix          = local.name_prefix
   aws_region           = var.aws_region
   temporal_address     = var.temporal_address
   temporal_namespace   = var.temporal_namespace
-  temporal_task_queue  = var.temporal_task_queue
+  temporal_task_queue  = var.worker_task_queue_ecs
   temporal_tls_enabled = local.temporal_tls_enabled
   worker_image         = var.worker_image
 
@@ -30,13 +29,12 @@ module "worker_ecs" {
 
 module "worker_lambda" {
   source = "./worker-lambda"
-  count  = var.worker_runtime == "lambda" ? 1 : 0
 
   name_prefix          = local.name_prefix
   aws_region           = var.aws_region
   temporal_address     = var.temporal_address
   temporal_namespace   = var.temporal_namespace
-  temporal_task_queue  = var.temporal_task_queue
+  temporal_task_queue  = var.worker_task_queue_lambda
   temporal_tls_enabled = local.temporal_tls_enabled
 
   images_bucket_arn  = aws_s3_bucket.images.arn

@@ -107,11 +107,12 @@ resource "aws_lambda_function" "backend" {
     # contract the worker uses and `temporalclient.Dial` reads.
     variables = merge(
       {
-        TEMPORAL_ADDRESS    = var.temporal_address
-        TEMPORAL_NAMESPACE  = var.temporal_namespace
-        TEMPORAL_TASK_QUEUE = var.temporal_task_queue
-        IMAGES_BUCKET       = aws_s3_bucket.images.bucket
-        IMAGES_TABLE        = aws_dynamodb_table.images.name
+        TEMPORAL_ADDRESS         = var.temporal_address
+        TEMPORAL_NAMESPACE       = var.temporal_namespace
+        WORKER_TASK_QUEUE_ECS    = var.worker_task_queue_ecs
+        WORKER_TASK_QUEUE_LAMBDA = var.worker_task_queue_lambda
+        IMAGES_BUCKET            = aws_s3_bucket.images.bucket
+        IMAGES_TABLE             = aws_dynamodb_table.images.name
         # Pin CORS to the only origin that legitimately calls this API.
         # Without this, the handler falls back to "*" and the API
         # advertises itself to arbitrary origins.

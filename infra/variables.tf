@@ -42,10 +42,16 @@ variable "temporal_namespace" {
   type        = string
 }
 
-variable "temporal_task_queue" {
-  description = "Temporal task queue served by the worker."
+variable "worker_task_queue_ecs" {
+  description = "Temporal task queue served by the ECS Fargate worker."
   type        = string
-  default     = "image-processing"
+  default     = "image-processing-ecs"
+}
+
+variable "worker_task_queue_lambda" {
+  description = "Temporal task queue served by the Lambda worker."
+  type        = string
+  default     = "image-processing-lambda"
 }
 
 variable "worker_image" {
@@ -54,26 +60,10 @@ variable "worker_image" {
   default     = "ghcr.io/alexandreroman/aws-image-processing-demo-worker:latest"
 }
 
-variable "worker_runtime" {
-  description = <<-EOT
-    Worker deployment target: "ecs" runs the long-running Fargate worker;
-    "lambda" deploys the per-invocation lambdaworker package. These are
-    mutually exclusive — only one runtime is provisioned per apply.
-  EOT
-  type        = string
-  default     = "ecs"
-
-  validation {
-    condition     = contains(["ecs", "lambda"], var.worker_runtime)
-    error_message = "worker_runtime must be either \"ecs\" or \"lambda\"."
-  }
-}
-
 variable "temporal_cloud_aws_account_id" {
   description = <<-EOT
     AWS account ID Temporal Cloud assumes from when invoking the Lambda worker.
-    Leave empty to skip creation of the invoker role (only meaningful when
-    worker_runtime = "lambda").
+    Leave empty to skip creation of the invoker role.
   EOT
   type        = string
   default     = ""
