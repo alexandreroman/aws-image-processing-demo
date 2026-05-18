@@ -25,17 +25,26 @@ configuration, and architecture.
 make dev               # infra in Docker + worker/backend/frontend on host
 make app-up            # full stack in Docker (Caddy-fronted, single origin)
 make test              # unit tests
+make worker-lambda-zip # build build/worker.zip for Lambda deployment
 make deploy            # tofu init + apply + frontend-deploy
+                       # set TF_VAR_worker_runtime=lambda to deploy the
+                       # Lambda variant instead of the default ECS one
 make frontend-deploy   # build Nuxt + sync to S3 + invalidate CloudFront
 make teardown          # tofu destroy + cleanup
 ```
 
 ## Modules
 
-- `cmd/` — entry points: `worker` (Fargate;
-  exposes `/healthz` on `:8001` as a liveness
-  probe), `backend` (Lambda or local HTTP on
-  `:8000`).
+- `cmd/` — entry points:
+  - `worker` — a single Go binary that runs in
+    four deployment modes (host, Docker, ECS
+    Fargate, AWS Lambda). The long-running modes
+    (host, Docker, ECS) expose `/healthz` on
+    `:8001` as a liveness probe. Lambda mode is
+    detected at startup via the presence of
+    `AWS_LAMBDA_FUNCTION_NAME` and uses
+    `go.temporal.io/sdk/contrib/aws/lambdaworker`.
+  - `backend` — Lambda or local HTTP on `:8000`.
 - `internal/workflows` — `LaunchPipelines` parent
   workflow that fans out one child `ProcessImage`
   workflow per image.
@@ -139,3 +148,8 @@ not shared with the team.
   `.env`. The compose stack (`make app-up`) is self-
   contained and does NOT read either file beyond
   `ANTHROPIC_API_KEY` (compose-time interpolation).
+- **Worker runtime selection** is driven by the Tofu
+  variable `worker_runtime` (`ecs` default, `lambda`
+  alternative). See the README's "Deployment modes"
+  section for the full trade-offs and the optional
+  Temporal-Cloud invoker-role variables.

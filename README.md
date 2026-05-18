@@ -251,7 +251,7 @@ prefix search.
 
 | Module                     | Description                                              |
 | -------------------------- | -------------------------------------------------------- |
-| `cmd/worker`               | Temporal worker (Fargate); `/healthz` liveness on `:8001` |
+| `cmd/worker`               | Temporal worker (host / Docker / ECS Fargate / AWS Lambda); `/healthz` on `:8001` in long-running modes |
 | `cmd/backend`              | Backend — Lambda or local HTTP server on `:8000`         |
 | `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows           |
 | `internal/activities`      | Resize, describe, watermark, store activities            |
@@ -263,6 +263,59 @@ prefix search.
 | `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
 | `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                |
 | `scripts`                  | Deploy, teardown, and sample-upload helpers              |
+
+## Deployment modes
+
+The worker is a single Go binary that runs in four
+deployment modes from the same source — the mode is
+selected by the environment, not by build flags.
+
+| Mode            | How to run                  | Process model              | Key trade-off                                     |
+| --------------- | --------------------------- | -------------------------- | ------------------------------------------------- |
+| Host            | `make dev`                  | Long-running poll          | Fastest iteration; runs on the developer machine. |
+| Docker          | `make app-up`               | Long-running poll          | Containerized parity with prod; single host.      |
+| ECS Fargate     | `make deploy` (default)     | Long-running poll          | Warm cache, stable concurrency; pays even at idle. |
+| AWS Lambda      | `make deploy` with `worker_runtime=lambda` | Per-invocation worker       | Scale-to-zero, pay-per-invocation; cold-start cost. |
+
+In long-running modes (host, Docker, ECS Fargate), the
+worker process keeps an open gRPC long-poll against
+Temporal and exposes `/healthz` on `:8001` for the
+container orchestrator. In Lambda mode, runtime
+detection happens at startup via the presence of
+`AWS_LAMBDA_FUNCTION_NAME` (always set by the Lambda
+runtime); the binary then hands control to
+`go.temporal.io/sdk/contrib/aws/lambdaworker`, which
+spins up a worker per invocation and shuts it down
+when the invocation ends.
+
+ECS Fargate keeps a hot in-process cache of decoded
+workflow histories and offers stable concurrency, at
+the cost of paying for an always-on task. AWS Lambda
+scales to zero and charges only when invoked, but each
+new container pays a cold-start replay cost as the
+workflow history is rebuilt from scratch. For dev or
+demo work, prefer ECS Fargate for predictable
+behavior; for spiky or low-volume workloads where cost
+matters more than steady-state latency, Lambda is the
+attractive option.
+
+To deploy the Lambda variant, first build the zip
+artifact, then pass the Tofu variable:
+
+```bash
+make worker-lambda-zip
+tofu -chdir=infra apply -var=worker_runtime=lambda
+# or, equivalently:
+TF_VAR_worker_runtime=lambda make deploy
+```
+
+Two optional Tofu variables wire up the
+Temporal-Cloud-assumes-AWS-role flow:
+`temporal_cloud_aws_account_id` and
+`temporal_cloud_external_id`. When both are set, an
+IAM role is created with `lambda:InvokeFunction` and a
+`sts:ExternalId` trust condition so Temporal Cloud can
+assume it to invoke the Lambda worker.
 
 ## Contributing
 
