@@ -1,6 +1,10 @@
-// Package temporalclient centralizes the Temporal SDK client construction
-// shared by the worker and backend binaries. It honors mTLS env vars so
-// the same code path works for the local dev server and Temporal Cloud.
+// Package temporalclient centralizes Temporal SDK client construction shared
+// by the worker and backend binaries. It honors mTLS env vars so the same code
+// path works for the local dev server and Temporal Cloud.
+//
+// Options builds a client.Options from the environment (canonical builder,
+// used by callers that let the SDK dial — e.g. Lambda worker). Dial is the
+// convenience wrapper that also opens the connection.
 package temporalclient
 
 import (
@@ -19,12 +23,11 @@ import (
 // filesystem paths (used by local dev or future container mounts).
 const pemHeader = "-----BEGIN"
 
-// Dial connects to Temporal, honoring TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE,
-// and optional TEMPORAL_TLS_CERT / TEMPORAL_TLS_KEY for mTLS (Temporal Cloud).
-//
-// It returns the dialed client and the resolved namespace so callers can log
-// and propagate it without re-reading the env.
-func Dial(logger *slog.Logger) (client.Client, string, error) {
+// Options builds a client.Options from TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE, and
+// optional TEMPORAL_TLS_CERT / TEMPORAL_TLS_KEY for mTLS (Temporal Cloud). It
+// returns the assembled options and the resolved namespace so callers can log
+// and propagate it without re-reading the env. It does not dial.
+func Options(logger *slog.Logger) (client.Options, string, error) {
 	address := envOr("TEMPORAL_ADDRESS", client.DefaultHostPort)
 	namespace := envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace)
 
@@ -39,9 +42,20 @@ func Dial(logger *slog.Logger) (client.Client, string, error) {
 	if certVar != "" && keyVar != "" {
 		cert, err := loadKeyPair(certVar, keyVar)
 		if err != nil {
-			return nil, "", err
+			return client.Options{}, "", err
 		}
 		opts.ConnectionOptions.TLS = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
+
+	return opts, namespace, nil
+}
+
+// Dial builds options via Options and opens the connection. It returns the
+// dialed client and the resolved namespace.
+func Dial(logger *slog.Logger) (client.Client, string, error) {
+	opts, namespace, err := Options(logger)
+	if err != nil {
+		return nil, "", err
 	}
 
 	tc, err := client.Dial(opts)
