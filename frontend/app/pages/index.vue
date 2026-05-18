@@ -11,8 +11,8 @@ const reasons = [
     accent: 'text-primary',
   },
   {
-    title: 'Elastic compute, zero servers',
-    body: 'Fargate workers, scaled by a single lever (min/max-capacity). No nodes, no AMIs, no patching.',
+    title: 'Two runtimes, one binary',
+    body: 'The same Go worker runs on ECS Fargate or AWS Lambda — pick the compute model per burst from the control panel.',
     iconKey: 'bolt',
     accent: 'text-accent',
   },
