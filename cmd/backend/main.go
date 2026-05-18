@@ -26,8 +26,13 @@ import (
 )
 
 const (
-	httpAddr         = ":8000"
-	defaultTaskQueue = "image-processing"
+	httpAddr = ":8000"
+
+	// Default task queues per runtime. Picked to match the names the Tofu
+	// worker module assigns to the ECS and Lambda deployments so a vanilla
+	// `make dev` works without touching env files.
+	defaultTaskQueueECS    = "image-processing-ecs"
+	defaultTaskQueueLambda = "image-processing-lambda"
 )
 
 func main() {
@@ -72,14 +77,14 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 		return nil, nil, errors.New("backend: IMAGES_BUCKET and IMAGES_TABLE are required")
 	}
 
-	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
+	runtimes := buildRuntimes()
 	h := api.New(api.Dependencies{
 		Temporal:     tc,
 		Presigner:    presigner,
 		Dynamo:       ddb,
 		ImagesBucket: bucket,
 		ImagesTable:  table,
-		TaskQueue:    taskQueue,
+		Runtimes:     runtimes,
 		Namespace:    namespace,
 		Logger:       logger,
 	})
@@ -87,9 +92,45 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	logger.Info("backend ready",
 		"bucket", bucket,
 		"table", table,
-		"taskQueue", taskQueue,
+		"runtimes", runtimeLogValue(runtimes),
 	)
 	return h, tc, nil
+}
+
+// buildRuntimes resolves the worker runtimes the backend will route to.
+// Unset env vars fall back to the canonical defaults so a vanilla
+// dev/demo boot works out of the box. Setting a variable to the empty
+// string opts the corresponding runtime out — that is how a deployment
+// running only one worker variant signals "do not advertise the other".
+func buildRuntimes() []api.Runtime {
+	out := make([]api.Runtime, 0, 2)
+	if q := envWithDefault("WORKER_TASK_QUEUE_ECS", defaultTaskQueueECS); q != "" {
+		out = append(out, api.Runtime{Name: "ecs", TaskQueue: q})
+	}
+	if q := envWithDefault("WORKER_TASK_QUEUE_LAMBDA", defaultTaskQueueLambda); q != "" {
+		out = append(out, api.Runtime{Name: "lambda", TaskQueue: q})
+	}
+	return out
+}
+
+// envWithDefault returns the env var's value, falling back to the default
+// only when the variable is unset. An explicit empty value is preserved so
+// callers can use it as an opt-out signal.
+func envWithDefault(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return fallback
+}
+
+// runtimeLogValue produces a compact loggable summary so the boot line stays
+// readable even when both runtimes are configured.
+func runtimeLogValue(rts []api.Runtime) []map[string]string {
+	out := make([]map[string]string, len(rts))
+	for i, rt := range rts {
+		out[i] = map[string]string{"name": rt.Name, "taskQueue": rt.TaskQueue}
+	}
+	return out
 }
 
 func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler) {

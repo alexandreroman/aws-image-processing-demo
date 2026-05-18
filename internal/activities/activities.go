@@ -35,14 +35,6 @@ type Activities struct {
 
 	ImagesBucket string
 	ImagesTable  string
-	// TaskQueue is the queue StartProcessImage targets when scheduling new
-	// ProcessImage workflows.
-	TaskQueue string
-}
-
-// Config carries optional overrides. Empty values fall back to env vars.
-type Config struct {
-	TaskQueue string
 }
 
 // New builds an Activities struct, resolving IMAGES_BUCKET and IMAGES_TABLE
@@ -52,11 +44,9 @@ func New(
 	ddb *dynamodb.Client,
 	ac *anthropicclient.Client,
 	tc client.Client,
-	cfg Config,
 ) (*Activities, error) {
 	bucket := os.Getenv("IMAGES_BUCKET")
 	table := os.Getenv("IMAGES_TABLE")
-	taskQueue := cfg.TaskQueue
 	if bucket == "" {
 		return nil, errors.New("activities: IMAGES_BUCKET is required")
 	}
@@ -73,7 +63,6 @@ func New(
 		Temporal:     tc,
 		ImagesBucket: bucket,
 		ImagesTable:  table,
-		TaskQueue:    taskQueue,
 	}, nil
 }
 

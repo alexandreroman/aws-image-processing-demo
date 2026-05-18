@@ -16,8 +16,14 @@ import (
 func newTestHandler() *Handler {
 	return New(Dependencies{
 		ImagesBucket: "test-bucket",
-		TaskQueue:    "image-processing",
+		Runtimes:     []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
 	})
+}
+
+// newTestHandlerWithoutRuntimes mirrors newTestHandler but leaves Runtimes
+// empty so the misconfiguration path can be exercised.
+func newTestHandlerWithoutRuntimes() *Handler {
+	return New(Dependencies{ImagesBucket: "test-bucket"})
 }
 
 func TestHandlePresign_Validation(t *testing.T) {
@@ -170,6 +176,81 @@ func TestHandleStart_RejectsBurstAboveCap(t *testing.T) {
 	if !strings.Contains(gotErr, wantSubstr) {
 		t.Fatalf("error %q does not contain %q", gotErr, wantSubstr)
 	}
+}
+
+func TestHandleStart_RejectsEmptyImages(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	status, gotErr := postJSON(t, h, "/api/workflows/start", `{"images":[],"runtime":"ecs"}`)
+	if status != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
+	}
+	if !strings.Contains(gotErr, "images must not be empty") {
+		t.Fatalf("error %q does not contain %q", gotErr, "images must not be empty")
+	}
+}
+
+func TestHandleStart_RejectsUnknownRuntime(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler()
+	body := `{"images":[{"bucket":"test-bucket","key":"uploads/x.jpg"}],"runtime":"firecracker"}`
+	status, gotErr := postJSON(t, h, "/api/workflows/start", body)
+	if status != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
+	}
+	if !strings.Contains(gotErr, `"firecracker"`) {
+		t.Fatalf("error %q does not echo the offending runtime", gotErr)
+	}
+	if !strings.Contains(gotErr, "ecs") {
+		t.Fatalf("error %q does not list allowed runtimes", gotErr)
+	}
+}
+
+func TestHandleRuntimes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("configured", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestHandler()
+		req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
+		}
+		var got []map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v (body=%s)", err, rec.Body.String())
+		}
+		if len(got) != 1 || got[0]["name"] != "ecs" {
+			t.Fatalf("unexpected payload: %s", rec.Body.String())
+		}
+		if _, leaked := got[0]["taskQueue"]; leaked {
+			t.Fatalf("taskQueue must not be exposed; got %s", rec.Body.String())
+		}
+	})
+
+	t.Run("unconfigured returns empty array", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestHandlerWithoutRuntimes()
+		req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
+		}
+		// Distinguish "[]" (empty array) from "null" — the frontend iterates,
+		// so a null body would crash it.
+		if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+			t.Fatalf("body: got %q, want %q", got, "[]")
+		}
+	})
 }
 
 func TestHandlePresign_CountErrorMentionsActualValue(t *testing.T) {

@@ -37,9 +37,12 @@ func (a *Activities) StartProcessImage(
 	logger := activity.GetLogger(ctx)
 	logger.Info("StartProcessImage", "workflowId", in.WorkflowID, "pipelineId", in.PipelineID)
 
+	// Inherit the parent's task queue so the fan-out lands on the same worker
+	// runtime that scheduled it (e.g. ECS-launched bursts stay on ECS).
+	taskQueue := activity.GetInfo(ctx).TaskQueue
 	opts := client.StartWorkflowOptions{
 		ID:                    in.WorkflowID,
-		TaskQueue:             a.TaskQueue,
+		TaskQueue:             taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
 	procIn := manifest.ProcessImageInput{

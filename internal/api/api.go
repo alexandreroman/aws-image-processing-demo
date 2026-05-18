@@ -5,6 +5,11 @@
 // no CORS gymnastics in production. The /healthz endpoint is the lone
 // exception: it sits at the root so container orchestrators can probe it
 // directly without a path-rewriting proxy in the way.
+//
+// The backend is configured at startup with the list of available worker
+// runtimes (e.g. "ecs", "lambda") and the Temporal task queue each one
+// polls. /api/workflows/start routes new pipelines to the queue of the
+// runtime selected by the caller (or the first one when omitted).
 package api
 
 import (
@@ -31,6 +36,17 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+// Runtime identifies one worker deployment + its Temporal task queue.
+// "ecs" and "lambda" are the two runtimes the demo provisions; the backend
+// is configured at startup with the queue name each one listens on.
+//
+// TaskQueue is intentionally not serialized: the browser only needs the
+// runtime name to render a picker and echo it back in the start request.
+type Runtime struct {
+	Name      string `json:"name"`
+	TaskQueue string `json:"-"`
+}
+
 // Dependencies holds the runtime collaborators of the API. The struct is
 // the seam used both by main (production) and tests.
 type Dependencies struct {
@@ -39,9 +55,11 @@ type Dependencies struct {
 	Dynamo       *dynamodb.Client
 	ImagesBucket string
 	ImagesTable  string
-	TaskQueue    string
-	Namespace    string
-	Logger       *slog.Logger
+	// Runtimes lists available worker deployments in display order. The first
+	// entry is the default when /api/workflows/start omits the runtime field.
+	Runtimes  []Runtime
+	Namespace string
+	Logger    *slog.Logger
 }
 
 // Handler implements http.Handler. Build it once at startup; it is safe for
@@ -64,6 +82,7 @@ func New(deps Dependencies) *Handler {
 	h.mux.HandleFunc("POST /api/uploads/presign", h.handlePresign)
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
+	h.mux.HandleFunc("GET /api/runtimes", h.handleRuntimes)
 	h.mux.HandleFunc("GET /healthz", h.handleHealth)
 	h.mux.HandleFunc("GET /api/stats", h.handleStats)
 	return h
@@ -97,6 +116,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// --- /api/runtimes ----------------------------------------------------------
+
+func (h *Handler) handleRuntimes(w http.ResponseWriter, _ *http.Request) {
+	// Always emit a JSON array, never null, so the frontend can iterate
+	// unconditionally even when no runtimes are configured.
+	out := make([]Runtime, 0, len(h.deps.Runtimes))
+	out = append(out, h.deps.Runtimes...)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // --- /api/uploads/presign ---------------------------------------------------
@@ -148,11 +177,13 @@ func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
 // --- /api/workflows/start ---------------------------------------------------
 
 type startRequest struct {
-	Images []manifest.S3Ref `json:"images"`
+	Images  []manifest.S3Ref `json:"images"`
+	Runtime string           `json:"runtime"`
 }
 
 type startResponse struct {
 	PipelineID  string   `json:"pipelineId"`
+	Runtime     string   `json:"runtime"`
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
@@ -189,6 +220,19 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if len(h.deps.Runtimes) == 0 {
+		h.deps.Logger.Error("start rejected: no runtimes configured")
+		writeError(w, http.StatusInternalServerError, "no runtimes configured")
+		return
+	}
+	runtime, ok := h.resolveRuntime(req.Runtime)
+	if !ok {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("runtime %q is not configured; allowed values: %s",
+				req.Runtime, strings.Join(h.runtimeNames(), ", ")))
+		return
+	}
+
 	pipelineID := newPipelineID()
 
 	imageIDs := make([]string, len(req.Images))
@@ -207,7 +251,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	// listing (which filters on `pipeline-{id}-`).
 	opts := client.StartWorkflowOptions{
 		ID:                    fmt.Sprintf("launch-%s", pipelineID),
-		TaskQueue:             h.deps.TaskQueue,
+		TaskQueue:             runtime.TaskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
 	in := manifest.LaunchPipelinesInput{PipelineID: pipelineID, Images: images}
@@ -225,7 +269,33 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, startResponse{PipelineID: pipelineID, WorkflowIDs: result.WorkflowIDs})
+	writeJSON(w, http.StatusOK, startResponse{
+		PipelineID:  pipelineID,
+		Runtime:     runtime.Name,
+		WorkflowIDs: result.WorkflowIDs,
+	})
+}
+
+// resolveRuntime picks the runtime for a start request. An empty name falls
+// back to the first configured runtime; any other unknown name fails.
+func (h *Handler) resolveRuntime(name string) (Runtime, bool) {
+	if name == "" {
+		return h.deps.Runtimes[0], true
+	}
+	for _, rt := range h.deps.Runtimes {
+		if rt.Name == name {
+			return rt, true
+		}
+	}
+	return Runtime{}, false
+}
+
+func (h *Handler) runtimeNames() []string {
+	names := make([]string, len(h.deps.Runtimes))
+	for i, rt := range h.deps.Runtimes {
+		names[i] = rt.Name
+	}
+	return names
 }
 
 // shortID returns the first 8 hex chars of a UUID v4.

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -26,7 +27,7 @@ import (
 )
 
 const (
-	defaultTaskQueue      = "image-processing"
+	defaultTaskQueue      = "image-processing-ecs"
 	defaultDeploymentName = "image-processing"
 )
 
@@ -66,10 +67,16 @@ func runLongRunning(logger *slog.Logger) error {
 	}
 	defer tc.Close()
 
-	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
-	acts, err := activities.New(s3c, ddb, anth, tc, activities.Config{TaskQueue: taskQueue})
+	acts, err := activities.New(s3c, ddb, anth, tc)
 	if err != nil {
 		return err
+	}
+
+	// Split on commas so a single dev process can poll both runtime queues
+	// at once (e.g. TEMPORAL_TASK_QUEUE=image-processing-ecs,image-processing-lambda).
+	queues := splitQueues(envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue))
+	if len(queues) == 0 {
+		return errors.New("worker: TEMPORAL_TASK_QUEUE must list at least one queue")
 	}
 
 	// Cap concurrent activities so a large burst cannot exhaust the
@@ -77,13 +84,23 @@ func runLongRunning(logger *slog.Logger) error {
 	// safe for the 256 MiB compose container; prod (1+ GiB Fargate)
 	// overrides via WORKER_MAX_CONCURRENT_ACTIVITIES.
 	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 8)
-	w := worker.New(tc, taskQueue, worker.Options{
-		MaxConcurrentActivityExecutionSize: maxConcurrent,
-	})
-	registerAll(w, acts)
+	workers := make([]worker.Worker, 0, len(queues))
+	for _, q := range queues {
+		w := worker.New(tc, q, worker.Options{
+			MaxConcurrentActivityExecutionSize: maxConcurrent,
+		})
+		registerAll(w, acts)
+		if err := w.Start(); err != nil {
+			for _, prev := range workers {
+				prev.Stop()
+			}
+			return err
+		}
+		workers = append(workers, w)
+	}
 
 	logger.Info("worker starting",
-		"taskQueue", taskQueue,
+		"taskQueues", queues,
 		"namespace", namespace,
 		"bucket", acts.ImagesBucket,
 		"table", acts.ImagesTable,
@@ -116,8 +133,28 @@ func runLongRunning(logger *slog.Logger) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	// worker.InterruptCh closes on SIGINT/SIGTERM; no goroutine to leak.
-	return w.Run(worker.InterruptCh())
+	// worker.InterruptCh closes on SIGINT/SIGTERM; stop every worker in
+	// reverse start order so the last-registered queue drains first.
+	<-worker.InterruptCh()
+	logger.Info("worker stopping", "taskQueues", queues)
+	for i := len(workers) - 1; i >= 0; i-- {
+		workers[i].Stop()
+	}
+	return nil
+}
+
+// splitQueues parses a comma-separated list of task queue names, trimming
+// whitespace and dropping empties. Returns an empty slice when the input
+// has no usable entries.
+func splitQueues(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if q := strings.TrimSpace(p); q != "" {
+			out = append(out, q)
+		}
+	}
+	return out
 }
 
 func runLambda(logger *slog.Logger) {
@@ -140,8 +177,21 @@ func runLambda(logger *slog.Logger) {
 		os.Exit(1)
 	}
 
-	taskQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
-	acts, err := activities.New(s3c, ddb, anth, tc, activities.Config{TaskQueue: taskQueue})
+	// Lambda runs exactly one worker per function, so collapse to the first
+	// entry when TEMPORAL_TASK_QUEUE was set to a comma-separated list (as
+	// the long-running path accepts).
+	queues := splitQueues(envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue))
+	if len(queues) == 0 {
+		tc.Close()
+		logger.Error("worker: TEMPORAL_TASK_QUEUE must list at least one queue")
+		os.Exit(1)
+	}
+	taskQueue := queues[0]
+	if len(queues) > 1 {
+		logger.Warn("multiple task queues set in Lambda mode; using the first",
+			"selected", taskQueue, "ignored", queues[1:])
+	}
+	acts, err := activities.New(s3c, ddb, anth, tc)
 	if err != nil {
 		tc.Close()
 		logger.Error("worker: build activities", "err", err)
