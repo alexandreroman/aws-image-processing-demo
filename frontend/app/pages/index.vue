@@ -17,9 +17,9 @@ const reasons = [
     accent: 'text-accent',
   },
   {
-    title: 'Lifecycle baked into S3',
-    body: 'Uploads expire after 7 days, derivatives after 30. Cost is bounded by design, not by a cron.',
-    iconKey: 'cycle',
+    title: 'Fan-out, fan-in in one workflow',
+    body: 'Eight activities per image, six in parallel — Temporal\'s fan-out/fan-in pattern, no SQS or Step Functions glue.',
+    iconKey: 'branches',
     accent: 'text-iris',
   },
 ] as const;
@@ -98,11 +98,15 @@ const reasons = [
             <template v-else-if="r.iconKey === 'bolt'">
               <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
             </template>
-            <template v-else-if="r.iconKey === 'cycle'">
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 22v-6h6" />
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 2v6h-6" />
+            <template v-else-if="r.iconKey === 'branches'">
+              <!-- A central node with three lines splitting out to the right. -->
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="19" cy="5" r="2" />
+              <circle cx="19" cy="12" r="2" />
+              <circle cx="19" cy="19" r="2" />
+              <path d="M7 12h10" />
+              <path d="M7 12l10 -7" />
+              <path d="M7 12l10 7" />
             </template>
           </svg>
         </div>
