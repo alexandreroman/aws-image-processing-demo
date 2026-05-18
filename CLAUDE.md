@@ -27,8 +27,8 @@ make app-up            # full stack in Docker (Caddy-fronted, single origin)
 make test              # unit tests
 make worker-lambda-zip # build build/worker.zip for Lambda deployment
 make deploy            # tofu init + apply + frontend-deploy
-                       # set TF_VAR_worker_runtime=lambda to deploy the
-                       # Lambda variant instead of the default ECS one
+                       # provisions both worker runtimes (ECS + Lambda);
+                       # pick one per burst from the UI control panel
 make frontend-deploy   # build Nuxt + sync to S3 + invalidate CloudFront
 make teardown          # tofu destroy + cleanup
 ```
@@ -148,8 +148,11 @@ not shared with the team.
   `.env`. The compose stack (`make app-up`) is self-
   contained and does NOT read either file beyond
   `ANTHROPIC_API_KEY` (compose-time interpolation).
-- **Worker runtime selection** is driven by the Tofu
-  variable `worker_runtime` (`ecs` default, `lambda`
-  alternative). See the README's "Deployment modes"
-  section for the full trade-offs and the optional
-  Temporal-Cloud invoker-role variables.
+- **Worker runtime selection** happens per burst at the
+  API layer. Both ECS Fargate and AWS Lambda workers are
+  deployed by `make deploy`; the backend exposes them via
+  `GET /api/runtimes` and the UI shows a selector in the
+  control panel. Each runtime has its own Temporal task
+  queue (`image-processing-ecs`,
+  `image-processing-lambda`). See the README's
+  "Deployment modes" section for the full picture.

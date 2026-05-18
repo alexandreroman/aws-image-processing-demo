@@ -267,59 +267,64 @@ prefix search.
 ## Deployment modes
 
 The worker is a single Go binary that runs in four
-deployment modes from the same source — the mode is
-selected by the environment, not by build flags.
+execution contexts from the same source — the context
+is selected by the environment, not by build flags. In
+prod, `make deploy` provisions both the ECS Fargate
+and the AWS Lambda worker side by side: it builds the
+worker container for ECS, packages `build/worker.zip`
+for Lambda, and applies both Tofu stacks in one go.
 
-| Mode            | How to run                  | Process model              | Key trade-off                                     |
-| --------------- | --------------------------- | -------------------------- | ------------------------------------------------- |
-| Host            | `make dev`                  | Long-running poll          | Fastest iteration; runs on the developer machine. |
-| Docker          | `make app-up`               | Long-running poll          | Containerized parity with prod; single host.      |
-| ECS Fargate     | `make deploy` (default)     | Long-running poll          | Warm cache, stable concurrency; pays even at idle. |
-| AWS Lambda      | `make deploy` with `worker_runtime=lambda` | Per-invocation worker       | Scale-to-zero, pay-per-invocation; cold-start cost. |
+| Context         | How to run                                | Process model         | Key trade-off                                       |
+| --------------- | ----------------------------------------- | --------------------- | --------------------------------------------------- |
+| Host            | `make dev`                                | Long-running poll     | Fastest iteration; runs on the developer machine.   |
+| Docker          | `make app-up`                             | Long-running poll     | Containerized parity with prod; single host.        |
+| ECS Fargate     | `make deploy` (deployed alongside Lambda) | Long-running poll     | Warm cache, stable concurrency; pays even at idle.  |
+| AWS Lambda      | `make deploy` (deployed alongside ECS)    | Per-invocation worker | Scale-to-zero, pay-per-invocation; cold-start cost. |
 
-In long-running modes (host, Docker, ECS Fargate), the
-worker process keeps an open gRPC long-poll against
-Temporal and exposes `/healthz` on `:8001` for the
-container orchestrator. In Lambda mode, runtime
-detection happens at startup via the presence of
-`AWS_LAMBDA_FUNCTION_NAME` (always set by the Lambda
-runtime); the binary then hands control to
+The first three contexts share the same long-running
+code path: the worker keeps an open gRPC long-poll
+against Temporal and exposes `/healthz` on `:8001` for
+the container orchestrator. Lambda mode is detected at
+startup via the presence of `AWS_LAMBDA_FUNCTION_NAME`
+(always set by the Lambda runtime); the binary then
+hands control to
 `go.temporal.io/sdk/contrib/aws/lambdaworker`, which
 spins up a worker per invocation and shuts it down
 when the invocation ends.
 
-ECS Fargate keeps a hot in-process cache of decoded
-workflow histories and offers stable concurrency, at
-the cost of paying for an always-on task. AWS Lambda
-scales to zero and charges only when invoked, but each
-new container pays a cold-start replay cost as the
-workflow history is rebuilt from scratch. For dev or
-demo work, prefer ECS Fargate for predictable
-behavior; for spiky or low-volume workloads where cost
-matters more than steady-state latency, Lambda is the
-attractive option.
+Because both runtimes are always deployed, the runtime
+choice moves to the API layer and is made **per
+burst**. The backend exposes the available runtimes
+via `GET /api/runtimes`; the UI's control panel shows
+a selector, and `POST /api/workflows/start` accepts a
+`runtime` field that picks the matching Temporal task
+queue (`image-processing-ecs` or
+`image-processing-lambda`). Child `ProcessImage`
+workflows inherit the parent `LaunchPipelines` queue,
+so a whole burst stays on a single runtime end-to-end.
 
-To deploy the Lambda variant, set the
-`worker_runtime` Tofu variable on `make deploy`:
+In dev, the single worker (`make dev` or `make
+app-up`) polls **both** queues from one process by
+setting
+`TEMPORAL_TASK_QUEUE=image-processing-ecs,image-processing-lambda`,
+so the UI selector works locally too.
 
-```bash
-TF_VAR_worker_runtime=lambda make deploy
-```
-
-`scripts/deploy.sh` detects the variable and builds
-`build/worker.zip` before running `tofu apply`, so a
-single command is enough. As a manual fallback you
-can also build the zip yourself and apply Tofu
-directly:
-
-```bash
-make worker-lambda-zip
-tofu -chdir=infra apply -var=worker_runtime=lambda
-```
+The classic trade-off still applies, just per burst
+rather than per deploy. ECS Fargate keeps a hot
+in-process cache of decoded workflow histories and
+offers stable concurrency, at the cost of paying for
+an always-on task. AWS Lambda scales to zero and
+charges only when invoked, but each new container
+pays a cold-start replay cost as the workflow history
+is rebuilt from scratch. For dev or demo work, pick
+ECS Fargate for predictable behavior; for spiky or
+low-volume workloads where cost matters more than
+steady-state latency, Lambda is the attractive
+option.
 
 Two optional Tofu variables wire up the
-Temporal-Cloud-assumes-AWS-role flow:
-`temporal_cloud_aws_account_id` and
+Temporal-Cloud-assumes-AWS-role flow for the Lambda
+runtime: `temporal_cloud_aws_account_id` and
 `temporal_cloud_external_id`. When both are set, an
 IAM role is created with `lambda:InvokeFunction` and a
 `sts:ExternalId` trust condition so Temporal Cloud can
