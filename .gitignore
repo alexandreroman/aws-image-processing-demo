@@ -37,6 +37,7 @@ crash.log
 # Build artifacts
 /cmd/**/*.bin
 /cmd/**/main
+/build/
 
 BRIEF.md
 ca.*

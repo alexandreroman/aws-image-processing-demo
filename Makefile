@@ -79,6 +79,17 @@ check: ## Run static checks across modules
 	go vet ./...
 	pnpm -C frontend lint
 
+##@ Build
+
+.PHONY: worker-lambda-zip
+worker-lambda-zip: build/worker.zip ## Build the worker Lambda deployment artifact (build/worker.zip)
+build/worker.zip:
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+	  go build \
+	  -ldflags "-s -w -X main.buildID=$(shell git rev-parse --short HEAD)" \
+	  -o build/bootstrap ./cmd/worker
+	cd build && zip worker.zip bootstrap
+
 ##@ Deploy
 
 .PHONY: deploy
