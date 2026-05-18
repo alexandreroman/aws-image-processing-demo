@@ -7,12 +7,20 @@ export interface S3Ref {
   key: string;
 }
 
+export type RuntimeName = 'ecs' | 'lambda';
+
+export interface Runtime {
+  name: RuntimeName;
+}
+
 export interface StartWorkflowsRequest {
   images: S3Ref[];
+  runtime?: RuntimeName;
 }
 
 export interface StartWorkflowsResponse {
   pipelineId: string;
+  runtime: RuntimeName;
   workflowIds: string[];
 }
 
@@ -84,10 +92,11 @@ export function useApi() {
 
   function startWorkflows(
     images: S3Ref[],
+    runtime?: RuntimeName,
   ): Promise<StartWorkflowsResponse> {
     return apiFetch<StartWorkflowsResponse>('/workflows/start', {
       method: 'POST',
-      body: { images } satisfies StartWorkflowsRequest,
+      body: { images, ...(runtime ? { runtime } : {}) } satisfies StartWorkflowsRequest,
     });
   }
 
@@ -99,9 +108,14 @@ export function useApi() {
     return apiFetch<Stats>('/stats');
   }
 
+  function getRuntimes(): Promise<Runtime[]> {
+    return apiFetch<Runtime[]>('/runtimes');
+  }
+
   return {
     startWorkflows,
     getPipeline,
     getStats,
+    getRuntimes,
   };
 }
