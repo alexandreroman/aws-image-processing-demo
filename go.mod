@@ -15,11 +15,13 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.temporal.io/api v1.62.11
 	go.temporal.io/sdk v1.43.0
+	go.temporal.io/sdk/contrib/aws/lambdaworker v0.1.1
 	golang.org/x/image v0.40.0
 )
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/air-verse/air v1.65.1 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
@@ -72,6 +74,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	go.temporal.io/sdk/contrib/envconfig v1.0.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
