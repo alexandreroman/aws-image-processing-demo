@@ -303,11 +303,12 @@ queue (`image-processing-ecs` or
 workflows inherit the parent `LaunchPipelines` queue,
 so a whole burst stays on a single runtime end-to-end.
 
-In dev, the single worker (`make dev` or `make
-app-up`) polls **both** queues from one process by
-setting
-`TEMPORAL_TASK_QUEUE=image-processing-ecs,image-processing-lambda`,
-so the UI selector works locally too.
+The selector is **AWS-only**: it appears when Tofu has
+set `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
+on the deployed backend Lambda. In local dev (`make dev`,
+`make app-up`) those vars are unset, so `GET /api/runtimes`
+returns `[]`, the UI hides the selector, and the single
+worker process polls one legacy queue (`image-processing`).
 
 The classic trade-off still applies, just per burst
 rather than per deploy. ECS Fargate keeps a hot

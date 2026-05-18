@@ -9,7 +9,10 @@
 // The backend is configured at startup with the list of available worker
 // runtimes (e.g. "ecs", "lambda") and the Temporal task queue each one
 // polls. /api/workflows/start routes new pipelines to the queue of the
-// runtime selected by the caller (or the first one when omitted).
+// runtime selected by the caller (or the first one when omitted). When no
+// runtimes are configured — the local-dev / compose case — the handler
+// falls back to DefaultTaskQueue and omits the runtime field from the
+// response so the frontend can hide the selector.
 package api
 
 import (
@@ -57,9 +60,14 @@ type Dependencies struct {
 	ImagesTable  string
 	// Runtimes lists available worker deployments in display order. The first
 	// entry is the default when /api/workflows/start omits the runtime field.
-	Runtimes  []Runtime
-	Namespace string
-	Logger    *slog.Logger
+	Runtimes []Runtime
+	// DefaultTaskQueue is the fallback queue used when Runtimes is empty
+	// (e.g. local dev with a single worker process). The handler reports an
+	// empty runtime in the response and on /api/runtimes when this path is
+	// taken, so the frontend can hide the selector.
+	DefaultTaskQueue string
+	Namespace        string
+	Logger           *slog.Logger
 }
 
 // Handler implements http.Handler. Build it once at startup; it is safe for
@@ -183,7 +191,7 @@ type startRequest struct {
 
 type startResponse struct {
 	PipelineID  string   `json:"pipelineId"`
-	Runtime     string   `json:"runtime"`
+	Runtime     string   `json:"runtime,omitempty"`
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
@@ -220,17 +228,30 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var (
+		taskQueue   string
+		runtimeName string
+	)
 	if len(h.deps.Runtimes) == 0 {
-		h.deps.Logger.Error("start rejected: no runtimes configured")
-		writeError(w, http.StatusInternalServerError, "no runtimes configured")
-		return
-	}
-	runtime, ok := h.resolveRuntime(req.Runtime)
-	if !ok {
-		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("runtime %q is not configured; allowed values: %s",
-				req.Runtime, strings.Join(h.runtimeNames(), ", ")))
-		return
+		// No per-runtime queues configured — local dev path. Fall back to the
+		// single default queue. The response omits the runtime field so the
+		// frontend can detect that no selection was made.
+		if h.deps.DefaultTaskQueue == "" {
+			h.deps.Logger.Error("start rejected: no task queue configured")
+			writeError(w, http.StatusInternalServerError, "no task queue configured")
+			return
+		}
+		taskQueue = h.deps.DefaultTaskQueue
+	} else {
+		runtime, ok := h.resolveRuntime(req.Runtime)
+		if !ok {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("runtime %q is not configured; allowed values: %s",
+					req.Runtime, strings.Join(h.runtimeNames(), ", ")))
+			return
+		}
+		taskQueue = runtime.TaskQueue
+		runtimeName = runtime.Name
 	}
 
 	pipelineID := newPipelineID()
@@ -251,7 +272,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	// listing (which filters on `pipeline-{id}-`).
 	opts := client.StartWorkflowOptions{
 		ID:                    fmt.Sprintf("launch-%s", pipelineID),
-		TaskQueue:             runtime.TaskQueue,
+		TaskQueue:             taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
 	in := manifest.LaunchPipelinesInput{PipelineID: pipelineID, Images: images}
@@ -271,7 +292,7 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, startResponse{
 		PipelineID:  pipelineID,
-		Runtime:     runtime.Name,
+		Runtime:     runtimeName,
 		WorkflowIDs: result.WorkflowIDs,
 	})
 }

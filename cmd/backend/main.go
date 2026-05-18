@@ -28,11 +28,11 @@ import (
 const (
 	httpAddr = ":8000"
 
-	// Default task queues per runtime. Picked to match the names the Tofu
-	// worker module assigns to the ECS and Lambda deployments so a vanilla
-	// `make dev` works without touching env files.
-	defaultTaskQueueECS    = "image-processing-ecs"
-	defaultTaskQueueLambda = "image-processing-lambda"
+	// defaultTaskQueue is the single queue used when no per-runtime queue is
+	// configured. This is the local-dev / compose default; the deployed
+	// backend Lambda gets WORKER_TASK_QUEUE_ECS and WORKER_TASK_QUEUE_LAMBDA
+	// from Tofu and bypasses this fallback entirely.
+	defaultTaskQueue = "image-processing"
 )
 
 func main() {
@@ -78,49 +78,43 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	}
 
 	runtimes := buildRuntimes()
+	defaultQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 	h := api.New(api.Dependencies{
-		Temporal:     tc,
-		Presigner:    presigner,
-		Dynamo:       ddb,
-		ImagesBucket: bucket,
-		ImagesTable:  table,
-		Runtimes:     runtimes,
-		Namespace:    namespace,
-		Logger:       logger,
+		Temporal:         tc,
+		Presigner:        presigner,
+		Dynamo:           ddb,
+		ImagesBucket:     bucket,
+		ImagesTable:      table,
+		Runtimes:         runtimes,
+		DefaultTaskQueue: defaultQueue,
+		Namespace:        namespace,
+		Logger:           logger,
 	})
 
 	logger.Info("backend ready",
 		"bucket", bucket,
 		"table", table,
+		"defaultTaskQueue", defaultQueue,
 		"runtimes", runtimeLogValue(runtimes),
 	)
 	return h, tc, nil
 }
 
 // buildRuntimes resolves the worker runtimes the backend will route to.
-// Unset env vars fall back to the canonical defaults so a vanilla
-// dev/demo boot works out of the box. Setting a variable to the empty
-// string opts the corresponding runtime out — that is how a deployment
-// running only one worker variant signals "do not advertise the other".
+// Presence (not value) of WORKER_TASK_QUEUE_ECS / WORKER_TASK_QUEUE_LAMBDA
+// is the signal: Tofu sets these on the deployed backend Lambda, so the
+// runtime selector only lights up in real deployments. In local dev /
+// compose neither var is set and the handler falls back to
+// DefaultTaskQueue.
 func buildRuntimes() []api.Runtime {
 	out := make([]api.Runtime, 0, 2)
-	if q := envWithDefault("WORKER_TASK_QUEUE_ECS", defaultTaskQueueECS); q != "" {
+	if q := os.Getenv("WORKER_TASK_QUEUE_ECS"); q != "" {
 		out = append(out, api.Runtime{Name: "ecs", TaskQueue: q})
 	}
-	if q := envWithDefault("WORKER_TASK_QUEUE_LAMBDA", defaultTaskQueueLambda); q != "" {
+	if q := os.Getenv("WORKER_TASK_QUEUE_LAMBDA"); q != "" {
 		out = append(out, api.Runtime{Name: "lambda", TaskQueue: q})
 	}
 	return out
-}
-
-// envWithDefault returns the env var's value, falling back to the default
-// only when the variable is unset. An explicit empty value is preserved so
-// callers can use it as an opt-out signal.
-func envWithDefault(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok {
-		return v
-	}
-	return fallback
 }
 
 // runtimeLogValue produces a compact loggable summary so the boot line stays

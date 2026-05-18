@@ -12,17 +12,30 @@ import (
 
 // newTestHandler builds a Handler with only the fields handlePresign needs
 // for its validation paths. Presigner is left nil because every test case
-// here errors out before reaching it.
+// here errors out before reaching it. DefaultTaskQueue is set so the
+// fallback path is also exercised when needed; it is harmless when
+// Runtimes is non-empty.
 func newTestHandler() *Handler {
 	return New(Dependencies{
-		ImagesBucket: "test-bucket",
-		Runtimes:     []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
+		ImagesBucket:     "test-bucket",
+		Runtimes:         []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
+		DefaultTaskQueue: "image-processing",
 	})
 }
 
-// newTestHandlerWithoutRuntimes mirrors newTestHandler but leaves Runtimes
-// empty so the misconfiguration path can be exercised.
-func newTestHandlerWithoutRuntimes() *Handler {
+// newTestHandlerWithDefaultQueueOnly mirrors newTestHandler but leaves
+// Runtimes empty so the local-dev fallback path can be exercised.
+func newTestHandlerWithDefaultQueueOnly() *Handler {
+	return New(Dependencies{
+		ImagesBucket:     "test-bucket",
+		DefaultTaskQueue: "image-processing",
+	})
+}
+
+// newTestHandlerWithoutAnyQueue mirrors newTestHandler but leaves both
+// Runtimes and DefaultTaskQueue empty so the misconfiguration path can be
+// exercised.
+func newTestHandlerWithoutAnyQueue() *Handler {
 	return New(Dependencies{ImagesBucket: "test-bucket"})
 }
 
@@ -237,7 +250,7 @@ func TestHandleRuntimes(t *testing.T) {
 	t.Run("unconfigured returns empty array", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestHandlerWithoutRuntimes()
+		h := newTestHandlerWithDefaultQueueOnly()
 		req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -272,5 +285,73 @@ func TestHandlePresign_CountErrorMentionsActualValue(t *testing.T) {
 	}
 	if !strings.Contains(resp["error"], "999") {
 		t.Fatalf("expected error to mention the offending count, got %q", resp["error"])
+	}
+}
+
+// TestHandleStart_FallbackToDefaultTaskQueue exercises the local-dev path
+// where Runtimes is empty and the handler falls back to DefaultTaskQueue.
+// We only assert the validation rejections that fire BEFORE the Temporal
+// call — the happy path would NPE on the nil client and is out of scope.
+func TestHandleStart_FallbackToDefaultTaskQueue(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty images still rejected", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestHandlerWithDefaultQueueOnly()
+		status, gotErr := postJSON(t, h, "/api/workflows/start", `{"images":[]}`)
+		if status != http.StatusBadRequest {
+			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
+		}
+		if !strings.Contains(gotErr, "images must not be empty") {
+			t.Fatalf("error %q does not contain %q", gotErr, "images must not be empty")
+		}
+	})
+
+	t.Run("bad bucket still rejected", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestHandlerWithDefaultQueueOnly()
+		body := `{"images":[{"bucket":"someone-else","key":"uploads/x.jpg"}]}`
+		status, gotErr := postJSON(t, h, "/api/workflows/start", body)
+		if status != http.StatusBadRequest {
+			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
+		}
+		if !strings.Contains(gotErr, "must match the configured images bucket") {
+			t.Fatalf("error %q does not mention the bucket mismatch", gotErr)
+		}
+	})
+
+	t.Run("no task queue configured returns 500", func(t *testing.T) {
+		t.Parallel()
+
+		h := newTestHandlerWithoutAnyQueue()
+		body := `{"images":[{"bucket":"test-bucket","key":"uploads/x.jpg"}]}`
+		status, gotErr := postJSON(t, h, "/api/workflows/start", body)
+		if status != http.StatusInternalServerError {
+			t.Fatalf("status: got %d, want %d (err=%q)",
+				status, http.StatusInternalServerError, gotErr)
+		}
+		if !strings.Contains(gotErr, "no task queue configured") {
+			t.Fatalf("error %q does not mention the missing queue", gotErr)
+		}
+	})
+}
+
+func TestHandleRuntimes_EmptyWhenUnconfigured(t *testing.T) {
+	t.Parallel()
+
+	// Local-dev shape: no runtimes, only a default queue. /api/runtimes
+	// must still return "[]" so the frontend can hide the selector.
+	h := newTestHandlerWithDefaultQueueOnly()
+	req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
+		t.Fatalf("body: got %q, want %q", got, "[]")
 	}
 }

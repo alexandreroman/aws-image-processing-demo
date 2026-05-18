@@ -149,10 +149,13 @@ not shared with the team.
   contained and does NOT read either file beyond
   `ANTHROPIC_API_KEY` (compose-time interpolation).
 - **Worker runtime selection** happens per burst at the
-  API layer. Both ECS Fargate and AWS Lambda workers are
-  deployed by `make deploy`; the backend exposes them via
-  `GET /api/runtimes` and the UI shows a selector in the
-  control panel. Each runtime has its own Temporal task
-  queue (`image-processing-ecs`,
-  `image-processing-lambda`). See the README's
-  "Deployment modes" section for the full picture.
+  API layer in AWS-deployed environments only. Tofu sets
+  `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
+  on the deployed backend Lambda; the backend then
+  advertises both via `GET /api/runtimes` and the UI
+  shows a selector. In local dev (`make dev`, `make
+  app-up`) those vars are unset, the API returns `[]`,
+  the UI hides the selector, and the single worker
+  polls one legacy queue (`image-processing`). See the
+  README's "Deployment modes" section for the full
+  picture.

@@ -24,7 +24,10 @@ function runtimeLabel(r: RuntimeName): string {
 
 const count = ref(20);
 const submitting = ref(false);
-const availableRuntimes = ref<RuntimeName[]>(['ecs']);
+// Empty by default: the selector only appears when the backend advertises
+// 2+ runtimes (real AWS deploy). In local dev, /api/runtimes returns []
+// and this stays empty, so no fieldset is rendered.
+const availableRuntimes = ref<RuntimeName[]>([]);
 const selectedRuntime = ref<RuntimeName>('ecs');
 
 const selectedIndex = computed(() => {
@@ -38,16 +41,14 @@ onMounted(async () => {
     const filtered = KNOWN_RUNTIMES.filter((r) =>
       runtimes.some((entry) => entry.name === r),
     );
-    if (filtered.length > 0) {
-      availableRuntimes.value = filtered;
-      if (!filtered.includes(selectedRuntime.value)) {
-        selectedRuntime.value = filtered[0]!;
-      }
+    availableRuntimes.value = filtered;
+    if (filtered.length > 0 && !filtered.includes(selectedRuntime.value)) {
+      selectedRuntime.value = filtered[0]!;
     }
   } catch (err) {
-    // Initial-load failure shouldn't toast — fall back to the default and
+    // Initial-load failure shouldn't toast — leave the selector hidden and
     // let the user retry by submitting a burst.
-    console.warn('Failed to load runtimes; falling back to default', err);
+    console.warn('Failed to load runtimes', err);
   }
 });
 
@@ -74,11 +75,17 @@ async function startBurst() {
   submitting.value = true;
   try {
     const images = pickRandomSampleRefs(count.value);
-    const res = await api.startWorkflows(images, selectedRuntime.value);
-    toast.success(
-      'Burst started',
-      `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows on ${runtimeLabel(res.runtime)}`,
-    );
+    // Only forward the runtime when the selector is actually rendered —
+    // otherwise the backend treats the field as unset and routes via its
+    // DefaultTaskQueue.
+    const runtime = availableRuntimes.value.length > 1
+      ? selectedRuntime.value
+      : undefined;
+    const res = await api.startWorkflows(images, runtime);
+    const summary = res.runtime !== undefined
+      ? `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows on ${runtimeLabel(res.runtime)}`
+      : `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows`;
+    toast.success('Burst started', summary);
     // Seed the expected slot count so the gallery reserves space before the first poll lands.
     useState<number | null>(`pipeline:expectedCount:${res.pipelineId}`, () => null).value
       = res.workflowIds.length;
@@ -122,12 +129,11 @@ async function startBurst() {
       </div>
     </label>
 
-    <fieldset class="block">
+    <fieldset v-if="availableRuntimes.length > 1" class="block">
       <legend class="text-xs font-medium text-ink-200">
         Worker runtime
       </legend>
       <div
-        v-if="availableRuntimes.length > 1"
         role="radiogroup"
         aria-label="Worker runtime"
         class="relative isolate mt-2 grid gap-1 p-1 rounded-md
@@ -162,12 +168,6 @@ async function startBurst() {
           {{ runtimeLabel(r) }}
         </button>
       </div>
-      <p v-else class="mt-1 text-xs text-ink-300">
-        Runtime:
-        <span class="text-ink-100 font-medium">
-          {{ runtimeLabel(availableRuntimes[0]!) }}
-        </span>
-      </p>
     </fieldset>
 
     <button

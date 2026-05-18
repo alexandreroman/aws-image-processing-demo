@@ -122,11 +122,11 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
-      # Compose runs a single worker process, but the demo offers two
-      # runtimes in the UI. The comma-separated list makes that one
-      # process poll BOTH queues so picking either "ecs" or "lambda"
-      # in the frontend works in local dev.
-      TEMPORAL_TASK_QUEUE: image-processing-ecs,image-processing-lambda
+      # Local dev runs a single worker on a single legacy queue. The
+      # ECS / Lambda runtime split exists only on a real AWS deploy
+      # where Tofu provisions two workers and the backend Lambda gets
+      # WORKER_TASK_QUEUE_ECS / WORKER_TASK_QUEUE_LAMBDA set.
+      TEMPORAL_TASK_QUEUE: image-processing
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
@@ -165,8 +165,9 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: default
-      WORKER_TASK_QUEUE_ECS: image-processing-ecs
-      WORKER_TASK_QUEUE_LAMBDA: image-processing-lambda
+      # Single legacy queue in local dev — the runtime selector is hidden
+      # in the UI because WORKER_TASK_QUEUE_ECS / _LAMBDA are unset.
+      TEMPORAL_TASK_QUEUE: image-processing
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000

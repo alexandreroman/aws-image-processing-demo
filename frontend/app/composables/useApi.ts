@@ -20,7 +20,9 @@ export interface StartWorkflowsRequest {
 
 export interface StartWorkflowsResponse {
   pipelineId: string;
-  runtime: RuntimeName;
+  // Optional: the backend omits this field when no runtime registry is
+  // configured (local dev), so the frontend can hide the selector.
+  runtime?: RuntimeName;
   workflowIds: string[];
 }
 
