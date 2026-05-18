@@ -59,23 +59,3 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
-
-# Worker SG: no ingress (no load balancer in v1), all egress allowed so the
-# task can talk to Temporal Cloud, Anthropic, S3, DynamoDB and GHCR.
-resource "aws_security_group" "worker" {
-  name        = "${local.name_prefix}-worker"
-  description = "Egress-only SG for the Temporal worker task"
-  vpc_id      = aws_vpc.main.id
-
-  egress {
-    description = "Allow all egress"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-worker"
-  }
-}
