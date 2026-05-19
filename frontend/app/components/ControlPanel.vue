@@ -100,7 +100,7 @@ async function startBurst() {
 </script>
 
 <template>
-  <section class="card p-4 flex flex-col gap-4 lg:h-full">
+  <section class="card p-4 flex flex-col gap-4 min-h-[17rem] lg:h-full">
     <header class="flex items-center">
       <h2 class="stat-label">Control panel</h2>
     </header>
@@ -121,7 +121,8 @@ async function startBurst() {
         min="1"
         max="48"
         step="1"
-        class="mt-2 w-full accent-primary cursor-pointer"
+        :disabled="submitting"
+        class="mt-2 w-full accent-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
       <div class="flex justify-between text-[10px] text-ink-400 mt-0.5">
         <span>1</span>
@@ -129,50 +130,53 @@ async function startBurst() {
       </div>
     </label>
 
-    <fieldset v-if="availableRuntimes.length > 1" class="block">
-      <legend class="text-xs font-medium text-ink-200">
-        Worker runtime
-      </legend>
-      <div
-        role="radiogroup"
-        aria-label="Worker runtime"
-        class="relative isolate mt-2 grid gap-1 p-1 rounded-md
-          bg-surface-elevated border border-surface-border"
-        :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
-      >
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
-            bg-primary shadow-glow transition-transform duration-200 ease-out
-            motion-reduce:transition-none"
-          :style="{
-            width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
-            transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
-          }"
-        />
-        <button
-          v-for="r in availableRuntimes"
-          :key="r"
-          type="button"
-          role="radio"
-          :aria-checked="selectedRuntime === r"
-          :tabindex="selectedRuntime === r ? 0 : -1"
-          class="relative z-10 text-xs font-medium py-1.5 rounded
-            transition-colors focus-visible:outline-none focus-visible:ring-2
-            focus-visible:ring-primary/60"
-          :class="selectedRuntime === r
-            ? 'text-bg'
-            : 'text-ink-200 hover:text-ink-100'"
-          @click="selectedRuntime = r"
+    <Transition name="slide-down" appear>
+      <fieldset v-if="availableRuntimes.length > 1" class="block">
+        <legend class="text-xs font-medium text-ink-200">
+          Worker runtime
+        </legend>
+        <div
+          role="radiogroup"
+          aria-label="Worker runtime"
+          class="relative isolate mt-2 grid gap-1 p-1 rounded-md
+            bg-surface-elevated border border-surface-border"
+          :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
         >
-          {{ runtimeLabel(r) }}
-        </button>
-      </div>
-    </fieldset>
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
+              bg-primary shadow-glow transition-transform duration-200 ease-out
+              motion-reduce:transition-none"
+            :style="{
+              width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
+              transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
+            }"
+          />
+          <button
+            v-for="r in availableRuntimes"
+            :key="r"
+            type="button"
+            role="radio"
+            :aria-checked="selectedRuntime === r"
+            :tabindex="selectedRuntime === r ? 0 : -1"
+            :disabled="submitting"
+            class="relative z-10 text-xs font-medium py-1.5 rounded
+              transition-colors focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
+            :class="selectedRuntime === r
+              ? 'text-bg'
+              : 'text-ink-200 hover:text-ink-100'"
+            @click="selectedRuntime = r"
+          >
+            {{ runtimeLabel(r) }}
+          </button>
+        </div>
+      </fieldset>
+    </Transition>
 
     <button
       type="button"
-      class="btn-primary-lg w-full lg:mt-auto"
+      class="btn-primary-lg w-full mt-auto"
       :disabled="submitting"
       @click="startBurst"
     >
@@ -181,3 +185,35 @@ async function startBurst() {
     </button>
   </section>
 </template>
+
+<style scoped>
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition:
+    opacity 220ms ease-out,
+    transform 240ms ease-out,
+    max-height 260ms ease-out;
+  overflow: hidden;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-6px);
+}
+
+.slide-down-enter-to,
+.slide-down-leave-from {
+  opacity: 1;
+  max-height: 8rem;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-down-enter-active,
+  .slide-down-leave-active {
+    transition: none;
+  }
+}
+</style>
