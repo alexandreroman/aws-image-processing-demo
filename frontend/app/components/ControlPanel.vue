@@ -100,7 +100,7 @@ async function startBurst() {
 </script>
 
 <template>
-  <section class="card p-4 flex flex-col gap-4 min-h-[17rem] lg:h-full">
+  <section class="card p-4 flex flex-col gap-4 lg:h-full">
     <header class="flex items-center">
       <h2 class="stat-label">Control panel</h2>
     </header>
@@ -130,49 +130,51 @@ async function startBurst() {
       </div>
     </label>
 
-    <Transition name="slide-down" appear>
-      <fieldset v-if="availableRuntimes.length > 1" class="block">
-        <legend class="text-xs font-medium text-ink-200">
-          Worker runtime
-        </legend>
-        <div
-          role="radiogroup"
-          aria-label="Worker runtime"
-          class="relative isolate mt-2 grid gap-1 p-1 rounded-md
-            bg-surface-elevated border border-surface-border"
-          :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
-        >
-          <span
-            aria-hidden="true"
-            class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
-              bg-primary shadow-glow transition-transform duration-200 ease-out
-              motion-reduce:transition-none"
-            :style="{
-              width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
-              transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
-            }"
-          />
-          <button
-            v-for="r in availableRuntimes"
-            :key="r"
-            type="button"
-            role="radio"
-            :aria-checked="selectedRuntime === r"
-            :tabindex="selectedRuntime === r ? 0 : -1"
-            :disabled="submitting"
-            class="relative z-10 text-xs font-medium py-1.5 rounded
-              transition-colors focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
-            :class="selectedRuntime === r
-              ? 'text-bg'
-              : 'text-ink-200 hover:text-ink-100'"
-            @click="selectedRuntime = r"
+    <div class="h-16">
+      <Transition name="slide-down" appear>
+        <fieldset v-if="availableRuntimes.length > 1" class="block">
+          <legend class="text-xs font-medium text-ink-200">
+            Worker runtime
+          </legend>
+          <div
+            role="radiogroup"
+            aria-label="Worker runtime"
+            class="relative isolate mt-2 grid gap-1 p-1 rounded-md
+              bg-surface-elevated border border-surface-border"
+            :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
           >
-            {{ runtimeLabel(r) }}
-          </button>
-        </div>
-      </fieldset>
-    </Transition>
+            <span
+              aria-hidden="true"
+              class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
+                bg-primary shadow-glow transition-transform duration-200 ease-out
+                motion-reduce:transition-none"
+              :style="{
+                width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
+                transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
+              }"
+            />
+            <button
+              v-for="r in availableRuntimes"
+              :key="r"
+              type="button"
+              role="radio"
+              :aria-checked="selectedRuntime === r"
+              :tabindex="selectedRuntime === r ? 0 : -1"
+              :disabled="submitting"
+              class="relative z-10 text-xs font-medium py-1.5 rounded
+                transition-colors focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="selectedRuntime === r
+                ? 'text-bg'
+                : 'text-ink-200 hover:text-ink-100'"
+              @click="selectedRuntime = r"
+            >
+              {{ runtimeLabel(r) }}
+            </button>
+          </div>
+        </fieldset>
+      </Transition>
+    </div>
 
     <button
       type="button"
