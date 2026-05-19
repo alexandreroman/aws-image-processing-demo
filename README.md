@@ -176,6 +176,7 @@ load only `.env`. Both files are gitignored — copy from
 | `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token; required only when `DOMAIN_NAME` is set | (empty)     |
 | `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID for the demo domain               | (empty)              |
 | `WORKER_IMAGE`          | Override the Fargate worker image                    | (GHCR `:latest`)     |
+| `WORKER_MAX_CONCURRENT_ACTIVITIES` | Max activities a worker executes concurrently. Lower values trigger autoscaling earlier. | `4` |
 
 **Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make infra-up`, `make test`, `make check`):
 
