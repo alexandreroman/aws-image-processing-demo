@@ -7,6 +7,7 @@
 import { useIntervalFn } from '@vueuse/core';
 
 const POLL_MS = 3_000;
+const POST_DONE_REFETCH_MS = [5_000, 10_000, 30_000] as const;
 
 export interface UsePipelineWorkersReturn {
   workerCount: ComputedRef<number | null>;
@@ -30,7 +31,12 @@ export function usePipelineWorkers(
   // could clobber a fresher value.
   let nextSeq = 0;
   let lastAppliedSeq = 0;
-  let postDoneTimer: ReturnType<typeof setTimeout> | null = null;
+  const postDoneTimers: ReturnType<typeof setTimeout>[] = [];
+
+  function clearPostDoneTimers() {
+    for (const t of postDoneTimers) clearTimeout(t);
+    postDoneTimers.length = 0;
+  }
 
   async function refresh() {
     const id = toValue(pipelineId);
@@ -91,20 +97,23 @@ export function usePipelineWorkers(
       // One final read so identities that started between the last poll
       // and the "done" flip are still counted.
       void refresh();
-      // Temporal visibility can lag the final activity-task events by a
-      // few hundred ms; a single delayed re-fetch catches them without
-      // resuming the polling loop.
-      if (postDoneTimer) clearTimeout(postDoneTimer);
-      postDoneTimer = setTimeout(() => {
-        void refresh();
-        postDoneTimer = null;
-      }, 2500);
+      // Temporal history finalization can lag the `running===0` flip on
+      // larger bursts; three staggered re-fetches catch identities that
+      // land seconds after the apparent completion.
+      clearPostDoneTimers();
+      for (const delay of POST_DONE_REFETCH_MS) {
+        postDoneTimers.push(
+          setTimeout(() => {
+            void refresh();
+          }, delay),
+        );
+      }
     },
   );
 
   onUnmounted(() => {
     pause();
-    if (postDoneTimer) clearTimeout(postDoneTimer);
+    clearPostDoneTimers();
   });
 
   return {
