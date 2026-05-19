@@ -22,6 +22,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"go.temporal.io/sdk/contrib/aws/lambdaworker"
+	"go.temporal.io/sdk/contrib/sysinfo"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 )
@@ -88,6 +89,10 @@ func runLongRunning(logger *slog.Logger) error {
 	for _, q := range queues {
 		w := worker.New(tc, q, worker.Options{
 			MaxConcurrentActivityExecutionSize: maxConcurrent,
+			// Report real CPU/RAM in worker heartbeats so the Temporal Cloud
+			// "Worker Hosts" view can distinguish a busy worker from a downed
+			// one. Long-running workers only — the Lambda path doesn't apply.
+			SysInfoProvider: sysinfo.SysInfoProvider(),
 		})
 		registerAll(w, acts)
 		if err := w.Start(); err != nil {
