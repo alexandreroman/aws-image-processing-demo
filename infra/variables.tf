@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for all resources except the ACM cert (us-east-1)."
   type        = string
-  default     = "eu-west-3"
+  default     = "eu-west-1"
 }
 
 variable "project_name" {

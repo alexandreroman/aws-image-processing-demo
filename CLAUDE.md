@@ -15,7 +15,7 @@ configuration, and architecture.
 - Temporal Cloud (workflow orchestration)
 - AWS — ECS Fargate, Lambda, API Gateway, S3,
   DynamoDB, CloudFront
-- OpenTofu (IaC) — AWS provider in `eu-west-3` +
+- OpenTofu (IaC) — AWS provider in `eu-west-1` +
   alias in `us-east-1` for ACM, plus Cloudflare DNS
 - Moto Server + Temporal CLI dev server for local dev
 

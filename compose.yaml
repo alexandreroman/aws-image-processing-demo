@@ -52,7 +52,7 @@ services:
   init:
     image: amazon/aws-cli:latest
     environment:
-      AWS_REGION: eu-west-3
+      AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       IMAGES_BUCKET: aws-image-processing-demo-images-local
@@ -130,7 +130,7 @@ services:
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
-      AWS_REGION: eu-west-3
+      AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       IMAGES_BUCKET: aws-image-processing-demo-images-local
@@ -171,7 +171,7 @@ services:
       TEMPORAL_TLS_CERT: ""
       TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
-      AWS_REGION: eu-west-3
+      AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       IMAGES_BUCKET: aws-image-processing-demo-images-local

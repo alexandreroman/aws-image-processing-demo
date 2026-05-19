@@ -15,9 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-const defaultRegion = "eu-west-3"
+const defaultRegion = "eu-west-1"
 
-// Load builds an AWS config. If AWS_REGION is empty, defaults to eu-west-3.
+// Load builds an AWS config. If AWS_REGION is empty, defaults to eu-west-1.
 // AWS credentials come from the default SDK chain (env, profile, IAM role).
 func Load(ctx context.Context) (aws.Config, error) {
 	region := os.Getenv("AWS_REGION")

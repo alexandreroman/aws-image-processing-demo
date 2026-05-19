@@ -40,7 +40,7 @@ architects and developers.
   and production (Moto Server does not mock Bedrock)
 
 For AWS deployment you also need an AWS account in
-`eu-west-3`, plus a Cloudflare account and API token
+`eu-west-1`, plus a Cloudflare account and API token
 if you want a custom domain.
 
 ## Getting Started
@@ -172,7 +172,7 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
 | `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
-| `AWS_REGION`            | AWS region for the deployment                        | `eu-west-3`          |
+| `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
 | `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
 | `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
 | `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token; required only when `DOMAIN_NAME` is set | (empty)     |
