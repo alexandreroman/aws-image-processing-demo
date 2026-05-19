@@ -75,11 +75,10 @@ func runLongRunning(logger *slog.Logger) error {
 
 	taskQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 
-	// Cap concurrent activities so a large burst cannot exhaust the
-	// worker's memory (each Resize holds a decoded RGBA buffer). 8 is
-	// safe for the 256 MiB compose container; prod (1+ GiB Fargate)
-	// overrides via WORKER_MAX_CONCURRENT_ACTIVITIES.
-	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 8)
+	// Cap concurrent activities so a large burst cannot exhaust the worker's memory
+	// (each Resize holds a decoded RGBA buffer). 4 is the aligned default across all
+	// runtimes (host/compose/ECS/Lambda) for predictable burst behavior.
+	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 4)
 	w := worker.New(tc, taskQueue, worker.Options{
 		MaxConcurrentActivityExecutionSize: maxConcurrent,
 		// Report real CPU/RAM in worker heartbeats so the Temporal Cloud
@@ -187,7 +186,7 @@ func runLambda(logger *slog.Logger) {
 		}
 		ctx.ClientOptions = opts
 		ctx.TaskQueue = taskQueue
-		ctx.WorkerOptions.MaxConcurrentActivityExecutionSize = envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 2)
+		ctx.WorkerOptions.MaxConcurrentActivityExecutionSize = envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 4)
 		// Report real CPU/RAM in heartbeats. On Lambda this gives a snapshot
 		// of each invocation's container footprint in Temporal Cloud's Worker
 		// Hosts view — parity with the long-running path.

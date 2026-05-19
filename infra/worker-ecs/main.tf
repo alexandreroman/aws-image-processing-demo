@@ -138,7 +138,7 @@ locals {
     { name = "IMAGES_BUCKET", value = var.images_bucket_name },
     { name = "IMAGES_TABLE", value = var.images_table_name },
     { name = "WORKER_DEPLOYMENT_NAME", value = "${var.name_prefix}-worker-ecs" },
-    { name = "WORKER_MAX_CONCURRENT_ACTIVITIES", value = "16" },
+    { name = "WORKER_MAX_CONCURRENT_ACTIVITIES", value = tostring(var.worker_max_concurrent_activities) },
   ]
 
   worker_secrets = concat(

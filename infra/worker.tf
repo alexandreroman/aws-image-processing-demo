@@ -30,6 +30,8 @@ module "worker_ecs" {
   temporal_tls_enabled = local.temporal_tls_enabled
   worker_image         = local.worker_image_pinned
 
+  worker_max_concurrent_activities = var.worker_max_concurrent_activities
+
   images_bucket_arn  = aws_s3_bucket.images.arn
   images_bucket_name = aws_s3_bucket.images.bucket
   images_table_arn   = aws_dynamodb_table.images.arn
@@ -52,6 +54,8 @@ module "worker_lambda" {
   temporal_namespace   = var.temporal_namespace
   temporal_task_queue  = var.worker_task_queue_lambda
   temporal_tls_enabled = local.temporal_tls_enabled
+
+  worker_max_concurrent_activities = var.worker_max_concurrent_activities
 
   images_bucket_arn  = aws_s3_bucket.images.arn
   images_bucket_name = aws_s3_bucket.images.bucket

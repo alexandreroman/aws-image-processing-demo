@@ -60,6 +60,12 @@ variable "worker_image" {
   default     = "ghcr.io/alexandreroman/aws-image-processing-demo-worker:latest"
 }
 
+variable "worker_max_concurrent_activities" {
+  description = "Maximum number of activities a worker executes concurrently (applies to both ECS and Lambda runtimes)."
+  type        = number
+  default     = 4
+}
+
 variable "temporal_cloud_aws_account_ids" {
   description = <<-EOT
     AWS account IDs of the Temporal Cloud Lambda invoker cells. The default

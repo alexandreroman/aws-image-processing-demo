@@ -28,6 +28,11 @@ variable "temporal_tls_enabled" {
   type        = bool
 }
 
+variable "worker_max_concurrent_activities" {
+  description = "Maximum number of activities the Lambda worker executes concurrently."
+  type        = number
+}
+
 variable "images_bucket_arn" {
   description = "ARN of the S3 images bucket — used to scope task-role permissions."
   type        = string

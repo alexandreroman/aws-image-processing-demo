@@ -33,6 +33,11 @@ variable "worker_image" {
   type        = string
 }
 
+variable "worker_max_concurrent_activities" {
+  description = "Maximum number of activities the ECS worker executes concurrently."
+  type        = number
+}
+
 variable "images_bucket_arn" {
   description = "ARN of the S3 images bucket — used to scope task-role permissions."
   type        = string
