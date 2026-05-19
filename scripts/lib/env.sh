@@ -37,7 +37,7 @@ load_env() {
   . "${env_file}"
   set +a
 
-  local required=(TEMPORAL_ADDRESS TEMPORAL_NAMESPACE ANTHROPIC_API_KEY)
+  local required=(TEMPORAL_ADDRESS TEMPORAL_NAMESPACE ANTHROPIC_API_KEY TEMPORAL_METRICS_API_KEY)
   local missing=()
   local var _check
   for var in "${required[@]}"; do
@@ -82,6 +82,7 @@ load_env() {
   export TF_VAR_temporal_address="${TEMPORAL_ADDRESS}"
   export TF_VAR_temporal_namespace="${TEMPORAL_NAMESPACE}"
   export TF_VAR_anthropic_api_key="${ANTHROPIC_API_KEY}"
+  export TF_VAR_temporal_metrics_api_key="${TEMPORAL_METRICS_API_KEY}"
   [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="${AWS_REGION}"
   [[ -n "${WORKER_IMAGE:-}" ]] && export TF_VAR_worker_image="${WORKER_IMAGE}"
   [[ -n "${TEMPORAL_CLOUD_EXTERNAL_ID:-}" ]] && export TF_VAR_temporal_cloud_external_id="${TEMPORAL_CLOUD_EXTERNAL_ID}"

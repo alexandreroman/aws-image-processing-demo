@@ -96,6 +96,16 @@ variable "anthropic_api_key" {
   sensitive   = true
 }
 
+variable "temporal_metrics_api_key" {
+  description = <<-EOT
+    Temporal Cloud service-account API key with the Metrics Read-Only
+    role. Stored in Secrets Manager and injected into the ADOT collector
+    ECS task so it can scrape metrics.temporal.io.
+  EOT
+  type        = string
+  sensitive   = true
+}
+
 variable "temporal_tls_cert_pem" {
   description = <<-EOT
     Temporal Cloud client certificate (PEM). Optional — leave empty for local

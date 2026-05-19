@@ -96,25 +96,25 @@ variable "autoscaling_max_capacity" {
 }
 
 variable "scale_out_threshold" {
-  description = "BacklogCount above which the scale-out alarm fires (first step boundary)."
+  description = "Total backlog (workflow + activity) above which the scale-out alarm fires (first step boundary)."
   type        = number
   default     = 10
 }
 
 variable "scale_out_step_2_lower" {
-  description = "BacklogCount at which the scale-out step jumps to +2 tasks."
+  description = "Total backlog (workflow + activity) at which the scale-out step jumps to +2 tasks."
   type        = number
   default     = 30
 }
 
 variable "scale_out_step_3_lower" {
-  description = "BacklogCount at which the scale-out step jumps to +3 tasks."
+  description = "Total backlog (workflow + activity) at which the scale-out step jumps to +3 tasks."
   type        = number
   default     = 60
 }
 
 variable "scale_in_threshold" {
-  description = "BacklogCount below which the scale-in alarm fires (sustained for 5 datapoints)."
+  description = "Total backlog (workflow + activity) below which the scale-in alarm fires (sustained for 5 datapoints)."
   type        = number
   default     = 5
 }

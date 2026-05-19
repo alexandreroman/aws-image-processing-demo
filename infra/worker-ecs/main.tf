@@ -249,11 +249,18 @@ resource "aws_ecs_service" "worker" {
 
 # --- Application Auto Scaling --------------------------------------------
 #
-# Step scaling on a custom CloudWatch metric (BacklogCount, published by the
-# worker-autoscaler Lambda). Step scaling reacts in ~1 minute (single
-# datapoint, 60 s period) versus ~3 min for target-tracking with its 3-of-3
-# default evaluation window, which matters on a demo where a burst is
-# 30–90 s long.
+# Step scaling on a CloudWatch metric emitted by the ADOT Collector ECS task
+# (see infra/worker-otel-collector), which scrapes Temporal Cloud's
+# OpenMetrics endpoint and republishes
+# temporal_cloud_v1_approximate_backlog_count in the TemporalDemo/Worker
+# namespace, dimensioned by `temporal_task_queue` and `task_type`. Each
+# alarm uses Metric Math to sum the two task_type series (workflow +
+# activity) for our task queue, since a worker pulls from both.
+#
+# End-to-end reactivity is bounded by Temporal Cloud's 3-minute aggregation
+# latency plus the collector's 60 s scrape interval; expect a ~4–5 min
+# reaction time. Meaningful for sustained or repeated load, not single
+# short bursts.
 
 resource "aws_appautoscaling_target" "worker" {
   service_namespace  = "ecs"
@@ -267,20 +274,47 @@ resource "aws_cloudwatch_metric_alarm" "backlog_high" {
   alarm_name        = "${var.name_prefix}-worker-backlog-high"
   alarm_description = "Triggers scale-out when the Temporal task queue backlog exceeds the threshold."
 
-  namespace           = "TemporalDemo/Worker"
-  metric_name         = "BacklogCount"
-  statistic           = "Maximum"
-  period              = 60
   evaluation_periods  = 1
   datapoints_to_alarm = 1
   threshold           = var.scale_out_threshold
   comparison_operator = "GreaterThanThreshold"
-  # Missing data is treated as "not breaching" so a polling outage does not
+  # Missing data is treated as "not breaching" so a scrape outage does not
   # spuriously scale out. Pairs with the scale-in alarm's same setting.
   treat_missing_data = "notBreaching"
 
-  dimensions = {
-    TaskQueue = var.temporal_task_queue
+  metric_query {
+    id          = "workflow"
+    return_data = false
+    metric {
+      namespace   = "TemporalDemo/Worker"
+      metric_name = "temporal_cloud_v1_approximate_backlog_count"
+      period      = 60
+      stat        = "Maximum"
+      dimensions = {
+        temporal_task_queue = var.temporal_task_queue
+        task_type           = "workflow"
+      }
+    }
+  }
+  metric_query {
+    id          = "activity"
+    return_data = false
+    metric {
+      namespace   = "TemporalDemo/Worker"
+      metric_name = "temporal_cloud_v1_approximate_backlog_count"
+      period      = 60
+      stat        = "Maximum"
+      dimensions = {
+        temporal_task_queue = var.temporal_task_queue
+        task_type           = "activity"
+      }
+    }
+  }
+  metric_query {
+    id          = "total"
+    expression  = "workflow + activity"
+    label       = "Total backlog"
+    return_data = true
   }
 
   alarm_actions = [aws_appautoscaling_policy.scale_out.arn]
@@ -290,18 +324,45 @@ resource "aws_cloudwatch_metric_alarm" "backlog_low" {
   alarm_name        = "${var.name_prefix}-worker-backlog-low"
   alarm_description = "Triggers scale-in when the backlog stays below the threshold for the configured window."
 
-  namespace           = "TemporalDemo/Worker"
-  metric_name         = "BacklogCount"
-  statistic           = "Maximum"
-  period              = 60
   evaluation_periods  = 5
   datapoints_to_alarm = 5
   threshold           = var.scale_in_threshold
   comparison_operator = "LessThanThreshold"
   treat_missing_data  = "notBreaching"
 
-  dimensions = {
-    TaskQueue = var.temporal_task_queue
+  metric_query {
+    id          = "workflow"
+    return_data = false
+    metric {
+      namespace   = "TemporalDemo/Worker"
+      metric_name = "temporal_cloud_v1_approximate_backlog_count"
+      period      = 60
+      stat        = "Maximum"
+      dimensions = {
+        temporal_task_queue = var.temporal_task_queue
+        task_type           = "workflow"
+      }
+    }
+  }
+  metric_query {
+    id          = "activity"
+    return_data = false
+    metric {
+      namespace   = "TemporalDemo/Worker"
+      metric_name = "temporal_cloud_v1_approximate_backlog_count"
+      period      = 60
+      stat        = "Maximum"
+      dimensions = {
+        temporal_task_queue = var.temporal_task_queue
+        task_type           = "activity"
+      }
+    }
+  }
+  metric_query {
+    id          = "total"
+    expression  = "workflow + activity"
+    label       = "Total backlog"
+    return_data = true
   }
 
   alarm_actions = [aws_appautoscaling_policy.scale_in.arn]

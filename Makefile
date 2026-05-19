@@ -91,16 +91,6 @@ worker-lambda-zip: ## Build the worker Lambda deployment artifact (build/worker.
 	  -o build/bootstrap ./cmd/worker
 	cd build && rm -f worker.zip && zip worker.zip bootstrap
 
-.PHONY: worker-autoscaler-lambda-zip
-worker-autoscaler-lambda-zip: ## Build the worker-autoscaler Lambda deployment artifact (build/worker-autoscaler.zip)
-	@mkdir -p build
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
-	  go build \
-	  -tags lambda.norpc \
-	  -ldflags "-s -w" \
-	  -o build/bootstrap ./cmd/worker-autoscaler
-	cd build && rm -f worker-autoscaler.zip && zip worker-autoscaler.zip bootstrap
-
 ##@ Deploy
 
 .PHONY: deploy

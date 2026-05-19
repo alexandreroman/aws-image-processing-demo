@@ -169,6 +169,7 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
 | `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role | `aws-image-processing-demo` |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
+| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role | (required) |
 | `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
 | `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
 | `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
@@ -324,26 +325,48 @@ option.
 
 The ECS Fargate runtime auto-scales from 1 to 5 tasks
 based on the actual Temporal task queue backlog,
-following the canonical CREMA / KEDA pattern. A small
-Lambda (`cmd/worker-autoscaler`) is invoked every 30 s
-by EventBridge Scheduler; it calls `DescribeTaskQueue`
-with `ReportStats=true` for both the workflow and
-activity task queue types on the ECS worker's queue,
-sums `approximate_backlog_count`, and publishes a
-`BacklogCount` metric to the `TemporalDemo/Worker`
-CloudWatch namespace. Two CloudWatch alarms drive
-step-scaling policies on the ECS service: scale-out
-fires after 1 datapoint above 10 (+1/+2/+3 tasks
-depending on depth, 30 s cooldown); scale-in fires
-after 5 datapoints below 5 (-1 task, 120 s cooldown).
+following the canonical CREMA / KEDA pattern — but
+with zero custom code. An ADOT (AWS Distro for
+OpenTelemetry) Collector runs as its own single-task
+Fargate service, scrapes Temporal Cloud's OpenMetrics
+endpoint (`https://metrics.temporal.io/v1/metrics`)
+every 60 s as a Bearer-authenticated Prometheus
+target, drops every series that does not match our
+task queue, and republishes
+`temporal_cloud_v1_approximate_backlog_count` to
+CloudWatch under the `TemporalDemo/Worker` namespace
+via the `awsemf` exporter. Two CloudWatch alarms then
+drive step-scaling policies on the ECS worker
+service, each using Metric Math to sum the `workflow`
+and `activity` series (since a worker pulls from
+both): scale-out fires after 1 datapoint above 10
+(+1/+2/+3 tasks depending on depth, 30 s cooldown);
+scale-in fires after 5 datapoints below 5 (-1 task,
+120 s cooldown).
 
-**Reactivity caveat:** end-to-end latency from metric
-poll to a new worker polling the queue is ~1.5–2
-minutes, so a single ~48-image pipeline (30–90 s)
-will not trigger autoscaling — the warm worker
-handles it alone. The autoscaler is meaningful for
-**sustained or repeated load** (2–5 pipelines
-back-to-back, or pipelines of hundreds of images).
+The collector authenticates with a Temporal Cloud
+service-account API key (Metrics Read-Only role).
+Provide it via the `TEMPORAL_METRICS_API_KEY` env
+variable in `.env`; Tofu creates the Secrets Manager
+secret automatically (same pattern as
+`ANTHROPIC_API_KEY`).
+
+**Reactivity caveat.** The OpenMetrics endpoint
+serves data with a fixed 3-minute aggregation lag,
+plus the collector's 60 s scrape interval, plus the
+CloudWatch alarm's 60 s period — total end-to-end
+reaction time is ~4–5 min. A single ~48-image
+pipeline (30–90 s) will not trigger autoscaling —
+the warm worker handles it alone. The autoscaler is
+meaningful for **sustained or repeated load**
+(3+ pipelines back-to-back, or pipelines of hundreds
+of images).
+
+**Cost note.** The always-on collector task runs at
+0.25 vCPU / 0.5 GB Fargate ARM64 — about **$10/month**
+in `eu-west-1`. The zero-code, all-config architecture
+uses the supported public Temporal Cloud OpenMetrics
+surface end-to-end.
 
 The Temporal-Cloud-assumes-AWS-role flow for the Lambda
 runtime is wired by two Tofu variables:

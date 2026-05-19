@@ -13,6 +13,10 @@
 #   8. Sync to S3 and invalidate CloudFront.
 #   9. Print the demo URL.
 #
+# The ECS worker autoscaler is now an ADOT Collector ECS task
+# scraping Temporal Cloud's OpenMetrics endpoint — there is no
+# Lambda artifact to build for it.
+#
 # Set INTERACTIVE=0 to skip the tofu approval
 # prompt (useful in CI). Default is interactive.
 
@@ -37,9 +41,6 @@ echo "==> Building Lambda bootstrap"
 
 echo "==> Building worker Lambda zip"
 make -C "${repo_root}" worker-lambda-zip
-
-echo "==> Building worker-autoscaler Lambda zip"
-make -C "${repo_root}" worker-autoscaler-lambda-zip
 
 echo "==> Provisioning infra with OpenTofu"
 tofu -chdir="${infra_dir}" init
