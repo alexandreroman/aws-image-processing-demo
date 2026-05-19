@@ -35,7 +35,7 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "worker_execution" {
-  name               = "${var.name_prefix}-worker-execution"
+  name               = "${var.name_prefix}-worker-lambda-execution"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
