@@ -94,4 +94,5 @@ echo "==> Setting current version to ${build_id}"
 temporal worker deployment set-current-version \
   "${temporal_auth_args[@]}" \
   --deployment-name "${deployment_name}" \
-  --build-id "${build_id}"
+  --build-id "${build_id}" \
+  --yes
