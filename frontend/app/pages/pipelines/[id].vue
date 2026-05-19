@@ -55,7 +55,9 @@ useHead(() => ({
         <Gallery :workflows="workflows" :expected-count="expectedCount" />
       </section>
 
-      <aside class="lg:col-span-4 space-y-4">
+      <aside
+        class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20"
+      >
         <article class="card p-4 animate-fade-in">
           <h2 class="stat-label">Workers</h2>
           <p
