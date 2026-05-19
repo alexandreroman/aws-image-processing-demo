@@ -304,7 +304,6 @@ onBeforeUnmount(() => {
             focus-visible:outline-none focus-visible:ring-2
             focus-visible:ring-primary/60 focus-visible:ring-offset-2
             focus-visible:ring-offset-bg rounded-md"
-          :title="slot.tile.title"
           :aria-label="`Open ${slot.tile.title}`"
           @click="openModal(slot.tile as CompletedTile)"
         >
@@ -335,7 +334,6 @@ onBeforeUnmount(() => {
         <div
           v-else-if="slot.kind === 'tile' && slot.tile.status === 'running' && slot.tile.image"
           class="animate-fade-in"
-          :title="slot.tile.title"
         >
           <div
             class="aspect-square overflow-hidden rounded-md bg-surface-hover
@@ -363,7 +361,6 @@ onBeforeUnmount(() => {
         <div
           v-else-if="slot.kind === 'tile' && slot.tile.status === 'running'"
           class="animate-fade-in"
-          :title="slot.tile.title"
         >
           <div
             class="aspect-square rounded-md bg-gradient-to-br from-primary/10
@@ -381,7 +378,6 @@ onBeforeUnmount(() => {
         <div
           v-else-if="slot.kind === 'tile'"
           class="animate-fade-in"
-          :title="slot.tile.title"
         >
           <div
             class="aspect-square rounded-md bg-rose-500/10 border
@@ -396,7 +392,6 @@ onBeforeUnmount(() => {
         <div
           v-else
           aria-hidden="true"
-          title="Waiting for workflow..."
         >
           <div
             class="aspect-square rounded-md bg-gradient-to-br from-primary/10
