@@ -59,7 +59,12 @@ useHead(() => ({
         class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20"
       >
         <article class="card p-4 animate-fade-in">
-          <h2 class="stat-label">Workers</h2>
+          <h2
+            class="stat-label"
+            title="Distinct execution environments that picked up work for this burst (~1 for ECS, N for Lambda warm sandboxes). Not the count of Lambda invocations."
+          >
+            Worker instances
+          </h2>
           <p
             class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100"
             :aria-busy="workerCount === null ? 'true' : 'false'"

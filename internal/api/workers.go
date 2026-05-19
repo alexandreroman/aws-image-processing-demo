@@ -13,8 +13,11 @@ import (
 // GET /api/pipelines/{pipelineId}/workers. The count is the number of
 // distinct worker Identity values observed across ActivityTaskStarted
 // and WorkflowTaskStarted events of the pipeline's launcher and its
-// child workflows — i.e. how many physical workers actually picked up
-// work for this burst (~1 for ECS, N for Lambda).
+// child workflows — i.e. how many distinct worker instances (execution
+// environments) actually picked up work for this burst (~1 for ECS, N
+// for Lambda warm sandboxes). This is NOT the count of Lambda
+// invocations: a warm Lambda sandbox handles many invocations under the
+// same Identity and therefore counts once.
 type workersResponse struct {
 	WorkerCount int `json:"workerCount"`
 }
