@@ -37,7 +37,7 @@ load_env() {
   . "${env_file}"
   set +a
 
-  local required=(TEMPORAL_ADDRESS TEMPORAL_NAMESPACE ANTHROPIC_API_KEY TEMPORAL_METRICS_API_KEY)
+  local required=(TEMPORAL_ADDRESS TEMPORAL_NAMESPACE ANTHROPIC_API_KEY)
   local missing=()
   local var _check
   for var in "${required[@]}"; do
@@ -82,7 +82,10 @@ load_env() {
   export TF_VAR_temporal_address="${TEMPORAL_ADDRESS}"
   export TF_VAR_temporal_namespace="${TEMPORAL_NAMESPACE}"
   export TF_VAR_anthropic_api_key="${ANTHROPIC_API_KEY}"
-  export TF_VAR_temporal_metrics_api_key="${TEMPORAL_METRICS_API_KEY}"
+  # Optional: when unset, Tofu sees var.temporal_metrics_api_key == "" and
+  # skips the entire ECS worker autoscaling stack (ADOT collector + alarms
+  # + scaling policies).
+  [[ -n "${TEMPORAL_METRICS_API_KEY:-}" ]] && export TF_VAR_temporal_metrics_api_key="${TEMPORAL_METRICS_API_KEY}"
   [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="${AWS_REGION}"
   [[ -n "${WORKER_IMAGE:-}" ]] && export TF_VAR_worker_image="${WORKER_IMAGE}"
   [[ -n "${WORKER_MAX_CONCURRENT_ACTIVITIES:-}" ]] && export TF_VAR_worker_max_concurrent_activities="${WORKER_MAX_CONCURRENT_ACTIVITIES}"

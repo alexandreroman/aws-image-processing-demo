@@ -41,11 +41,14 @@ module "worker_ecs" {
   temporal_tls_cert_secret_arn = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_cert[0].arn : ""
   temporal_tls_key_secret_arn  = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_key[0].arn : ""
 
+  autoscaling_enabled = var.temporal_metrics_api_key != ""
+
   subnet_ids = aws_subnet.public[*].id
   vpc_id     = aws_vpc.main.id
 }
 
 module "worker_otel_collector" {
+  count  = var.temporal_metrics_api_key != "" ? 1 : 0
   source = "./worker-otel-collector"
 
   name_prefix         = local.name_prefix
@@ -58,7 +61,7 @@ module "worker_otel_collector" {
   subnet_ids   = aws_subnet.public[*].id
   vpc_id       = aws_vpc.main.id
 
-  temporal_metrics_api_key_secret_arn = aws_secretsmanager_secret.temporal_metrics_api_key.arn
+  temporal_metrics_api_key_secret_arn = aws_secretsmanager_secret.temporal_metrics_api_key[0].arn
 }
 
 module "worker_lambda" {

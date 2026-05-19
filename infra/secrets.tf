@@ -20,6 +20,8 @@ resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
 }
 
 resource "aws_secretsmanager_secret" "temporal_metrics_api_key" {
+  count = var.temporal_metrics_api_key != "" ? 1 : 0
+
   name        = "${local.name_prefix}-temporal-metrics-api-key-${random_id.suffix.hex}"
   description = "Temporal Cloud Metrics Read-Only API key used by the ADOT collector"
   # Demo choice: 0 = delete immediately on `tofu destroy`, no 7-30 day
@@ -28,7 +30,9 @@ resource "aws_secretsmanager_secret" "temporal_metrics_api_key" {
 }
 
 resource "aws_secretsmanager_secret_version" "temporal_metrics_api_key" {
-  secret_id     = aws_secretsmanager_secret.temporal_metrics_api_key.id
+  count = var.temporal_metrics_api_key != "" ? 1 : 0
+
+  secret_id     = aws_secretsmanager_secret.temporal_metrics_api_key[0].id
   secret_string = var.temporal_metrics_api_key
 }
 

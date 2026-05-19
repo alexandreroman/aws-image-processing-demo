@@ -100,10 +100,13 @@ variable "temporal_metrics_api_key" {
   description = <<-EOT
     Temporal Cloud service-account API key with the Metrics Read-Only
     role. Stored in Secrets Manager and injected into the ADOT collector
-    ECS task so it can scrape metrics.temporal.io.
+    ECS task so it can scrape metrics.temporal.io. Leave empty to disable
+    ECS worker autoscaling — the collector, alarms, and scaling policies
+    are then not provisioned and the worker stays at desired_count = 1.
   EOT
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "temporal_tls_cert_pem" {

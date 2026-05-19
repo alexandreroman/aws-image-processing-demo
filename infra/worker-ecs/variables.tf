@@ -83,6 +83,16 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "autoscaling_enabled" {
+  description = <<-EOT
+    When false, the autoscaling target, CloudWatch alarms, and scaling
+    policies are not provisioned and the worker stays at desired_count = 1.
+    When true, the full autoscaling stack is wired in.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "autoscaling_min_capacity" {
   description = "Minimum desired_count for the ECS worker service (warm capacity, never zero by design)."
   type        = number

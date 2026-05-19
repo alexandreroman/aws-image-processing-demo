@@ -169,7 +169,7 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
 | `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role | `aws-image-processing-demo` |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
-| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role | (required) |
+| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role | (empty = autoscaling disabled) |
 | `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
 | `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
 | `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
@@ -324,6 +324,11 @@ option.
 
 ### ECS worker autoscaling
 
+ECS worker autoscaling is opt-in. Provide
+`TEMPORAL_METRICS_API_KEY` in `.env` to enable it; leave
+it unset to keep a fixed single-task worker (no ADOT
+collector, no CloudWatch alarms, no scaling policies).
+
 The ECS Fargate runtime auto-scales from 1 to 5 tasks
 based on the actual Temporal task queue backlog,
 following the canonical CREMA / KEDA pattern — but
@@ -350,7 +355,9 @@ service-account API key (Metrics Read-Only role).
 Provide it via the `TEMPORAL_METRICS_API_KEY` env
 variable in `.env`; Tofu creates the Secrets Manager
 secret automatically (same pattern as
-`ANTHROPIC_API_KEY`).
+`ANTHROPIC_API_KEY`). When the variable is unset or
+empty, the autoscaling stack is skipped entirely and
+the ECS worker stays at `desired_count = 1`.
 
 **Reactivity caveat.** The OpenMetrics endpoint
 serves data with a fixed 3-minute aggregation lag,

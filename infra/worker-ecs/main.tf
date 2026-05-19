@@ -263,6 +263,8 @@ resource "aws_ecs_service" "worker" {
 # short bursts.
 
 resource "aws_appautoscaling_target" "worker" {
+  count = var.autoscaling_enabled ? 1 : 0
+
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.worker.name}/${aws_ecs_service.worker.name}"
   scalable_dimension = "ecs:service:DesiredCount"
@@ -271,6 +273,8 @@ resource "aws_appautoscaling_target" "worker" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "backlog_high" {
+  count = var.autoscaling_enabled ? 1 : 0
+
   alarm_name        = "${var.name_prefix}-worker-backlog-high"
   alarm_description = "Triggers scale-out when the Temporal task queue backlog exceeds the threshold."
 
@@ -317,10 +321,12 @@ resource "aws_cloudwatch_metric_alarm" "backlog_high" {
     return_data = true
   }
 
-  alarm_actions = [aws_appautoscaling_policy.scale_out.arn]
+  alarm_actions = [aws_appautoscaling_policy.scale_out[0].arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "backlog_low" {
+  count = var.autoscaling_enabled ? 1 : 0
+
   alarm_name        = "${var.name_prefix}-worker-backlog-low"
   alarm_description = "Triggers scale-in when the backlog stays below the threshold for the configured window."
 
@@ -365,15 +371,17 @@ resource "aws_cloudwatch_metric_alarm" "backlog_low" {
     return_data = true
   }
 
-  alarm_actions = [aws_appautoscaling_policy.scale_in.arn]
+  alarm_actions = [aws_appautoscaling_policy.scale_in[0].arn]
 }
 
 resource "aws_appautoscaling_policy" "scale_out" {
+  count = var.autoscaling_enabled ? 1 : 0
+
   name               = "${var.name_prefix}-worker-scale-out"
   policy_type        = "StepScaling"
-  service_namespace  = aws_appautoscaling_target.worker.service_namespace
-  resource_id        = aws_appautoscaling_target.worker.resource_id
-  scalable_dimension = aws_appautoscaling_target.worker.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker[0].service_namespace
+  resource_id        = aws_appautoscaling_target.worker[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.worker[0].scalable_dimension
 
   step_scaling_policy_configuration {
     adjustment_type         = "ChangeInCapacity"
@@ -400,11 +408,13 @@ resource "aws_appautoscaling_policy" "scale_out" {
 }
 
 resource "aws_appautoscaling_policy" "scale_in" {
+  count = var.autoscaling_enabled ? 1 : 0
+
   name               = "${var.name_prefix}-worker-scale-in"
   policy_type        = "StepScaling"
-  service_namespace  = aws_appautoscaling_target.worker.service_namespace
-  resource_id        = aws_appautoscaling_target.worker.resource_id
-  scalable_dimension = aws_appautoscaling_target.worker.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker[0].service_namespace
+  resource_id        = aws_appautoscaling_target.worker[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.worker[0].scalable_dimension
 
   step_scaling_policy_configuration {
     adjustment_type         = "ChangeInCapacity"
