@@ -1,6 +1,8 @@
 output "function_arn" {
-  description = "ARN of the worker Lambda function."
-  value       = aws_lambda_function.worker.arn
+  description = "Version-qualified ARN of the worker Lambda function."
+  # Qualified ARN pins each Temporal Worker Deployment version to an
+  # immutable Lambda version, avoiding $LATEST races during rollouts.
+  value = aws_lambda_function.worker.qualified_arn
 }
 
 output "function_name" {

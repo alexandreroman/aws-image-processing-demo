@@ -23,7 +23,7 @@ output "images_bucket" {
 }
 
 output "worker_lambda_function_arn" {
-  description = "ARN of the worker Lambda function. Consumed by scripts/deploy.sh to register the Worker Deployment Version with Temporal Cloud."
+  description = "Version-qualified ARN of the worker Lambda function. Consumed by scripts/deploy.sh to register the Worker Deployment Version with Temporal Cloud."
   value       = module.worker_lambda.function_arn
 }
 
