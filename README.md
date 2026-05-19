@@ -82,10 +82,6 @@ Once the stack is up:
   devProxy in `make dev`, Caddy in `make app-up`).
 - Backend API — <http://localhost:8000/api> stays
   published in both modes for direct probing.
-- Health probes — backend on
-  <http://localhost:8000/healthz>, worker on
-  <http://localhost:8001/healthz> (liveness only,
-  used by compose and ECS healthchecks).
 - Temporal UI — <http://localhost:8233>
 - Moto Server endpoint — <http://localhost:4566>
 
