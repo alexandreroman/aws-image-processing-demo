@@ -31,3 +31,8 @@ output "worker_lambda_invoker_role_arn" {
   description = "ARN of the role Temporal Cloud assumes to invoke the worker Lambda. Null when the invoker role is not created. Consumed by scripts/deploy.sh."
   value       = module.worker_lambda.invoker_role_arn
 }
+
+output "worker_lambda_deployment_name" {
+  description = "Temporal Worker Deployment name registered for the Lambda runtime. Consumed by scripts/register-worker-deployment.sh."
+  value       = module.worker_lambda.deployment_name
+}

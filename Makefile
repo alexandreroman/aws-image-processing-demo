@@ -82,14 +82,14 @@ check: ## Run static checks across modules
 ##@ Build
 
 .PHONY: worker-lambda-zip
-worker-lambda-zip: build/worker.zip ## Build the worker Lambda deployment artifact (build/worker.zip)
-build/worker.zip:
+worker-lambda-zip: ## Build the worker Lambda deployment artifact (build/worker.zip)
+	@mkdir -p build
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
 	  go build \
 	  -tags lambda.norpc \
 	  -ldflags "-s -w -X main.buildID=$(shell git rev-parse --short HEAD)" \
 	  -o build/bootstrap ./cmd/worker
-	cd build && zip worker.zip bootstrap
+	cd build && rm -f worker.zip && zip worker.zip bootstrap
 
 ##@ Deploy
 

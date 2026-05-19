@@ -137,6 +137,7 @@ locals {
     { name = "AWS_REGION", value = var.aws_region },
     { name = "IMAGES_BUCKET", value = var.images_bucket_name },
     { name = "IMAGES_TABLE", value = var.images_table_name },
+    { name = "WORKER_DEPLOYMENT_NAME", value = "${var.name_prefix}-worker-ecs" },
     { name = "WORKER_MAX_CONCURRENT_ACTIVITIES", value = "16" },
   ]
 

@@ -163,7 +163,11 @@ resource "aws_lambda_function" "worker" {
         TEMPORAL_TASK_QUEUE              = var.temporal_task_queue
         IMAGES_BUCKET                    = var.images_bucket_name
         IMAGES_TABLE                     = var.images_table_name
-        WORKER_DEPLOYMENT_NAME           = "${var.name_prefix}-worker"
+        # Read by Go via WORKER_DEPLOYMENT_NAME (cmd/worker/main.go:31). The
+        # registration script consumes the same value via the Tofu output
+        # `worker_lambda_deployment_name`, so changes here flow there
+        # automatically — no string drift across sites.
+        WORKER_DEPLOYMENT_NAME           = "${var.name_prefix}-worker-lambda"
         WORKER_MAX_CONCURRENT_ACTIVITIES = "2"
         ANTHROPIC_API_KEY                = data.aws_secretsmanager_secret_version.anthropic_api_key.secret_string
       },
