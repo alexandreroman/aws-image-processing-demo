@@ -30,6 +30,7 @@ export function usePipelineWorkers(
   // could clobber a fresher value.
   let nextSeq = 0;
   let lastAppliedSeq = 0;
+  let postDoneTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function refresh() {
     const id = toValue(pipelineId);
@@ -90,11 +91,20 @@ export function usePipelineWorkers(
       // One final read so identities that started between the last poll
       // and the "done" flip are still counted.
       void refresh();
+      // Temporal visibility can lag the final activity-task events by a
+      // few hundred ms; a single delayed re-fetch catches them without
+      // resuming the polling loop.
+      if (postDoneTimer) clearTimeout(postDoneTimer);
+      postDoneTimer = setTimeout(() => {
+        void refresh();
+        postDoneTimer = null;
+      }, 2500);
     },
   );
 
   onUnmounted(() => {
     pause();
+    if (postDoneTimer) clearTimeout(postDoneTimer);
   });
 
   return {
