@@ -1,13 +1,18 @@
 // Poll a pipeline's distinct worker count every 3s while the pipeline is
-// running. When `done` flips true, fire one final refresh (to count any
-// tail-end activity starts that landed between the last poll and "done")
-// and then pause. The workerCount stays `null` until the first successful
-// fetch so callers can render a skeleton.
+// running. When `done` flips true, switch to a slower 5s cadence and keep
+// polling until the returned worker count has been identical for N
+// consecutive successful polls (or until a 120s hard cap elapses), then
+// pause. This catches identities that land seconds after the apparent
+// completion on larger Lambda bursts without forcing a manual refresh.
+// The workerCount stays `null` until the first successful fetch so callers
+// can render a skeleton.
 
 import { useIntervalFn } from '@vueuse/core';
 
 const POLL_MS = 3_000;
-const POST_DONE_REFETCH_MS = [5_000, 10_000, 30_000] as const;
+const POST_DONE_POLL_MS = 5_000;
+const POST_DONE_STABLE_POLLS = 3;
+const POST_DONE_MAX_MS = 120_000;
 
 export interface UsePipelineWorkersReturn {
   workerCount: ComputedRef<number | null>;
@@ -31,11 +36,21 @@ export function usePipelineWorkers(
   // could clobber a fresher value.
   let nextSeq = 0;
   let lastAppliedSeq = 0;
-  const postDoneTimers: ReturnType<typeof setTimeout>[] = [];
 
-  function clearPostDoneTimers() {
-    for (const t of postDoneTimers) clearTimeout(t);
-    postDoneTimers.length = 0;
+  // Post-done loop state. Tracked outside the watcher so we can reset on
+  // pipelineId change / unmount.
+  let postDoneTimer: ReturnType<typeof setTimeout> | null = null;
+  let postDoneDeadline = 0;
+  let stableCount = 0;
+  let lastStableValue: number | null = null;
+
+  function stopPostDoneLoop() {
+    if (postDoneTimer !== null) {
+      clearTimeout(postDoneTimer);
+      postDoneTimer = null;
+    }
+    stableCount = 0;
+    lastStableValue = null;
   }
 
   async function refresh() {
@@ -69,18 +84,70 @@ export function usePipelineWorkers(
     { immediate: false, immediateCallback: false },
   );
 
+  // Post-done loop: refresh, then decide whether to stop (stable or capped)
+  // or schedule the next slow tick. We re-read `done` on each tick so a
+  // flip back to running cancels the loop and lets the running-phase
+  // interval take over again.
+  async function postDoneTick() {
+    postDoneTimer = null;
+    if (!toValue(done)) {
+      stopPostDoneLoop();
+      return;
+    }
+    await refresh();
+    const after = count.value;
+
+    if (after !== null && after === lastStableValue) {
+      stableCount += 1;
+    } else {
+      lastStableValue = after;
+      stableCount = after === null ? 0 : 1;
+    }
+
+    if (stableCount >= POST_DONE_STABLE_POLLS) {
+      stopPostDoneLoop();
+      return;
+    }
+    if (Date.now() >= postDoneDeadline) {
+      stopPostDoneLoop();
+      return;
+    }
+    postDoneTimer = setTimeout(() => {
+      void postDoneTick();
+    }, POST_DONE_POLL_MS);
+  }
+
+  function startPostDoneLoop() {
+    stopPostDoneLoop();
+    postDoneDeadline = Date.now() + POST_DONE_MAX_MS;
+    // Fire an immediate refresh to capture identities that landed between
+    // the last running-phase poll and the "done" flip, then enter the
+    // slow cadence.
+    void (async () => {
+      await refresh();
+      lastStableValue = count.value;
+      stableCount = 1;
+      postDoneTimer = setTimeout(() => {
+        void postDoneTick();
+      }, POST_DONE_POLL_MS);
+    })();
+  }
+
   watch(
     () => toValue(pipelineId),
     (id) => {
+      pause();
+      stopPostDoneLoop();
       if (!id) {
-        pause();
         return;
       }
       count.value = null;
       lastAppliedSeq = 0;
       nextSeq = 0;
       void refresh();
-      if (!toValue(done)) {
+      if (toValue(done)) {
+        startPostDoneLoop();
+      } else {
         resume();
       }
     },
@@ -90,30 +157,23 @@ export function usePipelineWorkers(
   watch(
     () => toValue(done),
     (isDone) => {
-      if (!isDone) {
-        return;
-      }
-      pause();
-      // One final read so identities that started between the last poll
-      // and the "done" flip are still counted.
-      void refresh();
-      // Temporal history finalization can lag the `running===0` flip on
-      // larger bursts; three staggered re-fetches catch identities that
-      // land seconds after the apparent completion.
-      clearPostDoneTimers();
-      for (const delay of POST_DONE_REFETCH_MS) {
-        postDoneTimers.push(
-          setTimeout(() => {
-            void refresh();
-          }, delay),
-        );
+      if (isDone) {
+        // Keep the running-phase interval paused while the slower
+        // post-done loop drives polling.
+        pause();
+        startPostDoneLoop();
+      } else {
+        stopPostDoneLoop();
+        if (toValue(pipelineId)) {
+          resume();
+        }
       }
     },
   );
 
   onUnmounted(() => {
     pause();
-    clearPostDoneTimers();
+    stopPostDoneLoop();
   });
 
   return {
