@@ -1,14 +1,9 @@
 name: CI
 
 # Builds and tests the project, then publishes the
-# multi-arch worker and backend images to GitHub
-# Container Registry (GHCR) on pushes to `main`
-# and manual dispatch.
-#
-# Two packages are published, one per Dockerfile
-# stage:
-#   - aws-image-processing-demo-worker
-#   - aws-image-processing-demo-backend
+# multi-arch worker image to GitHub Container
+# Registry (GHCR) as `aws-image-processing-demo-worker`
+# on pushes to `main` and manual dispatch.
 #
 # Multi-arch images are built on native runners
 # (no QEMU): `ubuntu-24.04` for linux/amd64 and
@@ -94,13 +89,12 @@ jobs:
         run: pnpm generate
 
   build-image:
-    name: Build ${{ matrix.target }} (${{ matrix.arch }})
+    name: Build worker (${{ matrix.arch }})
     needs: [go, frontend]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target: [worker, backend]
         arch: [amd64, arm64]
         include:
           - arch: amd64
@@ -121,29 +115,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.target }} image (${{ matrix.arch }})
+      - name: Build and push worker image (${{ matrix.arch }})
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
-          target: ${{ matrix.target }}
+          target: worker
           platforms: linux/${{ matrix.arch }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/${{ github.repository_owner }}/aws-image-processing-demo-${{ matrix.target }}:linux-${{ matrix.arch }}
-          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.arch }}
+          tags: ghcr.io/${{ github.repository_owner }}/aws-image-processing-demo-worker:linux-${{ matrix.arch }}
+          cache-from: type=gha,scope=worker-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=worker-${{ matrix.arch }}
           provenance: true
           sbom: true
 
   package-image:
-    name: Package multi-arch ${{ matrix.target }}
+    name: Package multi-arch worker
     needs: build-image
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [worker, backend]
     steps:
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -157,7 +147,7 @@ jobs:
 
       - name: Create and push multi-arch manifest
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/aws-image-processing-demo-${{ matrix.target }}
+          IMAGE=ghcr.io/${{ github.repository_owner }}/aws-image-processing-demo-worker
           docker buildx imagetools create -t "$IMAGE:latest" \
             "$IMAGE:linux-amd64" \
             "$IMAGE:linux-arm64"
