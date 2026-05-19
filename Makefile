@@ -86,6 +86,7 @@ worker-lambda-zip: build/worker.zip ## Build the worker Lambda deployment artifa
 build/worker.zip:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
 	  go build \
+	  -tags lambda.norpc \
 	  -ldflags "-s -w -X main.buildID=$(shell git rev-parse --short HEAD)" \
 	  -o build/bootstrap ./cmd/worker
 	cd build && zip worker.zip bootstrap

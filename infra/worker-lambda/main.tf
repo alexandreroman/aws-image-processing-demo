@@ -148,7 +148,7 @@ resource "aws_lambda_function" "worker" {
   # 2048 MB matches the ECS task's memory headroom; resize/watermark
   # activities work on full-resolution images so undersizing is risky.
   memory_size = 2048
-  timeout     = 60
+  timeout     = 600
   publish     = true
 
   environment {
@@ -157,6 +157,7 @@ resource "aws_lambda_function" "worker" {
     # the backend Lambda pattern).
     variables = merge(
       {
+        HOME                             = "/tmp"
         TEMPORAL_ADDRESS                 = var.temporal_address
         TEMPORAL_NAMESPACE               = var.temporal_namespace
         TEMPORAL_TASK_QUEUE              = var.temporal_task_queue
@@ -213,7 +214,7 @@ data "aws_iam_policy_document" "invoker_invoke" {
 
   statement {
     sid     = "InvokeWorker"
-    actions = ["lambda:InvokeFunction"]
+    actions = ["lambda:InvokeFunction", "lambda:GetFunction"]
     # Cover the function itself and any published version / alias.
     resources = [
       aws_lambda_function.worker.arn,
