@@ -247,7 +247,7 @@ watch(selected, (item) => {
   } else {
     document.documentElement.classList.remove('overflow-hidden');
     document.removeEventListener('keydown', onKeydown);
-    previouslyFocused?.focus();
+    previouslyFocused?.blur();
     previouslyFocused = null;
   }
 });
