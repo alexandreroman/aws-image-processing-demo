@@ -90,6 +90,7 @@ func New(deps Dependencies) *Handler {
 	h.mux.HandleFunc("POST /api/uploads/presign", h.handlePresign)
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
+	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}/workers", h.handlePipelineWorkers)
 	h.mux.HandleFunc("GET /api/runtimes", h.handleRuntimes)
 	h.mux.HandleFunc("GET /healthz", h.handleHealth)
 	h.mux.HandleFunc("GET /api/stats", h.handleStats)

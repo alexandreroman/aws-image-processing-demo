@@ -11,6 +11,10 @@ const pipelineId = computed(() => String(route.params.id ?? ''));
 
 const { summary, workflows, error, refresh } = usePipeline(pipelineId);
 
+const done = computed(() => summary.value.total > 0 && summary.value.running === 0);
+
+const { workerCount } = usePipelineWorkers(pipelineId, done);
+
 const navExpectedCount = computed<number>(() => {
   const id = pipelineId.value;
   if (!id) return 0;
@@ -52,6 +56,16 @@ useHead(() => ({
       </section>
 
       <aside class="lg:col-span-4 space-y-4">
+        <article class="card p-4 animate-fade-in">
+          <h2 class="stat-label">Workers</h2>
+          <p
+            class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100"
+            :aria-busy="workerCount === null ? 'true' : 'false'"
+          >
+            <template v-if="workerCount === null">…</template>
+            <template v-else>{{ workerCount }}</template>
+          </p>
+        </article>
         <PipelineCharts :workflows="workflows" :summary="summary" />
       </aside>
     </div>

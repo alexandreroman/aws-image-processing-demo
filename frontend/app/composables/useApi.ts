@@ -81,6 +81,10 @@ export interface Stats {
   windowDays: number;
 }
 
+export interface PipelineWorkers {
+  workerCount: number;
+}
+
 type FetchOptions = Parameters<typeof $fetch>[1];
 
 export function useApi() {
@@ -106,6 +110,12 @@ export function useApi() {
     return apiFetch<Pipeline>(`/pipelines/${encodeURIComponent(pipelineId)}`);
   }
 
+  function getPipelineWorkers(pipelineId: string): Promise<PipelineWorkers> {
+    return apiFetch<PipelineWorkers>(
+      `/pipelines/${encodeURIComponent(pipelineId)}/workers`,
+    );
+  }
+
   function getStats(): Promise<Stats> {
     return apiFetch<Stats>('/stats');
   }
@@ -117,6 +127,7 @@ export function useApi() {
   return {
     startWorkflows,
     getPipeline,
+    getPipelineWorkers,
     getStats,
     getRuntimes,
   };
