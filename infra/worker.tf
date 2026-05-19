@@ -3,6 +3,22 @@
 # routes a workflow start request to the matching queue based on the
 # `runtime` field in the POST body.
 
+# Resolve the worker image's tag to its content-addressable digest. Pinning the
+# ECS task definition to `repo@sha256:...` instead of `repo:latest` makes Tofu
+# produce a new task definition revision whenever GHCR publishes a new manifest
+# under the same tag, which is what triggers ECS to roll the service. Without
+# this, the tag string never changes and the service never picks up new images.
+data "docker_registry_image" "worker" {
+  name = var.worker_image
+}
+
+locals {
+  # Strip any `:tag` suffix from `var.worker_image` (the registry/repo portion
+  # has no `:` for ghcr.io, but the regex tolerates `host:port/repo` too) and
+  # append the resolved digest. Final shape: `<repo>@sha256:<hex>`.
+  worker_image_pinned = "${regex("^[^:@]+(?:/[^:@]+)*", var.worker_image)}@${data.docker_registry_image.worker.sha256_digest}"
+}
+
 module "worker_ecs" {
   source = "./worker-ecs"
 
@@ -12,7 +28,7 @@ module "worker_ecs" {
   temporal_namespace   = var.temporal_namespace
   temporal_task_queue  = var.worker_task_queue_ecs
   temporal_tls_enabled = local.temporal_tls_enabled
-  worker_image         = var.worker_image
+  worker_image         = local.worker_image_pinned
 
   images_bucket_arn  = aws_s3_bucket.images.arn
   images_bucket_name = aws_s3_bucket.images.bucket

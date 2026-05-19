@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.6"
     }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -42,3 +46,8 @@ provider "aws" {
 
 # Reads CLOUDFLARE_API_TOKEN from the environment.
 provider "cloudflare" {}
+
+# Used only to resolve the worker image's tag to its content-addressable digest
+# (see worker.tf). No host config — we never push, only read from a public
+# registry.
+provider "docker" {}
