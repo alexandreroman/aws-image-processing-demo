@@ -102,7 +102,14 @@ temporal workflow start \
   --type ProcessImage \
   --task-queue image-processing \
   --workflow-id "manual-$(uuidgen)" \
-  --input '{"bucket":"aws-image-processing-demo-images-local","key":"samples/dog.jpg"}'
+  --input '{
+    "pipelineId": "manual",
+    "imageId": "dog",
+    "original": {
+      "bucket": "aws-image-processing-demo-images-local",
+      "key": "samples/dog.jpg"
+    }
+  }'
 ```
 
 The image must already be present in the bucket
@@ -166,7 +173,7 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_NAMESPACE`    | Temporal Cloud namespace                             | (required)           |
 | `TEMPORAL_TLS_CERT`     | Path to mTLS client cert (PEM)                       | (required for Cloud) |
 | `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
-| `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
+| `TEMPORAL_TASK_QUEUE`   | Worker task queue. Consumed at every layer: host-mode dev (worker + backend), ECS, and Lambda (passed through by Tofu). | `image-processing` |
 | `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role | `aws-image-processing-demo` |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
 | `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role | (empty = autoscaling disabled) |

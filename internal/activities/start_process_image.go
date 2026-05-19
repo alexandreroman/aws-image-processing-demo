@@ -11,11 +11,12 @@ import (
 )
 
 // StartProcessImageInput is the input for the StartProcessImage activity.
+// The per-image workflow ID is derived deterministically from PipelineID +
+// Image.ImageID via manifest.ProcessImageWorkflowID, so it is not carried
+// on the wire.
 type StartProcessImageInput struct {
-	WorkflowID string          `json:"workflowId"`
-	PipelineID string          `json:"pipelineId"`
-	ImageID    string          `json:"imageId"`
-	Original   manifest.S3Ref  `json:"original"`
+	PipelineID string                       `json:"pipelineId"`
+	Image      manifest.LaunchPipelineImage `json:"image"`
 }
 
 // StartProcessImage schedules a ProcessImage workflow on the configured task
@@ -34,24 +35,26 @@ type StartProcessImageInput struct {
 func (a *Activities) StartProcessImage(
 	ctx context.Context, in StartProcessImageInput,
 ) (string, error) {
+	workflowID := manifest.ProcessImageWorkflowID(in.PipelineID, in.Image.ImageID)
+
 	logger := activity.GetLogger(ctx)
-	logger.Info("StartProcessImage", "workflowId", in.WorkflowID, "pipelineId", in.PipelineID)
+	logger.Info("StartProcessImage", "workflowId", workflowID, "pipelineId", in.PipelineID)
 
 	// Inherit the parent's task queue so the fan-out lands on the same worker
 	// runtime that scheduled it (e.g. ECS-launched bursts stay on ECS).
 	taskQueue := activity.GetInfo(ctx).TaskQueue
 	opts := client.StartWorkflowOptions{
-		ID:                    in.WorkflowID,
+		ID:                    workflowID,
 		TaskQueue:             taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
 	procIn := manifest.ProcessImageInput{
 		PipelineID: in.PipelineID,
-		ImageID:    in.ImageID,
-		Original:   in.Original,
+		ImageID:    in.Image.ImageID,
+		Original:   in.Image.Original,
 	}
 	if _, err := a.Temporal.ExecuteWorkflow(ctx, opts, "ProcessImage", procIn); err != nil {
-		return "", fmt.Errorf("start %s: %w", in.WorkflowID, err)
+		return "", fmt.Errorf("start %s: %w", workflowID, err)
 	}
-	return in.WorkflowID, nil
+	return workflowID, nil
 }

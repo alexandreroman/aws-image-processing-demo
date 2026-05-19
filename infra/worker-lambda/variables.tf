@@ -87,13 +87,6 @@ variable "temporal_cloud_aws_account_ids" {
     creation.
   EOT
   type        = list(string)
-  default = [
-    "902542641901",
-    "160190466495",
-    "819232936619",
-    "829909441867",
-    "354116250941",
-  ]
 }
 
 variable "temporal_cloud_external_id" {

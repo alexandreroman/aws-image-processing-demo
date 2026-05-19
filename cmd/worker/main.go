@@ -30,6 +30,7 @@ import (
 const (
 	defaultTaskQueue      = "image-processing"
 	defaultDeploymentName = "image-processing"
+	healthAddr            = ":8001"
 )
 
 // buildID identifies this worker's deployment version. Injected at Lambda
@@ -43,12 +44,13 @@ func main() {
 	// AWS_LAMBDA_FUNCTION_NAME is set unconditionally by the Lambda runtime;
 	// its presence is the canonical signal that we are inside a Lambda
 	// execution environment.
+	var err error
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
-		runLambda(logger)
-		return
+		err = runLambda(logger)
+	} else {
+		err = runLongRunning(logger)
 	}
-
-	if err := runLongRunning(logger); err != nil {
+	if err != nil {
 		logger.Error("worker exited with error", "err", err)
 		os.Exit(1)
 	}
@@ -102,7 +104,6 @@ func runLongRunning(logger *slog.Logger) error {
 	// The worker speaks to Temporal over gRPC; this HTTP listener exists
 	// purely as a liveness probe for the container orchestrator (compose
 	// healthcheck, ECS container healthCheck).
-	healthAddr := temporalclient.EnvOr("HEALTH_ADDR", ":8001")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -132,13 +133,12 @@ func runLongRunning(logger *slog.Logger) error {
 	return nil
 }
 
-func runLambda(logger *slog.Logger) {
+func runLambda(logger *slog.Logger) error {
 	ctx := context.Background()
 
 	s3c, ddb, anth, err := loadAWSClients(ctx)
 	if err != nil {
-		logger.Error("worker: load AWS clients", "err", err)
-		os.Exit(1)
+		return err
 	}
 
 	// The lambdaworker manages its own per-invocation Temporal connection for
@@ -148,8 +148,7 @@ func runLambda(logger *slog.Logger) {
 	// process-stable across warm invocations, so this client is reused.
 	tc, namespace, err := temporalclient.Dial(logger)
 	if err != nil {
-		logger.Error("worker: dial Temporal for activities", "err", err)
-		os.Exit(1)
+		return err
 	}
 	defer tc.Close()
 
@@ -158,8 +157,7 @@ func runLambda(logger *slog.Logger) {
 
 	acts, err := activities.New(s3c, ddb, anth, tc)
 	if err != nil {
-		logger.Error("worker: build activities", "err", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("lambda worker starting",
@@ -196,20 +194,18 @@ func runLambda(logger *slog.Logger) {
 
 		return nil
 	})
+	return nil
 }
 
-// registrar is the subset of worker.Registry needed to register this worker's
-// workflows and activities. Both *worker.Worker (from worker.New) and
-// *lambdaworker.Options satisfy it.
-type registrar interface {
+// registerAll registers the worker's workflows and activities. Both
+// *worker.Worker and *lambdaworker.Options satisfy this interface.
+// VersioningBehaviorPinned is set unconditionally: it is a no-op when
+// UseVersioning is false (long-running path) and required when lambdaworker
+// forces UseVersioning on.
+func registerAll(r interface {
 	RegisterWorkflowWithOptions(w any, options workflow.RegisterOptions)
 	RegisterActivity(a any)
-}
-
-// registerAll registers the worker's workflows and activities. VersioningBehaviorPinned
-// is set unconditionally: it is a no-op when UseVersioning is false (long-running path)
-// and required when lambdaworker forces UseVersioning on.
-func registerAll(r registrar, acts *activities.Activities) {
+}, acts *activities.Activities) {
 	pinned := workflow.RegisterOptions{VersioningBehavior: workflow.VersioningBehaviorPinned}
 	r.RegisterWorkflowWithOptions(workflows.ProcessImage, pinned)
 	r.RegisterWorkflowWithOptions(workflows.LaunchPipelines, pinned)
@@ -239,8 +235,3 @@ func envIntOr(key string, fallback int) int {
 	}
 	return fallback
 }
-
-// Compile-time check that *lambdaworker.Options satisfies registrar.
-// worker.Worker is itself an interface whose method set is a superset of
-// registrar, so no static check is needed for it.
-var _ registrar = (*lambdaworker.Options)(nil)

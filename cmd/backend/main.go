@@ -1,9 +1,7 @@
 // Command backend serves the demo's REST API.
 //
-// Mode selection follows the project convention recorded in project
-// memory: if AWS_ENDPOINT_URL is set (LocalStack), boot as a plain HTTP
-// server on :8000; otherwise boot as a Lambda handler. A single env var
-// drives the choice — no RUN_MODE knob.
+// If AWS_ENDPOINT_URL is set (Moto), run as HTTP on :8000; otherwise start
+// the Lambda handler.
 package main
 
 import (

@@ -127,8 +127,6 @@ services:
       # where Tofu provisions two workers and the backend Lambda gets
       # WORKER_TASK_QUEUE_ECS / WORKER_TASK_QUEUE_LAMBDA set.
       TEMPORAL_TASK_QUEUE: image-processing
-      TEMPORAL_TLS_CERT: ""
-      TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
       AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test
@@ -168,8 +166,6 @@ services:
       # Single legacy queue in local dev — the runtime selector is hidden
       # in the UI because WORKER_TASK_QUEUE_ECS / _LAMBDA are unset.
       TEMPORAL_TASK_QUEUE: image-processing
-      TEMPORAL_TLS_CERT: ""
-      TEMPORAL_TLS_KEY: ""
       AWS_ENDPOINT_URL: http://moto:5000
       AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test

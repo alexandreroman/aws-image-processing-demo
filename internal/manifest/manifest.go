@@ -2,6 +2,18 @@
 // activities, API handlers, and the manifest stored in DynamoDB.
 package manifest
 
+import "fmt"
+
+// ProcessImageWorkflowID returns the deterministic workflow ID used for the
+// per-image ProcessImage execution belonging to (pipelineID, imageID). It is
+// the single source of truth for that format: the launcher workflow, the
+// starter activity, and the HTTP start handler all derive IDs from it so
+// the API response, visibility queries, and the launcher query handler stay
+// in lockstep.
+func ProcessImageWorkflowID(pipelineID, imageID string) string {
+	return fmt.Sprintf("image-pipeline-%s-%s", pipelineID, imageID)
+}
+
 // S3Ref points to an object in S3.
 type S3Ref struct {
 	Bucket string `json:"bucket"`
@@ -46,11 +58,6 @@ type LaunchPipelineImage struct {
 type LaunchPipelinesInput struct {
 	PipelineID string                `json:"pipelineId"`
 	Images     []LaunchPipelineImage `json:"images"`
-}
-
-// LaunchPipelinesResult is the output of the LaunchPipelines workflow.
-type LaunchPipelinesResult struct {
-	WorkflowIDs []string `json:"workflowIds"`
 }
 
 // SizeNames is the canonical, ordered list of size keys. Workflow code MUST

@@ -12,19 +12,10 @@ import (
 
 // GetWorkflowIDsQuery is the Temporal query handler name that returns the
 // canonical list of per-image workflow IDs the launcher is about to fan out.
-// The backend queries this instead of waiting on the launcher's completion
-// via run.Get(), so the pipeline detail page stays responsive while the
-// launcher is still scheduling activities.
+// The backend queries this instead of waiting on the launcher's completion,
+// so the pipeline detail page stays responsive while the launcher is still
+// scheduling activities.
 const GetWorkflowIDsQuery = "getWorkflowIDs"
-
-// ProcessImageWorkflowID returns the deterministic workflow ID used for the
-// per-image ProcessImage execution belonging to (pipelineID, imageID). It is
-// the single source of truth for that format: both the launcher workflow and
-// the HTTP start handler derive IDs from it so the API response, visibility
-// queries, and the launcher query handler stay in lockstep.
-func ProcessImageWorkflowID(pipelineID, imageID string) string {
-	return fmt.Sprintf("image-pipeline-%s-%s", pipelineID, imageID)
-}
 
 // LaunchPipelines fans out one ProcessImage execution per input image and
 // returns as soon as every execution has been *started* (not completed).
@@ -32,12 +23,10 @@ func ProcessImageWorkflowID(pipelineID, imageID string) string {
 // Each ProcessImage execution is scheduled by the StartProcessImage starter
 // activity, which calls client.ExecuteWorkflow. The resulting workflows are
 // fully independent top-level executions with no parent/child relationship
-// to this launcher — so this workflow can return its list of IDs as soon as
-// the starts are acknowledged, keeping the synchronous backend call well
-// within the API Gateway 29 s timeout.
-func LaunchPipelines(
-	ctx workflow.Context, in manifest.LaunchPipelinesInput,
-) (manifest.LaunchPipelinesResult, error) {
+// to this launcher — so this workflow can return as soon as the starts are
+// acknowledged, keeping the synchronous backend call well within the API
+// Gateway 29 s timeout.
+func LaunchPipelines(ctx workflow.Context, in manifest.LaunchPipelinesInput) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("LaunchPipelines start",
 		"pipelineId", in.PipelineID, "imageCount", len(in.Images))
@@ -54,16 +43,15 @@ func LaunchPipelines(
 
 	workflowIDs := make([]string, len(in.Images))
 	for i, img := range in.Images {
-		workflowIDs[i] = ProcessImageWorkflowID(in.PipelineID, img.ImageID)
+		workflowIDs[i] = manifest.ProcessImageWorkflowID(in.PipelineID, img.ImageID)
 	}
 
 	// Expose the ID list via a query so the backend can read it instantly
-	// while this workflow is still fanning out — avoids blocking the
-	// pipeline detail page on run.Get() of the launcher.
+	// while this workflow is still fanning out.
 	if err := workflow.SetQueryHandler(ctx, GetWorkflowIDsQuery, func() ([]string, error) {
 		return workflowIDs, nil
 	}); err != nil {
-		return manifest.LaunchPipelinesResult{}, fmt.Errorf("set query handler: %w", err)
+		return fmt.Errorf("set query handler: %w", err)
 	}
 
 	// Fan-out: schedule all starter activities in one pass so the underlying
@@ -71,22 +59,19 @@ func LaunchPipelines(
 	futures := make([]workflow.Future, len(in.Images))
 	for i, img := range in.Images {
 		actIn := activities.StartProcessImageInput{
-			WorkflowID: workflowIDs[i],
 			PipelineID: in.PipelineID,
-			ImageID:    img.ImageID,
-			Original:   img.Original,
+			Image:      img,
 		}
 		futures[i] = workflow.ExecuteActivity(actCtx, (*activities.Activities).StartProcessImage, actIn)
 	}
 
 	for i, f := range futures {
 		if err := f.Get(ctx, nil); err != nil {
-			return manifest.LaunchPipelinesResult{},
-				fmt.Errorf("start %s: %w", workflowIDs[i], err)
+			return fmt.Errorf("start %s: %w", workflowIDs[i], err)
 		}
 	}
 
 	logger.Info("LaunchPipelines done",
 		"pipelineId", in.PipelineID, "started", len(workflowIDs))
-	return manifest.LaunchPipelinesResult{WorkflowIDs: workflowIDs}, nil
+	return nil
 }

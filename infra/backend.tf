@@ -3,8 +3,8 @@
 # The deployment artifact is built **outside** of OpenTofu by
 # `scripts/build-lambda.sh`, which cross-compiles `cmd/backend` for Linux
 # and writes the binary to `dist/backend/bootstrap`. This file just zips it.
-# Run `make build-lambda` (or invoke the script directly) before
-# `tofu apply`.
+# The script is invoked by `scripts/deploy.sh` (i.e. `make deploy`) before
+# `tofu apply`; run it directly if applying Tofu by hand.
 
 data "archive_file" "backend" {
   type        = "zip"

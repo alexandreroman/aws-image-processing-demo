@@ -14,7 +14,7 @@ const POST_DONE_STABLE_POLLS = 3;
 const POST_DONE_MAX_MS = 120_000;
 
 export interface UsePipelineWorkersReturn {
-  workerCount: ComputedRef<number | null>;
+  workerCount: Readonly<Ref<number | null>>;
   error: Ref<Error | null>;
   refresh: () => Promise<void>;
 }
@@ -27,7 +27,6 @@ export function usePipelineWorkers(
 
   const count = ref<number | null>(null);
   const error = ref<Error | null>(null);
-  const workerCount = computed<number | null>(() => count.value);
 
   // Drop out-of-order responses: pause/resume + manual refresh can otherwise
   // let a slow earlier reply clobber a fresher value.
@@ -118,7 +117,7 @@ export function usePipelineWorkers(
   onUnmounted(pause);
 
   return {
-    workerCount,
+    workerCount: count,
     error,
     refresh,
   };

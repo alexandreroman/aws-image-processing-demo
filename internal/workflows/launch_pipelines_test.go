@@ -28,10 +28,13 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	}
 	env.RegisterActivity(acts)
 
+	started := make([]string, 0, len(imageIDs))
 	env.OnActivity(acts.StartProcessImage, mock.Anything,
 		mock.MatchedBy(func(in activities.StartProcessImageInput) bool { return true }),
 	).Return(func(_ context.Context, in activities.StartProcessImageInput) (string, error) {
-		return in.WorkflowID, nil
+		id := manifest.ProcessImageWorkflowID(in.PipelineID, in.Image.ImageID)
+		started = append(started, id)
+		return id, nil
 	})
 
 	images := make([]manifest.LaunchPipelineImage, len(imageIDs))
@@ -49,13 +52,11 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())
-
-	var got manifest.LaunchPipelinesResult
-	require.NoError(t, env.GetWorkflowResult(&got))
-	require.Len(t, got.WorkflowIDs, len(imageIDs))
+	want := make([]string, len(imageIDs))
 	for i, id := range imageIDs {
-		require.Equal(t, workflows.ProcessImageWorkflowID(pipelineID, id), got.WorkflowIDs[i])
+		want[i] = manifest.ProcessImageWorkflowID(pipelineID, id)
 	}
+	require.ElementsMatch(t, want, started)
 }
 
 func TestLaunchPipelines_PropagatesActivityError(t *testing.T) {

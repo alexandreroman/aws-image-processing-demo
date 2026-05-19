@@ -25,28 +25,17 @@ resource "aws_acm_certificate" "cf" {
   }
 }
 
-# Deduplicate validation records — ACM occasionally emits the same CNAME
-# twice when SAN names overlap. for_each on a map keyed by record name
-# collapses duplicates safely.
-locals {
-  cert_validation_records = local.use_custom_domain ? {
-    for dvo in aws_acm_certificate.cf[0].domain_validation_options : dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
-    }
-  } : {}
-}
-
 resource "cloudflare_dns_record" "cert_validation" {
-  for_each = local.cert_validation_records
+  for_each = local.use_custom_domain ? {
+    for dvo in aws_acm_certificate.cf[0].domain_validation_options : dvo.domain_name => dvo
+  } : {}
 
   zone_id = var.cloudflare_zone_id
 
   # Cloudflare v5 expects the FQDN without a trailing dot.
-  name    = trimsuffix(each.value.name, ".")
-  type    = each.value.type
-  content = trimsuffix(each.value.value, ".")
+  name    = trimsuffix(each.value.resource_record_name, ".")
+  type    = each.value.resource_record_type
+  content = trimsuffix(each.value.resource_record_value, ".")
   ttl     = 60
   proxied = false
 }

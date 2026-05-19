@@ -197,7 +197,7 @@ type startResponse struct {
 // pipeline page polls for state as the children appear.
 //
 // The response includes the per-image workflow IDs, which the handler
-// derives locally via workflows.ProcessImageWorkflowID — the same helper the
+// derives locally via manifest.ProcessImageWorkflowID — the same helper the
 // launcher uses — so the frontend can size its UI before the first poll
 // returns without waiting on the launcher.
 //
@@ -263,15 +263,14 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		runtimeName = runtime.Name
 	}
 
-	pipelineID := newPipelineID()
+	pipelineID := shortID()
 
-	imageIDs := make([]string, len(req.Images))
 	images := make([]manifest.LaunchPipelineImage, len(req.Images))
 	workflowIDs := make([]string, len(req.Images))
 	for i, img := range req.Images {
-		imageIDs[i] = newImageID()
-		images[i] = manifest.LaunchPipelineImage{ImageID: imageIDs[i], Original: img}
-		workflowIDs[i] = workflows.ProcessImageWorkflowID(pipelineID, imageIDs[i])
+		imageID := shortID()
+		images[i] = manifest.LaunchPipelineImage{ImageID: imageID, Original: img}
+		workflowIDs[i] = manifest.ProcessImageWorkflowID(pipelineID, imageID)
 	}
 
 	// Fire the launcher and return immediately — we don't wait for fan-out
@@ -332,9 +331,6 @@ func (h *Handler) runtimeNames() []string {
 func shortID() string {
 	return uuid.NewString()[:8]
 }
-
-func newPipelineID() string { return shortID() }
-func newImageID() string    { return shortID() }
 
 // --- /api/pipelines/{pipelineId} --------------------------------------------
 
