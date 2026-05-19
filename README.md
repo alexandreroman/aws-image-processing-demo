@@ -167,6 +167,7 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_TLS_CERT`     | Path to mTLS client cert (PEM)                       | (required for Cloud) |
 | `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
 | `TEMPORAL_TASK_QUEUE`   | Worker task queue                                    | `image-processing`   |
+| `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role | `aws-image-processing-demo` |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
 | `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
 | `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
@@ -319,13 +320,16 @@ low-volume workloads where cost matters more than
 steady-state latency, Lambda is the attractive
 option.
 
-Two optional Tofu variables wire up the
-Temporal-Cloud-assumes-AWS-role flow for the Lambda
-runtime: `temporal_cloud_aws_account_id` and
-`temporal_cloud_external_id`. When both are set, an
-IAM role is created with `lambda:InvokeFunction` and a
-`sts:ExternalId` trust condition so Temporal Cloud can
-assume it to invoke the Lambda worker.
+The Temporal-Cloud-assumes-AWS-role flow for the Lambda
+runtime is wired by two Tofu variables:
+`temporal_cloud_aws_account_ids` (defaulted to the 5
+Temporal Cloud invoker cells published in their
+CloudFormation template) and `temporal_cloud_external_id`.
+When the external ID is set, an IAM role is created with
+`lambda:InvokeFunction` + `lambda:GetFunction` and an
+`sts:ExternalId` trust condition so any of the 5 Temporal
+Cloud cells can assume it (via the `wci-lambda-invoke`
+role) to invoke the Lambda worker.
 
 ## Contributing
 

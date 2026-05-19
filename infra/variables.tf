@@ -60,13 +60,21 @@ variable "worker_image" {
   default     = "ghcr.io/alexandreroman/aws-image-processing-demo-worker:latest"
 }
 
-variable "temporal_cloud_aws_account_id" {
+variable "temporal_cloud_aws_account_ids" {
   description = <<-EOT
-    AWS account ID Temporal Cloud assumes from when invoking the Lambda worker.
-    Leave empty to skip creation of the invoker role.
+    AWS account IDs of the Temporal Cloud Lambda invoker cells. The default
+    is the full list of 5 cells published in Temporal's CloudFormation
+    template; the trust policy admits the precise `wci-lambda-invoke` role
+    in each. You normally do not need to override this.
   EOT
-  type        = string
-  default     = ""
+  type        = list(string)
+  default = [
+    "902542641901",
+    "160190466495",
+    "819232936619",
+    "829909441867",
+    "354116250941",
+  ]
 }
 
 variable "temporal_cloud_external_id" {

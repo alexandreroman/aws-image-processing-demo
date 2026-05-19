@@ -14,7 +14,7 @@ locals {
   # of filename/image_uri/s3_bucket" rule rejects a null value at validate
   # time, so we leave it unconditionally set.
   worker_zip_exists   = fileexists(local.worker_zip)
-  create_invoker_role = var.temporal_cloud_aws_account_id != "" && var.temporal_cloud_external_id != ""
+  create_invoker_role = length(var.temporal_cloud_aws_account_ids) > 0 && var.temporal_cloud_external_id != ""
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
@@ -179,9 +179,9 @@ resource "aws_lambda_function" "worker" {
 
 # --- Invoker role (Temporal Cloud assumes this to invoke the Lambda) ------
 #
-# Only created when both the Temporal Cloud AWS account ID and the external
-# ID are supplied. Skipping it keeps the module usable for local-only dev
-# or manual invocation.
+# Only created when the account-ID list is non-empty and the external ID is
+# set. Skipping it keeps the module usable for local-only dev or manual
+# invocation.
 
 data "aws_iam_policy_document" "invoker_assume" {
   count = local.create_invoker_role ? 1 : 0
@@ -191,7 +191,7 @@ data "aws_iam_policy_document" "invoker_assume" {
 
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${var.temporal_cloud_aws_account_id}:root"]
+      identifiers = [for id in var.temporal_cloud_aws_account_ids : "arn:aws:iam::${id}:role/wci-lambda-invoke"]
     }
 
     condition {

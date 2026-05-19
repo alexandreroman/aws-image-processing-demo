@@ -46,6 +46,6 @@ module "worker_lambda" {
   temporal_tls_cert_secret_id = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_cert[0].id : ""
   temporal_tls_key_secret_id  = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_key[0].id : ""
 
-  temporal_cloud_aws_account_id = var.temporal_cloud_aws_account_id
-  temporal_cloud_external_id    = var.temporal_cloud_external_id
+  temporal_cloud_aws_account_ids = var.temporal_cloud_aws_account_ids
+  temporal_cloud_external_id     = var.temporal_cloud_external_id
 }

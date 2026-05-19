@@ -75,13 +75,20 @@ variable "temporal_tls_key_secret_id" {
   type        = string
 }
 
-variable "temporal_cloud_aws_account_id" {
+variable "temporal_cloud_aws_account_ids" {
   description = <<-EOT
-    AWS account ID Temporal Cloud assumes the invoker role from. When empty the
-    invoker role is not created (use cases: local-only dev, manual invocation).
+    List of AWS account IDs whose `wci-lambda-invoke` role is trusted to invoke
+    this Lambda. Defaulted by the root module; empty list disables invoker-role
+    creation.
   EOT
-  type        = string
-  default     = ""
+  type        = list(string)
+  default = [
+    "902542641901",
+    "160190466495",
+    "819232936619",
+    "829909441867",
+    "354116250941",
+  ]
 }
 
 variable "temporal_cloud_external_id" {
