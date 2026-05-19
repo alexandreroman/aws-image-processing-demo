@@ -12,9 +12,9 @@ import (
 // workersResponse is the JSON payload of
 // GET /api/pipelines/{pipelineId}/workers. The count is the number of
 // distinct worker Identity values observed across ActivityTaskStarted
-// events of the pipeline's launcher and its child workflows — i.e. how
-// many physical workers actually picked up work for this burst (~1 for
-// ECS, N for Lambda).
+// and WorkflowTaskStarted events of the pipeline's launcher and its
+// child workflows — i.e. how many physical workers actually picked up
+// work for this burst (~1 for ECS, N for Lambda).
 type workersResponse struct {
 	WorkerCount int `json:"workerCount"`
 }
@@ -87,7 +87,7 @@ func (h *Handler) collectWorkerIdentities(
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			seen, err := h.workflowActivityIdentities(ctx, workflowID)
+			seen, err := h.workflowWorkerIdentities(ctx, workflowID)
 			if err != nil {
 				h.deps.Logger.Warn("read workflow history failed",
 					"workflowId", workflowID, "err", err)
@@ -108,11 +108,13 @@ func (h *Handler) collectWorkerIdentities(
 	return identities, nil
 }
 
-// workflowActivityIdentities walks one workflow's history and returns
-// the set of Identity values seen on ActivityTaskStarted events. The
-// iterator is bounded (isLongPoll=false) so it returns as soon as the
-// currently visible history is drained, even for running workflows.
-func (h *Handler) workflowActivityIdentities(
+// workflowWorkerIdentities walks one workflow's history and returns the
+// set of Identity values seen on ActivityTaskStarted and
+// WorkflowTaskStarted events — i.e. every worker that participated in
+// the orchestration, not just activity executors. The iterator is
+// bounded (isLongPoll=false) so it returns as soon as the currently
+// visible history is drained, even for running workflows.
+func (h *Handler) workflowWorkerIdentities(
 	ctx context.Context, workflowID string,
 ) (map[string]struct{}, error) {
 	iter := h.deps.Temporal.GetWorkflowHistory(
@@ -125,15 +127,17 @@ func (h *Handler) workflowActivityIdentities(
 		if err != nil {
 			return nil, err
 		}
-		if event.GetEventType() != enumspb.EVENT_TYPE_ACTIVITY_TASK_STARTED {
+		var identity string
+		switch event.GetEventType() {
+		case enumspb.EVENT_TYPE_ACTIVITY_TASK_STARTED:
+			identity = event.GetActivityTaskStartedEventAttributes().GetIdentity()
+		case enumspb.EVENT_TYPE_WORKFLOW_TASK_STARTED:
+			identity = event.GetWorkflowTaskStartedEventAttributes().GetIdentity()
+		default:
 			continue
 		}
-		attrs := event.GetActivityTaskStartedEventAttributes()
-		if attrs == nil {
-			continue
-		}
-		if id := attrs.GetIdentity(); id != "" {
-			out[id] = struct{}{}
+		if identity != "" {
+			out[identity] = struct{}{}
 		}
 	}
 	return out, nil
