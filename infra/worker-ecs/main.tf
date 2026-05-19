@@ -238,4 +238,121 @@ resource "aws_ecs_service" "worker" {
   # healthCheck above); ECS will replace tasks that fail it. Graceful
   # shutdown still goes through SIGTERM and the stopTimeout above.
   enable_execute_command = false
+
+  # The autoscaling target below manages desired_count at runtime;
+  # ignoring it here stops Tofu from snapping the count back to 1 on
+  # every apply.
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+}
+
+# --- Application Auto Scaling --------------------------------------------
+#
+# Step scaling on a custom CloudWatch metric (BacklogCount, published by the
+# worker-autoscaler Lambda). Step scaling reacts in ~1 minute (single
+# datapoint, 60 s period) versus ~3 min for target-tracking with its 3-of-3
+# default evaluation window, which matters on a demo where a burst is
+# 30–90 s long.
+
+resource "aws_appautoscaling_target" "worker" {
+  service_namespace  = "ecs"
+  resource_id        = "service/${aws_ecs_cluster.worker.name}/${aws_ecs_service.worker.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = var.autoscaling_min_capacity
+  max_capacity       = var.autoscaling_max_capacity
+}
+
+resource "aws_cloudwatch_metric_alarm" "backlog_high" {
+  alarm_name        = "${var.name_prefix}-worker-backlog-high"
+  alarm_description = "Triggers scale-out when the Temporal task queue backlog exceeds the threshold."
+
+  namespace           = "TemporalDemo/Worker"
+  metric_name         = "BacklogCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  threshold           = var.scale_out_threshold
+  comparison_operator = "GreaterThanThreshold"
+  # Missing data is treated as "not breaching" so a polling outage does not
+  # spuriously scale out. Pairs with the scale-in alarm's same setting.
+  treat_missing_data = "notBreaching"
+
+  dimensions = {
+    TaskQueue = var.temporal_task_queue
+  }
+
+  alarm_actions = [aws_appautoscaling_policy.scale_out.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "backlog_low" {
+  alarm_name        = "${var.name_prefix}-worker-backlog-low"
+  alarm_description = "Triggers scale-in when the backlog stays below the threshold for the configured window."
+
+  namespace           = "TemporalDemo/Worker"
+  metric_name         = "BacklogCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  threshold           = var.scale_in_threshold
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    TaskQueue = var.temporal_task_queue
+  }
+
+  alarm_actions = [aws_appautoscaling_policy.scale_in.arn]
+}
+
+resource "aws_appautoscaling_policy" "scale_out" {
+  name               = "${var.name_prefix}-worker-scale-out"
+  policy_type        = "StepScaling"
+  service_namespace  = aws_appautoscaling_target.worker.service_namespace
+  resource_id        = aws_appautoscaling_target.worker.resource_id
+  scalable_dimension = aws_appautoscaling_target.worker.scalable_dimension
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 30
+    metric_aggregation_type = "Maximum"
+
+    # Step boundaries are *relative to the alarm threshold* (scale_out_threshold).
+    # E.g. with threshold=10: 10..30 → +1, 30..60 → +2, ≥60 → +3.
+    step_adjustment {
+      metric_interval_lower_bound = 0
+      metric_interval_upper_bound = var.scale_out_step_2_lower - var.scale_out_threshold
+      scaling_adjustment          = 1
+    }
+    step_adjustment {
+      metric_interval_lower_bound = var.scale_out_step_2_lower - var.scale_out_threshold
+      metric_interval_upper_bound = var.scale_out_step_3_lower - var.scale_out_threshold
+      scaling_adjustment          = 2
+    }
+    step_adjustment {
+      metric_interval_lower_bound = var.scale_out_step_3_lower - var.scale_out_threshold
+      scaling_adjustment          = 3
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "scale_in" {
+  name               = "${var.name_prefix}-worker-scale-in"
+  policy_type        = "StepScaling"
+  service_namespace  = aws_appautoscaling_target.worker.service_namespace
+  resource_id        = aws_appautoscaling_target.worker.resource_id
+  scalable_dimension = aws_appautoscaling_target.worker.scalable_dimension
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 120
+    metric_aggregation_type = "Maximum"
+
+    step_adjustment {
+      metric_interval_upper_bound = 0
+      scaling_adjustment          = -1
+    }
+  }
 }

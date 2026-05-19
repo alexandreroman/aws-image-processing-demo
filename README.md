@@ -320,6 +320,31 @@ low-volume workloads where cost matters more than
 steady-state latency, Lambda is the attractive
 option.
 
+### ECS worker autoscaling
+
+The ECS Fargate runtime auto-scales from 1 to 5 tasks
+based on the actual Temporal task queue backlog,
+following the canonical CREMA / KEDA pattern. A small
+Lambda (`cmd/worker-autoscaler`) is invoked every 30 s
+by EventBridge Scheduler; it calls `DescribeTaskQueue`
+with `ReportStats=true` for both the workflow and
+activity task queue types on the ECS worker's queue,
+sums `approximate_backlog_count`, and publishes a
+`BacklogCount` metric to the `TemporalDemo/Worker`
+CloudWatch namespace. Two CloudWatch alarms drive
+step-scaling policies on the ECS service: scale-out
+fires after 1 datapoint above 10 (+1/+2/+3 tasks
+depending on depth, 30 s cooldown); scale-in fires
+after 5 datapoints below 5 (-1 task, 120 s cooldown).
+
+**Reactivity caveat:** end-to-end latency from metric
+poll to a new worker polling the queue is ~1.5–2
+minutes, so a single ~48-image pipeline (30–90 s)
+will not trigger autoscaling — the warm worker
+handles it alone. The autoscaler is meaningful for
+**sustained or repeated load** (2–5 pipelines
+back-to-back, or pipelines of hundreds of images).
+
 The Temporal-Cloud-assumes-AWS-role flow for the Lambda
 runtime is wired by two Tofu variables:
 `temporal_cloud_aws_account_ids` (defaulted to the 5

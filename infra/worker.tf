@@ -45,6 +45,20 @@ module "worker_ecs" {
   vpc_id     = aws_vpc.main.id
 }
 
+module "worker_autoscaler" {
+  source = "./worker-autoscaler"
+
+  name_prefix          = local.name_prefix
+  aws_region           = var.aws_region
+  temporal_address     = var.temporal_address
+  temporal_namespace   = var.temporal_namespace
+  temporal_task_queue  = var.worker_task_queue_ecs
+  temporal_tls_enabled = local.temporal_tls_enabled
+
+  temporal_tls_cert_secret_id = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_cert[0].id : ""
+  temporal_tls_key_secret_id  = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_key[0].id : ""
+}
+
 module "worker_lambda" {
   source = "./worker-lambda"
 

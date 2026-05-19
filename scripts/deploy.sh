@@ -38,6 +38,9 @@ echo "==> Building Lambda bootstrap"
 echo "==> Building worker Lambda zip"
 make -C "${repo_root}" worker-lambda-zip
 
+echo "==> Building worker-autoscaler Lambda zip"
+make -C "${repo_root}" worker-autoscaler-lambda-zip
+
 echo "==> Provisioning infra with OpenTofu"
 tofu -chdir="${infra_dir}" init
 tofu -chdir="${infra_dir}" apply "${tofu_apply_args[@]}"

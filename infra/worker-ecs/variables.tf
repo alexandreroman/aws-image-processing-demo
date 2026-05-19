@@ -82,3 +82,39 @@ variable "vpc_id" {
   description = "VPC ID the worker security group belongs to."
   type        = string
 }
+
+variable "autoscaling_min_capacity" {
+  description = "Minimum desired_count for the ECS worker service (warm capacity, never zero by design)."
+  type        = number
+  default     = 1
+}
+
+variable "autoscaling_max_capacity" {
+  description = "Maximum desired_count for the ECS worker service."
+  type        = number
+  default     = 5
+}
+
+variable "scale_out_threshold" {
+  description = "BacklogCount above which the scale-out alarm fires (first step boundary)."
+  type        = number
+  default     = 10
+}
+
+variable "scale_out_step_2_lower" {
+  description = "BacklogCount at which the scale-out step jumps to +2 tasks."
+  type        = number
+  default     = 30
+}
+
+variable "scale_out_step_3_lower" {
+  description = "BacklogCount at which the scale-out step jumps to +3 tasks."
+  type        = number
+  default     = 60
+}
+
+variable "scale_in_threshold" {
+  description = "BacklogCount below which the scale-in alarm fires (sustained for 5 datapoints)."
+  type        = number
+  default     = 5
+}
