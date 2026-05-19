@@ -21,3 +21,13 @@ output "images_bucket" {
   description = "Name of the S3 bucket holding originals + derived images."
   value       = aws_s3_bucket.images.bucket
 }
+
+output "worker_lambda_function_arn" {
+  description = "ARN of the worker Lambda function. Consumed by scripts/deploy.sh to register the Worker Deployment Version with Temporal Cloud."
+  value       = module.worker_lambda.function_arn
+}
+
+output "worker_lambda_invoker_role_arn" {
+  description = "ARN of the role Temporal Cloud assumes to invoke the worker Lambda. Null when the invoker role is not created. Consumed by scripts/deploy.sh."
+  value       = module.worker_lambda.invoker_role_arn
+}

@@ -6,9 +6,12 @@
 #   2. Build the Lambda bootstrap binary.
 #   3. Build the worker Lambda zip (build/worker.zip).
 #   4. tofu init && tofu apply.
-#   5. Build the Nuxt frontend.
-#   6. Sync to S3 and invalidate CloudFront.
-#   7. Print the demo URL.
+#   5. Register the Temporal Worker Deployment version for the
+#      Lambda runtime so Temporal Cloud can route workflows to it.
+#   6. Upload sample images.
+#   7. Build the Nuxt frontend.
+#   8. Sync to S3 and invalidate CloudFront.
+#   9. Print the demo URL.
 #
 # Set INTERACTIVE=0 to skip the tofu approval
 # prompt (useful in CI). Default is interactive.
@@ -38,6 +41,9 @@ make -C "${repo_root}" worker-lambda-zip
 echo "==> Provisioning infra with OpenTofu"
 tofu -chdir="${infra_dir}" init
 tofu -chdir="${infra_dir}" apply "${tofu_apply_args[@]}"
+
+echo "==> Registering Temporal Worker Deployment version"
+"${repo_root}/scripts/register-worker-deployment.sh"
 
 echo "==> Uploading sample images"
 "${repo_root}/scripts/upload-samples.sh"
