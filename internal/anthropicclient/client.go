@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -95,32 +94,25 @@ func firstText(msg *anthropic.Message) string {
 	return ""
 }
 
-// parseResponse tries strict JSON first, then falls back to a permissive
-// regex so that the activity still succeeds when the model wraps its answer
-// in markdown fences or extra prose.
+// parseResponse extracts the description and labels from the model's
+// reply. We accept any reply that contains a strict-JSON {...} object
+// matching the schema; markdown fences or leading/trailing prose are
+// tolerated by isolating the first '{' through the last '}'.
 func parseResponse(raw string) (string, []string, error) {
 	type payload struct {
 		Description string   `json:"description"`
 		Labels      []string `json:"labels"`
 	}
 
-	if start, end := strings.Index(raw, "{"), strings.LastIndex(raw, "}"); start >= 0 && end > start {
-		var p payload
-		if err := json.Unmarshal([]byte(raw[start:end+1]), &p); err == nil && p.Description != "" {
-			return p.Description, normalizeLabels(p.Labels), nil
-		}
+	start, end := strings.Index(raw, "{"), strings.LastIndex(raw, "}")
+	if start < 0 || end <= start {
+		return "", nil, fmt.Errorf("could not parse: %s", truncate(raw, 200))
 	}
-
-	// Fallback: "description: ... labels: a, b, c".
-	descRe := regexp.MustCompile(`(?i)description[^:]*:\s*"?([^"\n]+)"?`)
-	labelsRe := regexp.MustCompile(`(?i)labels?[^:]*:\s*\[?([^\]\n]+)\]?`)
-	d := descRe.FindStringSubmatch(raw)
-	l := labelsRe.FindStringSubmatch(raw)
-	if len(d) == 2 && len(l) == 2 {
-		labels := strings.Split(l[1], ",")
-		return strings.TrimSpace(d[1]), normalizeLabels(labels), nil
+	var p payload
+	if err := json.Unmarshal([]byte(raw[start:end+1]), &p); err != nil || p.Description == "" {
+		return "", nil, fmt.Errorf("could not parse: %s", truncate(raw, 200))
 	}
-	return "", nil, fmt.Errorf("could not parse: %s", truncate(raw, 200))
+	return p.Description, normalizeLabels(p.Labels), nil
 }
 
 func normalizeLabels(in []string) []string {

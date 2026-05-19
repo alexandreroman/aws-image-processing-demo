@@ -39,7 +39,6 @@ crash.log
 /cmd/**/main
 /build/
 
-BRIEF.md
 ca.*
 
 .worktrees/

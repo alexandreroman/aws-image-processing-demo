@@ -30,8 +30,8 @@ func TestParseResponse(t *testing.T) {
 			wantLabels: []string{"sunset", "mountain", "sky"},
 		},
 		{
-			name:       "prose fallback",
-			raw:        "Description: a small kitten on a couch\nLabels: kitten, couch, indoor",
+			name:       "JSON with leading and trailing prose",
+			raw:        `Sure! {"description":"a small kitten on a couch","labels":["kitten","couch","indoor"]} hope that helps.`,
 			wantDesc:   "a small kitten on a couch",
 			wantLabels: []string{"kitten", "couch", "indoor"},
 		},

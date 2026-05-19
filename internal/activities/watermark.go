@@ -75,18 +75,28 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 }
 
 // stampWatermark draws the Temporal logo on a rounded translucent plate at the
-// bottom edge of src, centered horizontally.
+// bottom edge of src, centered horizontally. Tiny images (< 32 px) are
+// returned unmodified — there is no room for a readable mark.
 func stampWatermark(src image.Image) image.Image {
 	const (
+		minDim   = 32
 		minLogoH = 12
 		maxLogoH = 80
 		padX     = 8
 		padY     = 6
+		marginX  = 8
+		marginY  = 20
 	)
-	marginX, marginY := 8, 20
 
 	bounds := src.Bounds()
 	imgW, imgH := bounds.Dx(), bounds.Dy()
+
+	dst := image.NewRGBA(bounds)
+	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
+
+	if imgW < minDim || imgH < minDim {
+		return dst
+	}
 
 	logoBounds := temporalLogo.Bounds()
 	logoOrigW, logoOrigH := logoBounds.Dx(), logoBounds.Dy()
@@ -98,31 +108,6 @@ func stampWatermark(src image.Image) image.Image {
 
 	plateW := logoW + 2*padX
 	plateH := logoH + 2*padY
-
-	// Tiny image: shrink margin, then shrink the logo proportionally rather
-	// than overflow the canvas.
-	if plateW > imgW-2*marginX || plateH > imgH-2*marginY {
-		marginX, marginY = 2, 2
-	}
-	if maxW, maxH := imgW-2*marginX, imgH-2*marginY; plateW > maxW || plateH > maxH {
-		scaleW := float64(maxW-2*padX) / float64(logoW)
-		scaleH := float64(maxH-2*padY) / float64(logoH)
-		scale := min(scaleW, scaleH)
-		if scale < 0 {
-			scale = 0
-		}
-		logoW = int(float64(logoW) * scale)
-		logoH = int(float64(logoH) * scale)
-		plateW = logoW + 2*padX
-		plateH = logoH + 2*padY
-	}
-
-	dst := image.NewRGBA(bounds)
-	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
-
-	if logoW <= 0 || logoH <= 0 {
-		return dst
-	}
 
 	radius := max(4, logoH/4)
 	if m := min(plateW, plateH) / 2; radius > m {

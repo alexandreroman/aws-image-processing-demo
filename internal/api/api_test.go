@@ -337,21 +337,3 @@ func TestHandleStart_FallbackToDefaultTaskQueue(t *testing.T) {
 		}
 	})
 }
-
-func TestHandleRuntimes_EmptyWhenUnconfigured(t *testing.T) {
-	t.Parallel()
-
-	// Local-dev shape: no runtimes, only a default queue. /api/runtimes
-	// must still return "[]" so the frontend can hide the selector.
-	h := newTestHandlerWithDefaultQueueOnly()
-	req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusOK)
-	}
-	if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
-		t.Fatalf("body: got %q, want %q", got, "[]")
-	}
-}

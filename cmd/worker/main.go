@@ -1,7 +1,8 @@
-// Command worker is the Temporal worker. A single binary that runs in two
-// modes: a long-running worker (host / Docker / ECS Fargate) and an AWS
-// Lambda worker. The mode is selected at runtime by the presence of
-// AWS_LAMBDA_FUNCTION_NAME, which the Lambda runtime always sets.
+// Command worker is the Temporal worker. A single binary supports four
+// deployment modes that collapse to two code paths: a long-running worker
+// (host, Docker, ECS Fargate) and an AWS Lambda worker. The Lambda path is
+// selected at runtime when AWS_LAMBDA_FUNCTION_NAME is set, which the
+// Lambda runtime always provides.
 package main
 
 import (
@@ -11,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	defaultTaskQueue      = "image-processing-ecs"
+	defaultTaskQueue      = "image-processing"
 	defaultDeploymentName = "image-processing"
 )
 
@@ -73,39 +73,27 @@ func runLongRunning(logger *slog.Logger) error {
 		return err
 	}
 
-	// Split on commas so a single dev process can poll both runtime queues
-	// at once (e.g. TEMPORAL_TASK_QUEUE=image-processing-ecs,image-processing-lambda).
-	queues := splitQueues(envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue))
-	if len(queues) == 0 {
-		return errors.New("worker: TEMPORAL_TASK_QUEUE must list at least one queue")
-	}
+	taskQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 
 	// Cap concurrent activities so a large burst cannot exhaust the
 	// worker's memory (each Resize holds a decoded RGBA buffer). 8 is
 	// safe for the 256 MiB compose container; prod (1+ GiB Fargate)
 	// overrides via WORKER_MAX_CONCURRENT_ACTIVITIES.
 	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 8)
-	workers := make([]worker.Worker, 0, len(queues))
-	for _, q := range queues {
-		w := worker.New(tc, q, worker.Options{
-			MaxConcurrentActivityExecutionSize: maxConcurrent,
-			// Report real CPU/RAM in worker heartbeats so the Temporal Cloud
-			// "Worker Hosts" view can distinguish a busy worker from a downed
-			// one. Long-running workers only — the Lambda path doesn't apply.
-			SysInfoProvider: sysinfo.SysInfoProvider(),
-		})
-		registerAll(w, acts)
-		if err := w.Start(); err != nil {
-			for _, prev := range workers {
-				prev.Stop()
-			}
-			return err
-		}
-		workers = append(workers, w)
+	w := worker.New(tc, taskQueue, worker.Options{
+		MaxConcurrentActivityExecutionSize: maxConcurrent,
+		// Report real CPU/RAM in worker heartbeats so the Temporal Cloud
+		// "Worker Hosts" view can distinguish a busy worker from a downed
+		// one. Long-running workers only — the Lambda path doesn't apply.
+		SysInfoProvider: sysinfo.SysInfoProvider(),
+	})
+	registerAll(w, acts)
+	if err := w.Start(); err != nil {
+		return err
 	}
 
 	logger.Info("worker starting",
-		"taskQueues", queues,
+		"taskQueue", taskQueue,
 		"namespace", namespace,
 		"bucket", acts.ImagesBucket,
 		"table", acts.ImagesTable,
@@ -115,7 +103,7 @@ func runLongRunning(logger *slog.Logger) error {
 	// The worker speaks to Temporal over gRPC; this HTTP listener exists
 	// purely as a liveness probe for the container orchestrator (compose
 	// healthcheck, ECS container healthCheck).
-	healthAddr := envOr("HEALTH_ADDR", ":8001")
+	healthAddr := temporalclient.EnvOr("HEALTH_ADDR", ":8001")
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -138,28 +126,11 @@ func runLongRunning(logger *slog.Logger) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	// worker.InterruptCh closes on SIGINT/SIGTERM; stop every worker in
-	// reverse start order so the last-registered queue drains first.
+	// worker.InterruptCh closes on SIGINT/SIGTERM.
 	<-worker.InterruptCh()
-	logger.Info("worker stopping", "taskQueues", queues)
-	for i := len(workers) - 1; i >= 0; i-- {
-		workers[i].Stop()
-	}
+	logger.Info("worker stopping", "taskQueue", taskQueue)
+	w.Stop()
 	return nil
-}
-
-// splitQueues parses a comma-separated list of task queue names, trimming
-// whitespace and dropping empties. Returns an empty slice when the input
-// has no usable entries.
-func splitQueues(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if q := strings.TrimSpace(p); q != "" {
-			out = append(out, q)
-		}
-	}
-	return out
 }
 
 func runLambda(logger *slog.Logger) {
@@ -183,23 +154,11 @@ func runLambda(logger *slog.Logger) {
 	}
 	defer tc.Close()
 
-	// Lambda runs exactly one worker per function, so collapse to the first
-	// entry when TEMPORAL_TASK_QUEUE was set to a comma-separated list (as
-	// the long-running path accepts).
-	queues := splitQueues(envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue))
-	if len(queues) == 0 {
-		tc.Close()
-		logger.Error("worker: TEMPORAL_TASK_QUEUE must list at least one queue")
-		os.Exit(1)
-	}
-	taskQueue := queues[0]
-	if len(queues) > 1 {
-		logger.Warn("multiple task queues set in Lambda mode; using the first",
-			"selected", taskQueue, "ignored", queues[1:])
-	}
+	taskQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
+	deploymentName := temporalclient.EnvOr("WORKER_DEPLOYMENT_NAME", defaultDeploymentName)
+
 	acts, err := activities.New(s3c, ddb, anth, tc)
 	if err != nil {
-		tc.Close()
 		logger.Error("worker: build activities", "err", err)
 		os.Exit(1)
 	}
@@ -209,12 +168,12 @@ func runLambda(logger *slog.Logger) {
 		"namespace", namespace,
 		"bucket", acts.ImagesBucket,
 		"table", acts.ImagesTable,
-		"deploymentName", envOr("WORKER_DEPLOYMENT_NAME", defaultDeploymentName),
+		"deploymentName", deploymentName,
 		"buildID", buildID,
 	)
 
 	version := worker.WorkerDeploymentVersion{
-		DeploymentName: envOr("WORKER_DEPLOYMENT_NAME", defaultDeploymentName),
+		DeploymentName: deploymentName,
 		BuildID:        buildID,
 	}
 
@@ -271,13 +230,6 @@ func loadAWSClients(ctx context.Context) (*s3.Client, *dynamodb.Client, *anthrop
 		return nil, nil, nil, err
 	}
 	return s3c, ddb, anth, nil
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 func envIntOr(key string, fallback int) int {

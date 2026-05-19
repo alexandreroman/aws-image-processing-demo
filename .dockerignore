@@ -53,7 +53,6 @@ coverage.out
 .claude/
 CLAUDE.md
 README.md
-BRIEF.md
 
 # Scripts (build artifacts, not needed inside the worker/backend images).
 scripts/

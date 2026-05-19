@@ -157,12 +157,12 @@ resource "aws_lambda_function" "worker" {
     # the backend Lambda pattern).
     variables = merge(
       {
-        HOME                             = "/tmp"
-        TEMPORAL_ADDRESS                 = var.temporal_address
-        TEMPORAL_NAMESPACE               = var.temporal_namespace
-        TEMPORAL_TASK_QUEUE              = var.temporal_task_queue
-        IMAGES_BUCKET                    = var.images_bucket_name
-        IMAGES_TABLE                     = var.images_table_name
+        HOME                = "/tmp"
+        TEMPORAL_ADDRESS    = var.temporal_address
+        TEMPORAL_NAMESPACE  = var.temporal_namespace
+        TEMPORAL_TASK_QUEUE = var.temporal_task_queue
+        IMAGES_BUCKET       = var.images_bucket_name
+        IMAGES_TABLE        = var.images_table_name
         # Read by Go via WORKER_DEPLOYMENT_NAME (cmd/worker/main.go:31). The
         # registration script consumes the same value via the Tofu output
         # `worker_lambda_deployment_name`, so changes here flow there

@@ -18,10 +18,6 @@ const RUNTIME_LABELS: Record<RuntimeName, string> = {
   lambda: 'AWS Lambda',
 };
 
-function runtimeLabel(r: RuntimeName): string {
-  return RUNTIME_LABELS[r];
-}
-
 const count = ref(20);
 const submitting = ref(false);
 // Empty by default — populated once /api/runtimes resolves with both
@@ -85,7 +81,7 @@ async function startBurst() {
       : undefined;
     const res = await api.startWorkflows(images, runtime);
     const summary = res.runtime !== undefined
-      ? `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows on ${runtimeLabel(res.runtime)}`
+      ? `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows on ${RUNTIME_LABELS[res.runtime]}`
       : `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows`;
     toast.success('Burst started', summary);
     // Seed the expected slot count so the gallery reserves space before the first poll lands.
@@ -169,7 +165,7 @@ async function startBurst() {
             : 'text-ink-200 hover:text-ink-100'"
           @click="selectedRuntime = r"
         >
-          {{ runtimeLabel(r) }}
+          {{ RUNTIME_LABELS[r] }}
         </button>
       </div>
     </fieldset>

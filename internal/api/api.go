@@ -1,18 +1,9 @@
 // Package api exposes the HTTP handlers backing the demo's REST endpoints.
 //
-// All API routes live under /api/* so a single CloudFront distribution can
-// dispatch by path (api → API Gateway, everything else → S3 frontend) with
-// no CORS gymnastics in production. The /healthz endpoint is the lone
-// exception: it sits at the root so container orchestrators can probe it
-// directly without a path-rewriting proxy in the way.
-//
-// The backend is configured at startup with the list of available worker
-// runtimes (e.g. "ecs", "lambda") and the Temporal task queue each one
-// polls. /api/workflows/start routes new pipelines to the queue of the
-// runtime selected by the caller (or the first one when omitted). When no
-// runtimes are configured — the local-dev / compose case — the handler
-// falls back to DefaultTaskQueue and omits the runtime field from the
-// response so the frontend can hide the selector.
+// All routes live under /api/* so CloudFront can dispatch by path
+// (api → API Gateway, everything else → S3 frontend) without CORS
+// gymnastics. /healthz at the root is the deliberate exception so
+// container orchestrators can probe it directly.
 package api
 
 import (
@@ -132,8 +123,10 @@ func (h *Handler) handleHealth(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) handleRuntimes(w http.ResponseWriter, _ *http.Request) {
 	// Always emit a JSON array, never null, so the frontend can iterate
 	// unconditionally even when no runtimes are configured.
-	out := make([]Runtime, 0, len(h.deps.Runtimes))
-	out = append(out, h.deps.Runtimes...)
+	out := h.deps.Runtimes
+	if out == nil {
+		out = []Runtime{}
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -196,6 +189,10 @@ type startResponse struct {
 	WorkflowIDs []string `json:"workflowIds"`
 }
 
+// handleStart routes a burst to the task queue of the selected runtime.
+// When no runtimes are configured (local dev / compose), it falls back to
+// DefaultTaskQueue and omits the runtime field from the response so the
+// frontend can hide the selector.
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

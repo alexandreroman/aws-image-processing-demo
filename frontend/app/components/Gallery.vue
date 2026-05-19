@@ -132,37 +132,13 @@ function toTile(w: WorkflowItem): Tile {
       title: `Running: ${w.currentActivity ?? '…'}`,
     };
   }
-  if (
-    w.status === 'COMPLETED'
-    || w.status === 'RUNNING'
-    || w.status === 'CONTINUED_AS_NEW'
-  ) {
-    const candidate = bestThumb(w);
-    if (candidate) {
-      if (candidate.kind === 'watermarked') {
-        return {
-          workflowId: w.workflowId,
-          status: 'completed',
-          image: candidate.thumb,
-          title: candidate.thumb.description || candidate.thumb.imageId,
-        };
-      }
-      return {
-        workflowId: w.workflowId,
-        status: 'running',
-        currentActivity: w.currentActivity,
-        image: candidate.thumb,
-        title: `Running: ${w.currentActivity ?? '…'}`,
-      };
-    }
-    if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
-      return {
-        workflowId: w.workflowId,
-        status: 'running',
-        currentActivity: w.currentActivity,
-        title: `Running: ${w.currentActivity ?? '…'}`,
-      };
-    }
+  if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
+    return {
+      workflowId: w.workflowId,
+      status: 'running',
+      currentActivity: w.currentActivity,
+      title: `Running: ${w.currentActivity ?? '…'}`,
+    };
   }
   return {
     workflowId: w.workflowId,

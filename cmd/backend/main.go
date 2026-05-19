@@ -47,10 +47,9 @@ func main() {
 		logger.Error("backend boot failed", "err", err)
 		os.Exit(1)
 	}
-	defer tc.Close()
 
 	if os.Getenv("AWS_ENDPOINT_URL") != "" {
-		runHTTP(ctx, logger, handler)
+		runHTTP(ctx, logger, handler, tc)
 		return
 	}
 	logger.Info("starting Lambda handler")
@@ -78,7 +77,7 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	}
 
 	runtimes := buildRuntimes()
-	defaultQueue := envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
+	defaultQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 	h := api.New(api.Dependencies{
 		Temporal:         tc,
 		Presigner:        presigner,
@@ -95,7 +94,7 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 		"bucket", bucket,
 		"table", table,
 		"defaultTaskQueue", defaultQueue,
-		"runtimes", runtimeLogValue(runtimes),
+		"runtimes", runtimes,
 	)
 	return h, tc, nil
 }
@@ -117,17 +116,8 @@ func buildRuntimes() []api.Runtime {
 	return out
 }
 
-// runtimeLogValue produces a compact loggable summary so the boot line stays
-// readable even when both runtimes are configured.
-func runtimeLogValue(rts []api.Runtime) []map[string]string {
-	out := make([]map[string]string, len(rts))
-	for i, rt := range rts {
-		out[i] = map[string]string{"name": rt.Name, "taskQueue": rt.TaskQueue}
-	}
-	return out
-}
-
-func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler) {
+func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler, tc client.Client) {
+	defer tc.Close()
 	srv := &http.Server{
 		Addr:              httpAddr,
 		Handler:           h,
@@ -148,11 +138,4 @@ func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler) {
 		logger.Error("HTTP server stopped with error", "err", err)
 		os.Exit(1)
 	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

@@ -28,8 +28,8 @@ command -v temporal >/dev/null || {
 # Deployment name comes from Tofu (worker-lambda module). The Lambda
 # function's WORKER_DEPLOYMENT_NAME env var is set from the same Tofu
 # expression, so the live worker and the registered deployment never drift.
-# The Go default in cmd/worker/main.go:31 ("image-processing") only applies
-# to local-dev runs where versioning is off.
+# The Go default `defaultDeploymentName` in cmd/worker/main.go
+# ("image-processing") only applies to local-dev runs where versioning is off.
 deployment_name="$(tofu -chdir="${infra_dir}" output -raw worker_lambda_deployment_name 2>/dev/null || true)"
 if [[ -z "${deployment_name}" ]]; then
   echo "error: tofu output worker_lambda_deployment_name is empty — has \`tofu apply\` been run?" >&2

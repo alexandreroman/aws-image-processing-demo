@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Stats } from '~/composables/useApi';
+
 const api = useApi();
 
 const stats = ref<Stats | null>(null);
