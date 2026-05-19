@@ -184,15 +184,20 @@ type startRequest struct {
 }
 
 type startResponse struct {
-	PipelineID  string   `json:"pipelineId"`
-	Runtime     string   `json:"runtime,omitempty"`
-	WorkflowIDs []string `json:"workflowIds"`
+	PipelineID string `json:"pipelineId"`
+	Runtime    string `json:"runtime,omitempty"`
 }
 
-// handleStart routes a burst to the task queue of the selected runtime.
-// When no runtimes are configured (local dev / compose), it falls back to
-// DefaultTaskQueue and omits the runtime field from the response so the
-// frontend can hide the selector.
+// handleStart routes a burst to the task queue of the selected runtime and
+// returns as soon as the launcher workflow has been enqueued on the Temporal
+// frontend — it does NOT wait for the launcher to fan out the per-image
+// children. This keeps the HTTP response (and the frontend redirect) snappy
+// even on large bursts; the fan-out happens in the background and the
+// pipeline page polls for state as the children appear.
+//
+// When no runtimes are configured (local dev / compose), the handler falls
+// back to DefaultTaskQueue and omits the runtime field from the response so
+// the frontend can hide the selector.
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -261,10 +266,9 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		images[i] = manifest.LaunchPipelineImage{ImageID: imageIDs[i], Original: img}
 	}
 
-	// One call instead of N: the LaunchPipelines workflow fans out the
-	// per-image ProcessImage children and returns as soon as they are
-	// started, so the backend stays well inside the API Gateway 29 s budget
-	// regardless of burst size.
+	// Fire the launcher and return immediately — we don't wait for fan-out
+	// to complete, so the frontend can redirect as soon as Temporal has
+	// accepted the start.
 	//
 	// The launcher's ID is `image-pipeline-{id}` with no trailing
 	// `-{imageId}` segment, so it stays out of any per-image listing
@@ -275,24 +279,15 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
 	in := manifest.LaunchPipelinesInput{PipelineID: pipelineID, Images: images}
-	run, err := h.deps.Temporal.ExecuteWorkflow(r.Context(), opts, workflows.LaunchPipelines, in)
-	if err != nil {
+	if _, err := h.deps.Temporal.ExecuteWorkflow(r.Context(), opts, workflows.LaunchPipelines, in); err != nil {
 		h.deps.Logger.Error("start launcher failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
 		return
 	}
 
-	var result manifest.LaunchPipelinesResult
-	if err := run.Get(r.Context(), &result); err != nil {
-		h.deps.Logger.Error("launcher failed", "pipelineId", pipelineID, "err", err)
-		writeError(w, http.StatusInternalServerError, "failed to start workflow: "+err.Error())
-		return
-	}
-
 	writeJSON(w, http.StatusOK, startResponse{
-		PipelineID:  pipelineID,
-		Runtime:     runtimeName,
-		WorkflowIDs: result.WorkflowIDs,
+		PipelineID: pipelineID,
+		Runtime:    runtimeName,
 	})
 }
 
