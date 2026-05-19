@@ -24,14 +24,16 @@ function runtimeLabel(r: RuntimeName): string {
 
 const count = ref(20);
 const submitting = ref(false);
-// Empty by default: the selector only appears when the backend advertises
-// 2+ runtimes (real AWS deploy). In local dev, /api/runtimes returns []
-// and this stays empty, so no fieldset is rendered.
+// Empty by default — populated once /api/runtimes resolves with both
+// runtimes (AWS-deployed environments). In local dev the array stays
+// empty and the fieldset renders disabled.
 const availableRuntimes = ref<RuntimeName[]>([]);
 const selectedRuntime = ref<RuntimeName>('ecs');
 
+const awsAvailable = computed(() => availableRuntimes.value.length > 1);
+
 const selectedIndex = computed(() => {
-  const i = availableRuntimes.value.indexOf(selectedRuntime.value);
+  const i = KNOWN_RUNTIMES.indexOf(selectedRuntime.value);
   return i < 0 ? 0 : i;
 });
 
@@ -46,8 +48,8 @@ onMounted(async () => {
       selectedRuntime.value = filtered[0]!;
     }
   } catch (err) {
-    // Initial-load failure shouldn't toast — leave the selector hidden and
-    // let the user retry by submitting a burst.
+    // Initial-load failure shouldn't toast — leave the selector disabled
+    // and let the user retry by submitting a burst.
     console.warn('Failed to load runtimes', err);
   }
 });
@@ -75,10 +77,10 @@ async function startBurst() {
   submitting.value = true;
   try {
     const images = pickRandomSampleRefs(count.value);
-    // Only forward the runtime when the selector is actually rendered —
-    // otherwise the backend treats the field as unset and routes via its
+    // Only forward the runtime when AWS is actually wired — otherwise
+    // the backend treats the field as unset and routes via its
     // DefaultTaskQueue.
-    const runtime = availableRuntimes.value.length > 1
+    const runtime = awsAvailable.value
       ? selectedRuntime.value
       : undefined;
     const res = await api.startWorkflows(images, runtime);
@@ -130,51 +132,47 @@ async function startBurst() {
       </div>
     </label>
 
-    <div class="h-16">
-      <Transition name="slide-down" appear>
-        <fieldset v-if="availableRuntimes.length > 1" class="block">
-          <legend class="text-xs font-medium text-ink-200">
-            Worker runtime
-          </legend>
-          <div
-            role="radiogroup"
-            aria-label="Worker runtime"
-            class="relative isolate mt-2 grid gap-1 p-1 rounded-md
-              bg-surface-elevated border border-surface-border"
-            :style="{ gridTemplateColumns: `repeat(${availableRuntimes.length}, minmax(0, 1fr))` }"
-          >
-            <span
-              aria-hidden="true"
-              class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
-                bg-primary shadow-glow transition-transform duration-200 ease-out
-                motion-reduce:transition-none"
-              :style="{
-                width: `calc((100% - 0.5rem - ${availableRuntimes.length - 1} * 0.25rem) / ${availableRuntimes.length})`,
-                transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
-              }"
-            />
-            <button
-              v-for="r in availableRuntimes"
-              :key="r"
-              type="button"
-              role="radio"
-              :aria-checked="selectedRuntime === r"
-              :tabindex="selectedRuntime === r ? 0 : -1"
-              :disabled="submitting"
-              class="relative z-10 text-xs font-medium py-1.5 rounded
-                transition-colors focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
-              :class="selectedRuntime === r
-                ? 'text-bg'
-                : 'text-ink-200 hover:text-ink-100'"
-              @click="selectedRuntime = r"
-            >
-              {{ runtimeLabel(r) }}
-            </button>
-          </div>
-        </fieldset>
-      </Transition>
-    </div>
+    <fieldset :disabled="submitting || !awsAvailable" class="block">
+      <legend class="text-xs font-medium text-ink-200">
+        Worker runtime
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label="Worker runtime"
+        class="relative isolate mt-2 grid gap-1 p-1 rounded-md
+          bg-surface-elevated border border-surface-border"
+        :style="{ gridTemplateColumns: `repeat(${KNOWN_RUNTIMES.length}, minmax(0, 1fr))` }"
+      >
+        <span
+          v-if="awsAvailable"
+          aria-hidden="true"
+          class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
+            bg-primary shadow-glow transition-transform duration-200 ease-out
+            motion-reduce:transition-none"
+          :style="{
+            width: `calc((100% - 0.5rem - ${KNOWN_RUNTIMES.length - 1} * 0.25rem) / ${KNOWN_RUNTIMES.length})`,
+            transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
+          }"
+        />
+        <button
+          v-for="r in KNOWN_RUNTIMES"
+          :key="r"
+          type="button"
+          role="radio"
+          :aria-checked="awsAvailable && selectedRuntime === r"
+          :tabindex="awsAvailable && selectedRuntime === r ? 0 : -1"
+          class="relative z-10 text-xs font-medium py-1.5 rounded
+            transition-colors focus-visible:outline-none focus-visible:ring-2
+            focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="awsAvailable && selectedRuntime === r
+            ? 'text-bg'
+            : 'text-ink-200 hover:text-ink-100'"
+          @click="selectedRuntime = r"
+        >
+          {{ runtimeLabel(r) }}
+        </button>
+      </div>
+    </fieldset>
 
     <button
       type="button"
@@ -187,35 +185,3 @@ async function startBurst() {
     </button>
   </section>
 </template>
-
-<style scoped>
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition:
-    opacity 220ms ease-out,
-    transform 240ms ease-out,
-    max-height 260ms ease-out;
-  overflow: hidden;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  opacity: 0;
-  max-height: 0;
-  transform: translateY(-6px);
-}
-
-.slide-down-enter-to,
-.slide-down-leave-from {
-  opacity: 1;
-  max-height: 8rem;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .slide-down-enter-active,
-  .slide-down-leave-active {
-    transition: none;
-  }
-}
-</style>
