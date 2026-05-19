@@ -55,7 +55,7 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	require.NoError(t, env.GetWorkflowResult(&got))
 	require.Len(t, got.WorkflowIDs, len(imageIDs))
 	for i, id := range imageIDs {
-		require.Equal(t, fmt.Sprintf("pipeline-%s-%s", pipelineID, id), got.WorkflowIDs[i])
+		require.Equal(t, fmt.Sprintf("image-pipeline-%s-%s", pipelineID, id), got.WorkflowIDs[i])
 	}
 }
 

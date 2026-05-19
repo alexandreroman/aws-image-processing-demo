@@ -38,7 +38,7 @@ func LaunchPipelines(
 
 	workflowIDs := make([]string, len(in.Images))
 	for i, img := range in.Images {
-		workflowIDs[i] = fmt.Sprintf("pipeline-%s-%s", in.PipelineID, img.ImageID)
+		workflowIDs[i] = fmt.Sprintf("image-pipeline-%s-%s", in.PipelineID, img.ImageID)
 	}
 
 	// Fan-out: schedule all starter activities in one pass so the underlying

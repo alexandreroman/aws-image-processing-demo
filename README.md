@@ -242,9 +242,9 @@ per image. Each `ProcessImage` runs 8 activities,
 4. 1 × `StoreManifest` to DynamoDB
 
 The workflow ID format is
-`pipeline-<pipelineId>-<imageId>` (where `<pipelineId>` and
-`<imageId>` are short 8-char hex IDs) so the Temporal UI
-can filter a whole burst with a `pipeline-<pipelineId>`
+`image-pipeline-<pipelineId>-<imageId>` (where `<pipelineId>`
+and `<imageId>` are short 8-char hex IDs) so the Temporal UI
+can filter a whole burst with an `image-pipeline-<pipelineId>-`
 prefix search.
 
 ### Modules

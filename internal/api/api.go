@@ -268,10 +268,11 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	// started, so the backend stays well inside the API Gateway 29 s budget
 	// regardless of burst size.
 	//
-	// The "launch-" ID prefix keeps this workflow out of the pipeline
-	// listing (which filters on `pipeline-{id}-`).
+	// The launcher's ID is `image-pipeline-{id}` with no trailing
+	// `-{imageId}` segment, so it stays out of any per-image listing
+	// that filters on the `image-pipeline-{id}-` prefix.
 	opts := client.StartWorkflowOptions{
-		ID:                    fmt.Sprintf("launch-%s", pipelineID),
+		ID:                    fmt.Sprintf("image-pipeline-%s", pipelineID),
 		TaskQueue:             taskQueue,
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}
@@ -488,7 +489,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) fetchPipelineWorkflowIDs(
 	ctx context.Context, pipelineID string,
 ) ([]string, error) {
-	launcherID := fmt.Sprintf("launch-%s", pipelineID)
+	launcherID := fmt.Sprintf("image-pipeline-%s", pipelineID)
 	run := h.deps.Temporal.GetWorkflow(ctx, launcherID, "")
 	var result manifest.LaunchPipelinesResult
 	if err := run.Get(ctx, &result); err != nil {

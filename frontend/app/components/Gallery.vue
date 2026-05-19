@@ -172,7 +172,7 @@ function toTile(w: WorkflowItem): Tile {
 }
 
 const tiles = computed<Tile[]>(() =>
-  // Sort by workflowId (deterministic `pipeline-<pipelineId>-<imageId>`) for a stable slot per workflow.
+  // Sort by workflowId (deterministic `image-pipeline-<pipelineId>-<imageId>`) for a stable slot per workflow.
   [...props.workflows]
     .map(toTile)
     .sort((a, b) => a.workflowId.localeCompare(b.workflowId)),
