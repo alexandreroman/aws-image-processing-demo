@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Upload sample images to the demo S3 bucket
-# under the samples/ prefix.
+# Sync sample images to the demo S3 bucket under
+# the samples/ prefix. Uses `aws s3 sync` so files
+# that are already present and unchanged are
+# skipped — the first deploy uploads everything,
+# subsequent deploys are no-ops unless a sample
+# was added or modified locally.
 #
 # Local vs. AWS detection:
 #   - If AWS_ENDPOINT_URL is set, target
@@ -42,14 +46,11 @@ echo "Bucket: s3://${bucket}"
 echo "Samples: ${#samples[@]} file(s)"
 echo
 
-for f in "${samples[@]}"; do
-  name="$(basename -- "${f}")"
-  key="samples/${name}"
-  aws "${aws_args[@]}" s3 cp "${f}" "s3://${bucket}/${key}" \
-    --content-type image/jpeg \
-    --only-show-errors
-  echo "  uploaded ${key}"
-done
+echo "Syncing samples to s3://${bucket}/samples/ (skips unchanged)"
+aws "${aws_args[@]}" s3 sync "${samples_dir}/" "s3://${bucket}/samples/" \
+  --exclude '*' \
+  --include '*.jpg' \
+  --no-progress
 
 echo
-echo "Done: ${#samples[@]} image(s) uploaded to s3://${bucket}/samples/"
+echo "Done: ${#samples[@]} local sample(s) reconciled with s3://${bucket}/samples/"
