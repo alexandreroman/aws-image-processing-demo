@@ -229,6 +229,10 @@ func runLambda(logger *slog.Logger) {
 		ctx.ClientOptions = opts
 		ctx.TaskQueue = taskQueue
 		ctx.WorkerOptions.MaxConcurrentActivityExecutionSize = envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 2)
+		// Report real CPU/RAM in heartbeats. On Lambda this gives a snapshot
+		// of each invocation's container footprint in Temporal Cloud's Worker
+		// Hosts view — parity with the long-running path.
+		ctx.WorkerOptions.SysInfoProvider = sysinfo.SysInfoProvider()
 
 		registerAll(ctx, acts)
 
