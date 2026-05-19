@@ -10,6 +10,22 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// GetWorkflowIDsQuery is the Temporal query handler name that returns the
+// canonical list of per-image workflow IDs the launcher is about to fan out.
+// The backend queries this instead of waiting on the launcher's completion
+// via run.Get(), so the pipeline detail page stays responsive while the
+// launcher is still scheduling activities.
+const GetWorkflowIDsQuery = "getWorkflowIDs"
+
+// ProcessImageWorkflowID returns the deterministic workflow ID used for the
+// per-image ProcessImage execution belonging to (pipelineID, imageID). It is
+// the single source of truth for that format: both the launcher workflow and
+// the HTTP start handler derive IDs from it so the API response, visibility
+// queries, and the launcher query handler stay in lockstep.
+func ProcessImageWorkflowID(pipelineID, imageID string) string {
+	return fmt.Sprintf("image-pipeline-%s-%s", pipelineID, imageID)
+}
+
 // LaunchPipelines fans out one ProcessImage execution per input image and
 // returns as soon as every execution has been *started* (not completed).
 //
@@ -38,7 +54,16 @@ func LaunchPipelines(
 
 	workflowIDs := make([]string, len(in.Images))
 	for i, img := range in.Images {
-		workflowIDs[i] = fmt.Sprintf("image-pipeline-%s-%s", in.PipelineID, img.ImageID)
+		workflowIDs[i] = ProcessImageWorkflowID(in.PipelineID, img.ImageID)
+	}
+
+	// Expose the ID list via a query so the backend can read it instantly
+	// while this workflow is still fanning out — avoids blocking the
+	// pipeline detail page on run.Get() of the launcher.
+	if err := workflow.SetQueryHandler(ctx, GetWorkflowIDsQuery, func() ([]string, error) {
+		return workflowIDs, nil
+	}); err != nil {
+		return manifest.LaunchPipelinesResult{}, fmt.Errorf("set query handler: %w", err)
 	}
 
 	// Fan-out: schedule all starter activities in one pass so the underlying

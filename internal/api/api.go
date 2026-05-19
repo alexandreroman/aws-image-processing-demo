@@ -184,8 +184,9 @@ type startRequest struct {
 }
 
 type startResponse struct {
-	PipelineID string `json:"pipelineId"`
-	Runtime    string `json:"runtime,omitempty"`
+	PipelineID  string   `json:"pipelineId"`
+	WorkflowIDs []string `json:"workflowIds"`
+	Runtime     string   `json:"runtime,omitempty"`
 }
 
 // handleStart routes a burst to the task queue of the selected runtime and
@@ -194,6 +195,11 @@ type startResponse struct {
 // children. This keeps the HTTP response (and the frontend redirect) snappy
 // even on large bursts; the fan-out happens in the background and the
 // pipeline page polls for state as the children appear.
+//
+// The response includes the per-image workflow IDs, which the handler
+// derives locally via workflows.ProcessImageWorkflowID — the same helper the
+// launcher uses — so the frontend can size its UI before the first poll
+// returns without waiting on the launcher.
 //
 // When no runtimes are configured (local dev / compose), the handler falls
 // back to DefaultTaskQueue and omits the runtime field from the response so
@@ -261,9 +267,11 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	imageIDs := make([]string, len(req.Images))
 	images := make([]manifest.LaunchPipelineImage, len(req.Images))
+	workflowIDs := make([]string, len(req.Images))
 	for i, img := range req.Images {
 		imageIDs[i] = newImageID()
 		images[i] = manifest.LaunchPipelineImage{ImageID: imageIDs[i], Original: img}
+		workflowIDs[i] = workflows.ProcessImageWorkflowID(pipelineID, imageIDs[i])
 	}
 
 	// Fire the launcher and return immediately — we don't wait for fan-out
@@ -286,8 +294,9 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, startResponse{
-		PipelineID: pipelineID,
-		Runtime:    runtimeName,
+		PipelineID:  pipelineID,
+		WorkflowIDs: workflowIDs,
+		Runtime:     runtimeName,
 	})
 }
 
@@ -473,22 +482,28 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// fetchPipelineWorkflowIDs reads the LaunchPipelines workflow output to get
-// the canonical list of pipeline workflow IDs. The launcher completes as
-// soon as all children are started, so this returns quickly even on the
-// 1 s frontend poll cadence. We deliberately rely on the launcher's output
-// rather than a visibility STARTS_WITH query so the pipeline page sees the
-// full burst even if visibility hasn't caught up yet.
+// fetchPipelineWorkflowIDs returns the canonical list of per-image workflow
+// IDs for a pipeline by querying the launcher workflow's GetWorkflowIDsQuery
+// handler. We query rather than wait on run.Get() so the pipeline detail
+// page stays responsive while the launcher is still fanning out — Temporal
+// answers the query against both running and completed launcher executions,
+// and the handler is registered before the activity fan-out begins so the
+// list is always available. We deliberately rely on this rather than a
+// visibility STARTS_WITH query so the pipeline page sees the full burst
+// even if visibility hasn't caught up yet.
 func (h *Handler) fetchPipelineWorkflowIDs(
 	ctx context.Context, pipelineID string,
 ) ([]string, error) {
 	launcherID := fmt.Sprintf("image-pipeline-%s", pipelineID)
-	run := h.deps.Temporal.GetWorkflow(ctx, launcherID, "")
-	var result manifest.LaunchPipelinesResult
-	if err := run.Get(ctx, &result); err != nil {
+	val, err := h.deps.Temporal.QueryWorkflow(ctx, launcherID, "", workflows.GetWorkflowIDsQuery)
+	if err != nil {
 		return nil, err
 	}
-	return result.WorkflowIDs, nil
+	var ids []string
+	if err := val.Get(&ids); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 func (h *Handler) listWorkflows(

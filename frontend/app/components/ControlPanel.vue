@@ -81,12 +81,12 @@ async function startBurst() {
       : undefined;
     const res = await api.startWorkflows(images, runtime);
     const summary = res.runtime !== undefined
-      ? `Pipeline ${res.pipelineId} — ${images.length} workflows on ${RUNTIME_LABELS[res.runtime]}`
-      : `Pipeline ${res.pipelineId} — ${images.length} workflows`;
+      ? `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows on ${RUNTIME_LABELS[res.runtime]}`
+      : `Pipeline ${res.pipelineId} — ${res.workflowIds.length} workflows`;
     toast.success('Burst started', summary);
     // Seed the expected slot count so the gallery reserves space before the first poll lands.
     useState<number | null>(`pipeline:expectedCount:${res.pipelineId}`, () => null).value
-      = images.length;
+      = res.workflowIds.length;
     await navigateTo(`/pipelines/${res.pipelineId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

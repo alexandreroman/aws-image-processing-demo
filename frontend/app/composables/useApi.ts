@@ -20,6 +20,10 @@ export interface StartWorkflowsRequest {
 
 export interface StartWorkflowsResponse {
   pipelineId: string;
+  // Per-image workflow IDs the backend derived from the burst. Same format
+  // and order the launcher will use, so the UI can size itself before the
+  // first /api/pipelines poll lands.
+  workflowIds: string[];
   // Optional: the backend omits this field when no runtime registry is
   // configured (local dev), so the frontend can hide the selector.
   runtime?: RuntimeName;

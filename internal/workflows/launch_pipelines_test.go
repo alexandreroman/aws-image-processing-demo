@@ -3,7 +3,6 @@ package workflows_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -55,7 +54,7 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	require.NoError(t, env.GetWorkflowResult(&got))
 	require.Len(t, got.WorkflowIDs, len(imageIDs))
 	for i, id := range imageIDs {
-		require.Equal(t, fmt.Sprintf("image-pipeline-%s-%s", pipelineID, id), got.WorkflowIDs[i])
+		require.Equal(t, workflows.ProcessImageWorkflowID(pipelineID, id), got.WorkflowIDs[i])
 	}
 }
 
