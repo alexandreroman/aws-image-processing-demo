@@ -176,6 +176,7 @@ func runLambda(logger *slog.Logger) {
 		logger.Error("worker: dial Temporal for activities", "err", err)
 		os.Exit(1)
 	}
+	defer tc.Close()
 
 	// Lambda runs exactly one worker per function, so collapse to the first
 	// entry when TEMPORAL_TASK_QUEUE was set to a comma-separated list (as
@@ -226,10 +227,6 @@ func runLambda(logger *slog.Logger) {
 
 		registerAll(ctx, acts)
 
-		ctx.OnShutdown(func(context.Context) error {
-			tc.Close()
-			return nil
-		})
 		return nil
 	})
 }
