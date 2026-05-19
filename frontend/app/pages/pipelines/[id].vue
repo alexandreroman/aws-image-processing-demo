@@ -31,29 +31,29 @@ useHead(() => ({
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-    <div
-      v-if="error"
-      class="card border-rose-500/40 bg-rose-500/10 text-rose-200
-        px-4 py-3 text-sm"
-    >
-      <strong class="font-semibold text-rose-100">
-        Couldn't load pipeline:
-      </strong>
-      {{ error.message }}
-      <button
-        type="button"
-        class="ml-2 underline hover:text-rose-100"
-        @click="() => refresh()"
-      >
-        Retry
-      </button>
-    </div>
-
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div class="grid lg:grid-cols-12 gap-4">
-      <section class="lg:col-span-8">
+      <div class="lg:col-span-8 space-y-4">
+        <div
+          v-if="error"
+          class="card border-rose-500/40 bg-rose-500/10 text-rose-200
+            px-4 py-3 text-sm"
+        >
+          <strong class="font-semibold text-rose-100">
+            Couldn't load pipeline:
+          </strong>
+          {{ error.message }}
+          <button
+            type="button"
+            class="ml-2 underline hover:text-rose-100"
+            @click="() => refresh()"
+          >
+            Retry
+          </button>
+        </div>
+
         <Gallery :workflows="workflows" :expected-count="expectedCount" />
-      </section>
+      </div>
 
       <aside
         class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20"
