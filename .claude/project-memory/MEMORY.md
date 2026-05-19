@@ -17,3 +17,4 @@ in this directory.
 - [No per-image notifications](references/no_per_image_notifications.md) — never emit a toast per processed image; at most one end-of-burst toast; errors may still toast individually
 - [No workflow.GetVersion in ProcessImage workflows](references/workflow_no_versioning.md) — workflows are short-lived; rollouts ship code directly without versioning gates
 - [Worktree env symlinks](references/worktree_env_symlinks.md) — new git worktrees need both `.env` and `.env.local` symlinked from the main worktree, otherwise `make dev` is broken
+- [Cleanup recipe for orphan Temporal Worker Deployments](references/temporal_worker_deployment_cleanup.md) — `set-current-version --unversioned` first, then `delete-version --skip-drainage`, then `delete`
