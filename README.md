@@ -10,20 +10,24 @@ architects and developers.
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 > 🆕 **Highlights Temporal's new
-> [serverless workers on AWS Lambda](https://temporal.io/blog/introducing-temporal-serverless-workers-deploy-temporal-workers-to-aws-lambda).**
+> [Serverless Workers on AWS Lambda](https://temporal.io/blog/introducing-temporal-serverless-workers-deploy-temporal-workers-to-aws-lambda)**
+> (currently in **pre-release**).
+>
 > This demo deploys both worker runtimes side by
-> side — a long-running ECS Fargate worker and an
-> AWS Lambda worker — and lets you pick the runtime
-> **per burst** from the UI. The Lambda path uses
-> Temporal Cloud's recently shipped invoker model:
-> Temporal Cloud assumes an IAM role in your AWS
-> account and invokes the worker function on demand,
-> so there is **no worker process to keep alive
-> between activities**. That unlocks true
-> scale-to-zero, pay-per-invocation economics for
-> Temporal workloads. See the [Deployment](#deployment)
-> section for the full picture and the ECS-vs-Lambda
-> trade-offs.
+> side — a long-running ECS Fargate worker and a
+> Lambda worker — and lets you pick the runtime
+> **per burst** from the UI.
+>
+> The Lambda path uses Temporal Cloud's new invoker
+> model: Temporal Cloud assumes an IAM role in your
+> AWS account and invokes the worker function on
+> demand, so there is **no worker process to keep
+> alive between activities** — true scale-to-zero,
+> pay-per-invocation economics for Temporal
+> workloads.
+>
+> See the [Deployment](#deployment) section for the
+> full picture and the ECS-vs-Lambda trade-offs.
 
 ## Features
 
