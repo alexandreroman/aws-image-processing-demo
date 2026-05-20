@@ -9,7 +9,7 @@ const route = useRoute();
 
 const pipelineId = computed(() => String(route.params.id ?? ''));
 
-const { summary, workflows, durationMs, error, refresh } = usePipeline(pipelineId);
+const { summary, workflows, durationMs, loaded, error, refresh } = usePipeline(pipelineId);
 
 function formatSeconds(ms: number | null): string {
   return ms === null ? '…' : `${(ms / 1000).toFixed(1)}s`;
@@ -60,7 +60,7 @@ useHead(() => ({
       </div>
 
       <aside
-        class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20"
+        class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20 lg:[scrollbar-gutter:stable]"
       >
         <div class="grid grid-cols-2 gap-4">
           <article class="card p-4 animate-fade-in">
@@ -78,19 +78,39 @@ useHead(() => ({
               <template v-else>{{ workerCount }}</template>
             </p>
           </article>
-          <article class="card p-4 animate-fade-in">
-            <h2
-              class="stat-label"
-              title="Wall-clock time from the earliest ProcessImage start to the latest completion. Updates live while the pipeline is running."
-            >
-              Duration
-            </h2>
-            <p
-              class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100"
-              :aria-busy="durationMs === null ? 'true' : 'false'"
-            >
-              {{ formatSeconds(durationMs) }}
-            </p>
+          <article class="card p-4 animate-fade-in min-h-[5.5rem] relative">
+            <Transition name="duration-fade" mode="out-in">
+              <div v-if="durationMs !== null" key="done">
+                <h2
+                  class="stat-label"
+                  title="Wall-clock time from the earliest ProcessImage start to the latest completion."
+                >
+                  Duration
+                </h2>
+                <p class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100 leading-9">
+                  {{ formatSeconds(durationMs) }}
+                </p>
+              </div>
+              <div
+                v-else-if="loaded"
+                key="running"
+                class="absolute inset-0 flex items-center justify-center gap-2 pr-5"
+                role="status"
+                aria-label="Pipeline running, duration pending"
+              >
+                <span class="inline-block h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
+                <span class="font-mono font-semibold text-base text-ink-300">Running</span>
+              </div>
+              <div v-else key="loading">
+                <h2 class="stat-label invisible">Duration</h2>
+                <p
+                  class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100 leading-9"
+                  aria-busy="true"
+                >
+                  …
+                </p>
+              </div>
+            </Transition>
           </article>
         </div>
         <PipelineCharts :workflows="workflows" :summary="summary" />
@@ -98,3 +118,14 @@ useHead(() => ({
     </div>
   </div>
 </template>
+
+<style scoped>
+.duration-fade-enter-active,
+.duration-fade-leave-active {
+  transition: opacity 300ms ease;
+}
+.duration-fade-enter-from,
+.duration-fade-leave-to {
+  opacity: 0;
+}
+</style>

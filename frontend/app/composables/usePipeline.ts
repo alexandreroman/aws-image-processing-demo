@@ -8,12 +8,12 @@ import type { Pipeline, PipelineSummary, WorkflowItem } from './useApi';
 const POLL_FAST_MS = 1_000;
 const POLL_SLOW_MS = 2_000;
 const SLOW_AFTER_MS = 10_000;
-const TICK_MS = 100;
 
 export interface UsePipelineReturn {
   summary: ComputedRef<PipelineSummary>;
   workflows: ComputedRef<WorkflowItem[]>;
   durationMs: ComputedRef<number | null>;
+  loaded: ComputedRef<boolean>;
   error: Ref<Error | null>;
   refresh: () => Promise<void>;
 }
@@ -30,8 +30,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
 
   const pipeline = ref<Pipeline | null>(null);
   const error = ref<Error | null>(null);
-  const serverAnchorAt = ref<number | null>(null);
-  const now = ref(Date.now());
 
   const summary = computed<PipelineSummary>(
     () => pipeline.value?.summary ?? EMPTY_SUMMARY,
@@ -39,17 +37,14 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   const workflows = computed<WorkflowItem[]>(
     () => pipeline.value?.workflows ?? [],
   );
-  // Why: freeze on completedAt so the final reading matches the backend's
-  // CompletedAt - CreatedAt; otherwise re-anchor each poll to avoid drift.
-  const durationMs = computed<number | null>(() => {
+  const isDone = computed<boolean>(() => {
     const p = pipeline.value;
-    if (!p) return null;
-    if (p.completedAt) return p.durationMs ?? null;
-    if (p.durationMs != null && serverAnchorAt.value != null) {
-      return p.durationMs + (now.value - serverAnchorAt.value);
-    }
-    return null;
+    if (!p) return false;
+    if (p.completedAt) return true;
+    return p.summary.total > 0 && p.summary.running === 0;
   });
+  const durationMs = computed<number | null>(() => (isDone.value ? pipeline.value?.durationMs ?? null : null));
+  const loaded = computed<boolean>(() => pipeline.value !== null);
 
   // Why: backend latency varies wildly under load, so out-of-order responses can
   // overwrite fresh state with stale snapshots and wedge the page after the
@@ -71,7 +66,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
       }
       lastAppliedSeq = seq;
       pipeline.value = result;
-      serverAnchorAt.value = Date.now();
       error.value = null;
     } catch (err) {
       if (seq <= lastAppliedSeq) {
@@ -109,47 +103,34 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     resume();
   }
 
-  const { pause: pauseTick, resume: resumeTick } = useIntervalFn(
-    () => {
-      now.value = Date.now();
-    },
-    TICK_MS,
-    { immediate: false, immediateCallback: false },
-  );
-
-  // Stop polling automatically when everything is done.
-  watch(summary, (s) => {
-    if (s.total > 0 && s.running === 0) {
+  watch(isDone, (done) => {
+    if (done) {
       pause();
-      pauseTick();
     }
-  });
+  }, { immediate: true });
 
   watch(
     () => toValue(pipelineId),
     (id) => {
-      serverAnchorAt.value = null;
       if (!id) {
         pause();
-        pauseTick();
         return;
       }
       void refresh();
       startPolling();
-      resumeTick();
     },
     { immediate: true },
   );
 
   onUnmounted(() => {
     pause();
-    pauseTick();
   });
 
   return {
     summary,
     workflows,
     durationMs,
+    loaded,
     error,
     refresh,
   };
