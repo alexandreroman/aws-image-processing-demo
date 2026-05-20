@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newTestHandler builds a Handler with only the fields handleStart needs
@@ -215,4 +216,34 @@ func TestHandleStart_LocalDevPath(t *testing.T) {
 			t.Fatalf("error %q does not mention the key prefix", gotErr)
 		}
 	})
+}
+
+func TestPipelineTiming_AllCompleted(t *testing.T) {
+	created := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
+	latest := created.Add(3500 * time.Millisecond)
+	now := created.Add(time.Hour)
+
+	completedAt, durationMs := pipelineTiming(created, latest, 0, 4, now)
+	if completedAt == nil {
+		t.Fatal("completedAt: got nil, want non-nil")
+	}
+	if !completedAt.Equal(latest) {
+		t.Fatalf("completedAt: got %s, want %s", completedAt, latest)
+	}
+	if durationMs == nil || *durationMs != 3500 {
+		t.Fatalf("durationMs: got %v, want 3500", durationMs)
+	}
+}
+
+func TestPipelineTiming_SomeRunning(t *testing.T) {
+	created := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
+	now := created.Add(1200 * time.Millisecond)
+
+	completedAt, durationMs := pipelineTiming(created, time.Time{}, 2, 4, now)
+	if completedAt != nil {
+		t.Fatalf("completedAt: got %s, want nil", completedAt)
+	}
+	if durationMs == nil || *durationMs != 1200 {
+		t.Fatalf("durationMs: got %v, want 1200", durationMs)
+	}
 }

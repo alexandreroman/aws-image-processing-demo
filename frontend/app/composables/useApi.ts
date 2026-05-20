@@ -74,6 +74,9 @@ export interface Pipeline {
   pipelineId: string;
   summary: PipelineSummary;
   workflows: WorkflowItem[];
+  createdAt?: string;
+  completedAt?: string;
+  durationMs?: number;
 }
 
 export interface Stats {

@@ -291,11 +291,13 @@ type pipelineSummary struct {
 }
 
 type pipelineResponse struct {
-	PipelineID string             `json:"pipelineId"`
-	CreatedAt  time.Time          `json:"createdAt,omitempty"`
-	ImageCount int                `json:"imageCount"`
-	Summary    pipelineSummary    `json:"summary"`
-	Workflows  []pipelineWorkflow `json:"workflows"`
+	PipelineID  string             `json:"pipelineId"`
+	CreatedAt   time.Time          `json:"createdAt,omitempty"`
+	CompletedAt *time.Time         `json:"completedAt,omitempty"`
+	DurationMs  *int64             `json:"durationMs,omitempty"`
+	ImageCount  int                `json:"imageCount"`
+	Summary     pipelineSummary    `json:"summary"`
+	Workflows   []pipelineWorkflow `json:"workflows"`
 }
 
 func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +340,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	currentActivityLookups := 0
 	manifestQueryLookups := 0
 	seen := make(map[string]bool, len(executions))
+	var latestClose time.Time
 	for _, exec := range executions {
 		wf := pipelineWorkflow{
 			WorkflowID: exec.GetExecution().GetWorkflowId(),
@@ -354,6 +357,9 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		if t := exec.GetCloseTime(); t != nil {
 			closed := t.AsTime()
 			wf.CompletedAt = &closed
+			if closed.After(latestClose) {
+				latestClose = closed
+			}
 		}
 
 		// DynamoDB is authoritative once the final StoreManifest write lands,
@@ -412,8 +418,29 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		resp.Summary.Running++
 	}
 	resp.Summary.Total = len(workflowIDs)
+	resp.CompletedAt, resp.DurationMs = pipelineTiming(
+		resp.CreatedAt, latestClose, resp.Summary.Running, len(resp.Workflows), time.Now(),
+	)
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// pipelineTiming returns the pipeline-level completedAt and duration.
+// completedAt is set only when every child workflow has reached a terminal
+// status (running == 0) and at least one workflow exists.
+func pipelineTiming(
+	createdAt, latestClose time.Time, running, total int, now time.Time,
+) (*time.Time, *int64) {
+	if createdAt.IsZero() {
+		return nil, nil
+	}
+	if total > 0 && running == 0 && !latestClose.IsZero() {
+		closed := latestClose
+		d := closed.Sub(createdAt).Milliseconds()
+		return &closed, &d
+	}
+	d := now.Sub(createdAt).Milliseconds()
+	return nil, &d
 }
 
 // fetchPipelineWorkflowIDs returns the canonical list of per-image workflow
