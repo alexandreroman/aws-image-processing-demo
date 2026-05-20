@@ -29,6 +29,8 @@ architects and developers.
 > See the [Deployment](#deployment) section for the
 > full picture and the ECS-vs-Lambda trade-offs.
 
+https://github.com/user-attachments/assets/f57f4f0d-9b3b-49a9-9379-89299062c6d5
+
 ## Features
 
 - **Bursty image pipeline** — pick N images from the
