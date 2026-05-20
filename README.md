@@ -39,9 +39,9 @@ https://github.com/user-attachments/assets/f57f4f0d-9b3b-49a9-9379-89299062c6d5
   watermark × 3, persist).
 - **Durable execution** — kill the worker mid-burst;
   Temporal Cloud keeps the workflows alive and a new
-  Fargate task resumes where the previous one left off.
+  task resumes where the previous one left off.
 - **AI in the loop** — each image is described and
-  labeled by Claude Haiku 4.5 vision.
+  labeled by Claude vision.
 - **Shareable pipelines** — every burst gets a pipeline
   ID, threaded through the URL, workflow IDs, S3
   prefixes, and DynamoDB items.
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/f57f4f0d-9b3b-49a9-9379-89299062c6d5
 
 - **Go** 1.26 or newer
 - **Node.js** 24 LTS (or newer) and **pnpm** 9 (or newer)
-- **Docker** and **Docker Compose**
+- **Docker** and **Docker Compose** (for development)
 - **OpenTofu** 1.8 or newer (for AWS deployment)
 - **AWS CLI v2** (for AWS deployment)
 - **Temporal CLI** — `brew install temporal`
