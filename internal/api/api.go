@@ -561,8 +561,29 @@ func (h *Handler) fetchManifests(
 
 // --- helpers ---------------------------------------------------------------
 
+// statusName maps a Temporal status to the frontend's WorkflowStatus union.
+// We can't use enumspb.WorkflowExecutionStatus.String() — it returns
+// CamelCase ("Running") rather than the SCREAMING_SNAKE_CASE the frontend
+// expects.
 func statusName(s enumspb.WorkflowExecutionStatus) string {
-	return strings.TrimPrefix(s.String(), "WORKFLOW_EXECUTION_STATUS_")
+	switch s {
+	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:
+		return "RUNNING"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		return "COMPLETED"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_FAILED:
+		return "FAILED"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_CANCELED:
+		return "CANCELED"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED:
+		return "TERMINATED"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW:
+		return "CONTINUED_AS_NEW"
+	case enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
+		return "TIMED_OUT"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
