@@ -132,9 +132,9 @@ resource "aws_lambda_function" "worker" {
   architectures = ["arm64"]
   package_type  = "Zip"
 
-  # 2048 MB matches the ECS task's memory headroom; resize/watermark
-  # activities work on full-resolution images so undersizing is risky.
-  memory_size = 2048
+  # Measured peak ~89 MB leaves ~11x headroom at 1024 MB; not lower because
+  # Lambda CPU scales with memory and resize activities are CPU-bound.
+  memory_size = 1024
   timeout     = 600
   publish     = true
 
