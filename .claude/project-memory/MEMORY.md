@@ -20,3 +20,4 @@ in this directory.
 - [Cleanup recipe for orphan Temporal Worker Deployments](references/temporal_worker_deployment_cleanup.md) — `set-current-version --unversioned` first, then `delete-version --skip-drainage`, then `delete`
 - [Temporal WorkflowExecutionStatus.String() pitfall](references/temporal_status_enum_string.md) — `.String()` returns CamelCase ("Running"), not the SCREAMING_SNAKE constant; keep the explicit `statusName` switch
 - [Keep WORKER_MAX_CONCURRENT_ACTIVITIES env knob](references/worker_max_concurrent_activities.md) — deliberate demo dial for burst/autoscaling/backpressure; do not prune as dead config
+- [Temporal Cloud metric task_type dimension casing](references/temporal_metric_task_type_casing.md) — ADOT-republished `task_type` values are capitalized (`Workflow`/`Activity`); lowercase breaks backlog alarms silently

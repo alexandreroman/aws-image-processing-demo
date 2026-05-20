@@ -254,8 +254,8 @@ resource "aws_ecs_service" "worker" {
 # OpenMetrics endpoint and republishes
 # temporal_cloud_v1_approximate_backlog_count in the TemporalDemo/Worker
 # namespace, dimensioned by `temporal_task_queue` and `task_type`. Each
-# alarm uses Metric Math to sum the two task_type series (workflow +
-# activity) for our task queue, since a worker pulls from both.
+# alarm uses Metric Math to sum the two task_type series (Workflow +
+# Activity) for our task queue, since a worker pulls from both.
 #
 # End-to-end reactivity is bounded by Temporal Cloud's 3-minute aggregation
 # latency plus the collector's 60 s scrape interval; expect a ~4–5 min
@@ -296,7 +296,7 @@ resource "aws_cloudwatch_metric_alarm" "backlog_high" {
       stat        = "Maximum"
       dimensions = {
         temporal_task_queue = var.temporal_task_queue
-        task_type           = "workflow"
+        task_type           = "Workflow"
       }
     }
   }
@@ -310,7 +310,7 @@ resource "aws_cloudwatch_metric_alarm" "backlog_high" {
       stat        = "Maximum"
       dimensions = {
         temporal_task_queue = var.temporal_task_queue
-        task_type           = "activity"
+        task_type           = "Activity"
       }
     }
   }
@@ -346,7 +346,7 @@ resource "aws_cloudwatch_metric_alarm" "backlog_low" {
       stat        = "Maximum"
       dimensions = {
         temporal_task_queue = var.temporal_task_queue
-        task_type           = "workflow"
+        task_type           = "Workflow"
       }
     }
   }
@@ -360,7 +360,7 @@ resource "aws_cloudwatch_metric_alarm" "backlog_low" {
       stat        = "Maximum"
       dimensions = {
         temporal_task_queue = var.temporal_task_queue
-        task_type           = "activity"
+        task_type           = "Activity"
       }
     }
   }
