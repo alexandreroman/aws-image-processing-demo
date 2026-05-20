@@ -9,6 +9,22 @@ architects and developers.
 [![CI](https://github.com/alexandreroman/aws-image-processing-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/alexandreroman/aws-image-processing-demo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
+> 🆕 **Highlights Temporal's new
+> [serverless workers on AWS Lambda](https://temporal.io/blog/introducing-temporal-serverless-workers-deploy-temporal-workers-to-aws-lambda).**
+> This demo deploys both worker runtimes side by
+> side — a long-running ECS Fargate worker and an
+> AWS Lambda worker — and lets you pick the runtime
+> **per burst** from the UI. The Lambda path uses
+> Temporal Cloud's recently shipped invoker model:
+> Temporal Cloud assumes an IAM role in your AWS
+> account and invokes the worker function on demand,
+> so there is **no worker process to keep alive
+> between activities**. That unlocks true
+> scale-to-zero, pay-per-invocation economics for
+> Temporal workloads. See the [Deployment](#deployment)
+> section for the full picture and the ECS-vs-Lambda
+> trade-offs.
+
 ## Features
 
 - **Bursty image pipeline** — pick N images from the
@@ -20,10 +36,6 @@ architects and developers.
   Fargate task resumes where the previous one left off.
 - **AI in the loop** — each image is described and
   labeled by Claude Haiku 4.5 vision.
-- **Curated sample library** — a fixed set of images
-  is pre-uploaded under `samples/` in the bucket; the
-  UI picks from that set, so no user upload path is
-  exposed.
 - **Shareable pipelines** — every burst gets a pipeline
   ID, threaded through the URL, workflow IDs, S3
   prefixes, and DynamoDB items.
@@ -172,22 +184,22 @@ load only `.env`. Both files are gitignored — copy from
 
 **Canonical (`.env`)** — required for `make deploy`:
 
-| Variable                | Description                                          | Default              |
-| ----------------------- | ---------------------------------------------------- | -------------------- |
-| `TEMPORAL_ADDRESS`      | Temporal Cloud gRPC endpoint                         | (required)           |
-| `TEMPORAL_NAMESPACE`    | Temporal Cloud namespace                             | (required)           |
-| `TEMPORAL_TLS_CERT`     | Path to mTLS client cert (PEM)                       | (required for Cloud) |
-| `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
-| `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role (see note below) | `aws-image-processing-demo` |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
-| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role. Enables ECS Fargate worker autoscaling only — Lambda scales natively and is unaffected. | (empty = ECS autoscaling disabled) |
-| `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
-| `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
-| `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare DNS token; required only when `DOMAIN_NAME` is set | (empty)     |
-| `CLOUDFLARE_ZONE_ID`    | Cloudflare zone ID for the demo domain               | (empty)              |
-| `WORKER_IMAGE`          | Override the Fargate worker image                    | (GHCR `:latest`)     |
-| `WORKER_MAX_CONCURRENT_ACTIVITIES` | Max activities a worker executes concurrently. Lower values trigger autoscaling earlier. | `4` |
+| Variable                             | Description                                                  | Default                            |
+| ------------------------------------ | ------------------------------------------------------------ | ---------------------------------- |
+| `TEMPORAL_ADDRESS`                   | Temporal Cloud gRPC endpoint                                 | (required)                         |
+| `TEMPORAL_NAMESPACE`                 | Temporal Cloud namespace                                     | (required)                         |
+| `TEMPORAL_TLS_CERT`                  | Path to mTLS client cert (PEM)                               | (required for Cloud)               |
+| `TEMPORAL_TLS_KEY`                   | Path to mTLS client key (PEM)                                | (required for Cloud)               |
+| `TEMPORAL_CLOUD_EXTERNAL_ID`         | External ID for Temporal Cloud → AWS IAM (see note)          | `aws-image-processing-demo`        |
+| `ANTHROPIC_API_KEY`                  | Anthropic API key                                            | (required)                         |
+| `TEMPORAL_METRICS_API_KEY`           | Metrics-Read-Only API key (ECS autoscaling, see below)       | (empty = ECS autoscaling disabled) |
+| `AWS_REGION`                         | AWS region for the deployment                                | `eu-west-1`                        |
+| `DOMAIN_NAME`                        | Custom-domain root; empty uses the CloudFront default        | (empty)                            |
+| `SUBDOMAIN`                          | Subdomain when `DOMAIN_NAME` is set                          | `demo`                             |
+| `CLOUDFLARE_API_TOKEN`               | Cloudflare DNS token (only with `DOMAIN_NAME`)               | (empty)                            |
+| `CLOUDFLARE_ZONE_ID`                 | Cloudflare zone ID for the demo domain                       | (empty)                            |
+| `WORKER_IMAGE`                       | Override the Fargate worker image                            | (GHCR `:latest`)                   |
+| `WORKER_MAX_CONCURRENT_ACTIVITIES`   | Max activities a worker runs concurrently                    | `4`                                |
 
 > **Note — `TEMPORAL_CLOUD_EXTERNAL_ID`.** This is the
 > `sts:ExternalId` trust-condition value Temporal Cloud
@@ -200,15 +212,15 @@ load only `.env`. Both files are gitignored — copy from
 
 **Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make infra-up`, `make test`, `make check`):
 
-| Variable                | Description                                          | Value                |
-| ----------------------- | ---------------------------------------------------- | -------------------- |
-| `AWS_ENDPOINT_URL`      | Point the AWS SDK at the local Moto Server           | `http://localhost:4566` |
-| `IMAGES_BUCKET`         | Fixed bucket name used by the dev stack              | `aws-image-processing-demo-images-local` |
-| `IMAGES_TABLE`          | Fixed DynamoDB table name used by the dev stack      | `aws-image-processing-demo-images-local` |
-| `TEMPORAL_ADDRESS`      | Override Temporal Cloud with the local dev server    | `localhost:7233` (optional, commented by default) |
-| `TEMPORAL_NAMESPACE`    | Namespace on the local dev server                    | `default` (optional) |
-| `TEMPORAL_TLS_CERT`     | Disable mTLS for the local dev server                | empty (optional)     |
-| `TEMPORAL_TLS_KEY`      | Disable mTLS for the local dev server                | empty (optional)     |
+| Variable             | Description                                       | Value                                              |
+| -------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `AWS_ENDPOINT_URL`   | Point the AWS SDK at the local Moto Server        | `http://localhost:4566`                            |
+| `IMAGES_BUCKET`      | Fixed bucket name used by the dev stack           | `aws-image-processing-demo-images-local`           |
+| `IMAGES_TABLE`       | Fixed DynamoDB table name used by the dev stack   | `aws-image-processing-demo-images-local`           |
+| `TEMPORAL_ADDRESS`   | Override Temporal Cloud with the local dev server | `localhost:7233` (optional, commented by default)  |
+| `TEMPORAL_NAMESPACE` | Namespace on the local dev server                 | `default` (optional)                               |
+| `TEMPORAL_TLS_CERT`  | Disable mTLS for the local dev server             | empty (optional)                                   |
+| `TEMPORAL_TLS_KEY`   | Disable mTLS for the local dev server             | empty (optional)                                   |
 
 In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants directly — `.env.local` is not consulted. Only `ANTHROPIC_API_KEY` is interpolated from `.env` at compose-time.
 
@@ -255,15 +267,90 @@ and `<imageId>` are short 8-char hex IDs) so the Temporal UI
 can filter a whole burst with an `image-pipeline-<pipelineId>-`
 prefix search.
 
-### Deployment topology
+### Modules
 
-Both worker runtimes (ECS Fargate and AWS Lambda) are
-deployed side by side by `make deploy`. The UI's
-control panel exposes a selector, and the runtime is
-picked **per burst** — see
-[Deployment modes](#deployment-modes) for the
-trade-offs. The two diagrams below show the same
-ingress path with each runtime in turn.
+| Module                     | Description                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `cmd/worker`               | Temporal worker (host / Docker / ECS Fargate / AWS Lambda); `/healthz` on `:8001` in long-running modes |
+| `cmd/backend`              | Backend — Lambda or local HTTP server on `:8000`                                                       |
+| `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows                                                         |
+| `internal/activities`      | Resize, describe, watermark, store activities                                                          |
+| `internal/manifest`        | Shared manifest types and canonical size list                                                          |
+| `internal/awsclient`       | AWS SDK config (Moto-aware)                                                                            |
+| `internal/anthropicclient` | Anthropic API wrapper                                                                                  |
+| `internal/temporalclient`  | Temporal SDK client (mTLS-aware for Temporal Cloud)                                                    |
+| `internal/api`             | HTTP handlers — `/api/*` plus `/healthz` at the root                                                   |
+| `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                                                                   |
+| `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                                                              |
+| `scripts`                  | Deploy, teardown, and sample-upload helpers                                                            |
+
+## Deployment
+
+The worker is a single Go binary that runs in four
+execution contexts from the same source — the context
+is selected by the environment, not by build flags. In
+prod, `make deploy` provisions both the ECS Fargate
+and the AWS Lambda worker side by side: it builds the
+worker container for ECS, packages `build/worker.zip`
+for Lambda, and applies both Tofu stacks in one go.
+
+| Context     | How to run                                | Process model         | Key trade-off                                       |
+| ----------- | ----------------------------------------- | --------------------- | --------------------------------------------------- |
+| Host        | `make dev`                                | Long-running poll     | Fastest iteration; runs on the developer machine.   |
+| Docker      | `make app-up`                             | Long-running poll     | Containerized parity with prod; single host.        |
+| ECS Fargate | `make deploy` (deployed alongside Lambda) | Long-running poll     | Warm cache, stable concurrency; pays even at idle.  |
+| AWS Lambda  | `make deploy` (deployed alongside ECS)    | Per-invocation worker | Scale-to-zero, pay-per-invocation; cold-start cost. |
+
+The first three contexts share the same long-running
+code path: the worker keeps an open gRPC long-poll
+against Temporal and exposes `/healthz` on `:8001` for
+the container orchestrator. Lambda mode is detected at
+startup via the presence of `AWS_LAMBDA_FUNCTION_NAME`
+(always set by the Lambda runtime); the binary then
+hands control to
+`go.temporal.io/sdk/contrib/aws/lambdaworker`, which
+spins up a worker per invocation and shuts it down
+when the invocation ends.
+
+### Per-burst runtime selection
+
+Because both runtimes are always deployed, the runtime
+choice moves to the API layer and is made **per
+burst**. The backend exposes the available runtimes
+via `GET /api/runtimes`; the UI's control panel shows
+a selector, and `POST /api/workflows/start` accepts a
+`runtime` field that picks the matching Temporal task
+queue (`image-processing-ecs` or
+`image-processing-lambda`). The starter activity
+schedules each `ProcessImage` on the same task queue
+it was itself scheduled on (read from
+`activity.GetInfo`), so a whole burst stays on a
+single runtime end-to-end.
+
+The selector is **AWS-only**: it appears when Tofu has
+set `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
+on the deployed backend Lambda. In local dev (`make dev`,
+`make app-up`) those vars are unset, so `GET /api/runtimes`
+returns `[]`, the UI hides the selector, and the single
+worker process polls one legacy queue (`image-processing`).
+
+The classic trade-off still applies, just per burst
+rather than per deploy. ECS Fargate keeps a hot
+in-process cache of decoded workflow histories and
+offers stable concurrency, at the cost of paying for
+an always-on task. AWS Lambda scales to zero and
+charges only when invoked, but each new container
+pays a cold-start replay cost as the workflow history
+is rebuilt from scratch. For dev or demo work, pick
+ECS Fargate for predictable behavior; for spiky or
+low-volume workloads where cost matters more than
+steady-state latency, Lambda is the attractive
+option.
+
+### Request flow per runtime
+
+The two diagrams below show the same ingress path with
+each runtime in turn.
 
 **ECS Fargate runtime** — long-running worker that
 long-polls Temporal Cloud.
@@ -336,10 +423,23 @@ sequenceDiagram
     BE-->>User: manifest
 ```
 
-The same shape applies locally in `make app-up`: Caddy
-plays the role of CloudFront, fronting both the static
-Nuxt SSG bundle and the API. There is a single
-long-running worker — no runtime selector.
+The Temporal-Cloud-assumes-AWS-role flow for the Lambda
+runtime is wired by two Tofu variables:
+`temporal_cloud_aws_account_ids` (defaulted to the 5
+Temporal Cloud invoker cells published in their
+CloudFormation template) and `temporal_cloud_external_id`.
+When the external ID is set, an IAM role is created with
+`lambda:InvokeFunction` + `lambda:GetFunction` and an
+`sts:ExternalId` trust condition so any of the 5 Temporal
+Cloud cells can assume it (via the `wci-lambda-invoke`
+role) to invoke the Lambda worker.
+
+### Local mirror (`make app-up`)
+
+The same shape applies locally: Caddy plays the role
+of CloudFront, fronting both the static Nuxt SSG bundle
+and the API. There is a single long-running worker —
+no runtime selector.
 
 ```mermaid
 sequenceDiagram
@@ -373,84 +473,6 @@ sequenceDiagram
     BE->>DDB: Query
     BE-->>Browser: manifest
 ```
-
-### Modules
-
-| Module                     | Description                                              |
-| -------------------------- | -------------------------------------------------------- |
-| `cmd/worker`               | Temporal worker (host / Docker / ECS Fargate / AWS Lambda); `/healthz` on `:8001` in long-running modes |
-| `cmd/backend`              | Backend — Lambda or local HTTP server on `:8000`         |
-| `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows           |
-| `internal/activities`      | Resize, describe, watermark, store activities            |
-| `internal/manifest`        | Shared manifest types and canonical size list            |
-| `internal/awsclient`       | AWS SDK config (Moto-aware)                              |
-| `internal/anthropicclient` | Anthropic API wrapper                                    |
-| `internal/temporalclient`  | Temporal SDK client (mTLS-aware for Temporal Cloud)      |
-| `internal/api`             | HTTP handlers — `/api/*` plus `/healthz` at the root     |
-| `frontend`                 | Nuxt 4 SSG frontend (Tailwind, pnpm)                     |
-| `infra`                    | OpenTofu modules for AWS + Cloudflare DNS                |
-| `scripts`                  | Deploy, teardown, and sample-upload helpers              |
-
-## Deployment modes
-
-The worker is a single Go binary that runs in four
-execution contexts from the same source — the context
-is selected by the environment, not by build flags. In
-prod, `make deploy` provisions both the ECS Fargate
-and the AWS Lambda worker side by side: it builds the
-worker container for ECS, packages `build/worker.zip`
-for Lambda, and applies both Tofu stacks in one go.
-
-| Context         | How to run                                | Process model         | Key trade-off                                       |
-| --------------- | ----------------------------------------- | --------------------- | --------------------------------------------------- |
-| Host            | `make dev`                                | Long-running poll     | Fastest iteration; runs on the developer machine.   |
-| Docker          | `make app-up`                             | Long-running poll     | Containerized parity with prod; single host.        |
-| ECS Fargate     | `make deploy` (deployed alongside Lambda) | Long-running poll     | Warm cache, stable concurrency; pays even at idle.  |
-| AWS Lambda      | `make deploy` (deployed alongside ECS)    | Per-invocation worker | Scale-to-zero, pay-per-invocation; cold-start cost. |
-
-The first three contexts share the same long-running
-code path: the worker keeps an open gRPC long-poll
-against Temporal and exposes `/healthz` on `:8001` for
-the container orchestrator. Lambda mode is detected at
-startup via the presence of `AWS_LAMBDA_FUNCTION_NAME`
-(always set by the Lambda runtime); the binary then
-hands control to
-`go.temporal.io/sdk/contrib/aws/lambdaworker`, which
-spins up a worker per invocation and shuts it down
-when the invocation ends.
-
-Because both runtimes are always deployed, the runtime
-choice moves to the API layer and is made **per
-burst**. The backend exposes the available runtimes
-via `GET /api/runtimes`; the UI's control panel shows
-a selector, and `POST /api/workflows/start` accepts a
-`runtime` field that picks the matching Temporal task
-queue (`image-processing-ecs` or
-`image-processing-lambda`). The starter activity
-schedules each `ProcessImage` on the same task queue
-it was itself scheduled on (read from
-`activity.GetInfo`), so a whole burst stays on a
-single runtime end-to-end.
-
-The selector is **AWS-only**: it appears when Tofu has
-set `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
-on the deployed backend Lambda. In local dev (`make dev`,
-`make app-up`) those vars are unset, so `GET /api/runtimes`
-returns `[]`, the UI hides the selector, and the single
-worker process polls one legacy queue (`image-processing`).
-
-The classic trade-off still applies, just per burst
-rather than per deploy. ECS Fargate keeps a hot
-in-process cache of decoded workflow histories and
-offers stable concurrency, at the cost of paying for
-an always-on task. AWS Lambda scales to zero and
-charges only when invoked, but each new container
-pays a cold-start replay cost as the workflow history
-is rebuilt from scratch. For dev or demo work, pick
-ECS Fargate for predictable behavior; for spiky or
-low-volume workloads where cost matters more than
-steady-state latency, Lambda is the attractive
-option.
 
 ### ECS worker autoscaling
 
@@ -513,17 +535,6 @@ of images).
 in `eu-west-1`. The zero-code, all-config architecture
 uses the supported public Temporal Cloud OpenMetrics
 surface end-to-end.
-
-The Temporal-Cloud-assumes-AWS-role flow for the Lambda
-runtime is wired by two Tofu variables:
-`temporal_cloud_aws_account_ids` (defaulted to the 5
-Temporal Cloud invoker cells published in their
-CloudFormation template) and `temporal_cloud_external_id`.
-When the external ID is set, an IAM role is created with
-`lambda:InvokeFunction` + `lambda:GetFunction` and an
-`sts:ExternalId` trust condition so any of the 5 Temporal
-Cloud cells can assume it (via the `wci-lambda-invoke`
-role) to invoke the Lambda worker.
 
 ## Contributing
 
