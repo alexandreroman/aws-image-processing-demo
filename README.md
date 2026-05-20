@@ -11,16 +11,19 @@ architects and developers.
 
 ## Features
 
-- **Bursty image pipeline** — upload N images, watch
-  Temporal fan them out into 8 activities per image
-  (resize × 3, describe, watermark × 3, persist).
+- **Bursty image pipeline** — pick N images from the
+  curated sample set, watch Temporal fan them out into
+  8 activities per image (resize × 3, describe,
+  watermark × 3, persist).
 - **Durable execution** — kill the worker mid-burst;
   Temporal Cloud keeps the workflows alive and a new
   Fargate task resumes where the previous one left off.
 - **AI in the loop** — each image is described and
   labeled by Claude Haiku 4.5 vision.
-- **Direct-to-S3 uploads** — the backend signs PUT
-  URLs; bytes never touch the API.
+- **Curated sample library** — a fixed set of images
+  is pre-uploaded under `samples/` in the bucket; the
+  UI picks from that set, so no user upload path is
+  exposed.
 - **Shareable pipelines** — every burst gets a pipeline
   ID, threaded through the URL, workflow IDs, S3
   prefixes, and DynamoDB items.
@@ -37,11 +40,13 @@ architects and developers.
 - **AWS CLI v2** (for AWS deployment)
 - **Temporal CLI** — `brew install temporal`
 - An **Anthropic API key** — used in both local dev
-  and production (Moto Server does not mock Bedrock)
+  and production ([Moto Server](https://github.com/getmoto/moto)
+  does not mock Bedrock)
 
-For AWS deployment you also need an AWS account in
-`eu-west-1`, plus a Cloudflare account and API token
-if you want a custom domain.
+For AWS deployment you also need an AWS account
+(defaults to `eu-west-1`, override via `AWS_REGION`),
+plus a Cloudflare account and API token if you want
+a custom domain.
 
 ## Getting Started
 
@@ -132,7 +137,7 @@ GHCR by a GitHub Actions workflow on every push to
 # Configure secrets for deployment
 cp .env.example .env
 # edit .env — set TEMPORAL_*, ANTHROPIC_API_KEY, paths to Temporal Cloud certs.
-# AWS auth comes from your CLI profile (`aws sts get-caller-identity`).
+# AWS auth comes from your CLI profile.
 
 make deploy
 # runs: scripts/deploy.sh
@@ -173,10 +178,9 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_NAMESPACE`    | Temporal Cloud namespace                             | (required)           |
 | `TEMPORAL_TLS_CERT`     | Path to mTLS client cert (PEM)                       | (required for Cloud) |
 | `TEMPORAL_TLS_KEY`      | Path to mTLS client key (PEM)                        | (required for Cloud) |
-| `TEMPORAL_TASK_QUEUE`   | Worker task queue. Consumed at every layer: host-mode dev (worker + backend), ECS, and Lambda (passed through by Tofu). | `image-processing` |
-| `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role | `aws-image-processing-demo` |
+| `TEMPORAL_CLOUD_EXTERNAL_ID`    | External ID Temporal Cloud presents when assuming the invoker role (see note below) | `aws-image-processing-demo` |
 | `ANTHROPIC_API_KEY`     | Anthropic API key                                    | (required)           |
-| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role | (empty = autoscaling disabled) |
+| `TEMPORAL_METRICS_API_KEY` | Temporal Cloud service-account API key with the Metrics Read-Only role. Enables ECS Fargate worker autoscaling only — Lambda scales natively and is unaffected. | (empty = ECS autoscaling disabled) |
 | `AWS_REGION`            | AWS region for the deployment                        | `eu-west-1`          |
 | `DOMAIN_NAME`           | Custom-domain root (e.g. `example.com`); empty = use the default `*.cloudfront.net` hostname | (empty) |
 | `SUBDOMAIN`             | Subdomain when `DOMAIN_NAME` is set                  | `demo`               |
@@ -185,13 +189,20 @@ load only `.env`. Both files are gitignored — copy from
 | `WORKER_IMAGE`          | Override the Fargate worker image                    | (GHCR `:latest`)     |
 | `WORKER_MAX_CONCURRENT_ACTIVITIES` | Max activities a worker executes concurrently. Lower values trigger autoscaling earlier. | `4` |
 
+> **Note — `TEMPORAL_CLOUD_EXTERNAL_ID`.** This is the
+> `sts:ExternalId` trust-condition value Temporal Cloud
+> must present when assuming the `wci-lambda-invoke`
+> IAM role to invoke the Lambda worker. It acts as a
+> shared secret tying your Temporal Cloud namespace to
+> this AWS account — set it to a value known only to
+> you and your namespace. Leaving it empty disables the
+> Lambda invoker role (ECS-only deploy).
+
 **Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make infra-up`, `make test`, `make check`):
 
 | Variable                | Description                                          | Value                |
 | ----------------------- | ---------------------------------------------------- | -------------------- |
 | `AWS_ENDPOINT_URL`      | Point the AWS SDK at the local Moto Server           | `http://localhost:4566` |
-| `AWS_ACCESS_KEY_ID`     | Moto's dummy access key                              | `test`               |
-| `AWS_SECRET_ACCESS_KEY` | Moto's dummy secret                                  | `test`               |
 | `IMAGES_BUCKET`         | Fixed bucket name used by the dev stack              | `aws-image-processing-demo-images-local` |
 | `IMAGES_TABLE`          | Fixed DynamoDB table name used by the dev stack      | `aws-image-processing-demo-images-local` |
 | `TEMPORAL_ADDRESS`      | Override Temporal Cloud with the local dev server    | `localhost:7233` (optional, commented by default) |
@@ -203,54 +214,165 @@ In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants 
 
 ## Architecture
 
-```mermaid
-graph TD
-    User -->|POST /api/*| CF[CloudFront]
-    CF -->|/api/*| APIGW[API Gateway]
-    APIGW --> BE[Backend Lambda]
-    CF -->|/images/*| S3
-    CF -->|/*| FE[(S3 Nuxt SSG)]
-    BE -->|StartWorkflow / Query| TC[Temporal Cloud]
-    BE --> DDB[(DynamoDB metadata)]
-    Worker[ECS Fargate worker] -->|long-poll| TC
-    Worker --> S3
-    Worker --> DDB
-    Worker --> Anthropic[Anthropic API]
-```
+### Workflow
 
-The same shape applies locally in `make app-up`: Caddy
-plays the role of CloudFront, fronting both the static
-Nuxt SSG bundle and the API.
-
-```mermaid
-graph TD
-    Browser -->|GET /, /api/*, /images/*| Caddy
-    Caddy -->|/| StaticSSG[(Nuxt SSG files)]
-    Caddy -->|/api/*| Backend
-    Caddy -->|/images/*| Moto[(Moto S3)]
-    Backend -->|StartWorkflow / Query| Temporal[Temporal dev server]
-    Backend --> DDB[(Moto DynamoDB)]
-    Worker -->|long-poll| Temporal
-    Worker --> Moto
-    Worker --> DDB
-    Worker --> Anthropic
-```
-
-A burst is orchestrated by a parent `LaunchPipelines`
-workflow that fans out one child `ProcessImage` workflow
-per image. Each `ProcessImage` runs 8 activities,
-6 of which execute in parallel:
+A burst is orchestrated by a `LaunchPipelines`
+workflow that fans out one independent top-level
+`ProcessImage` workflow per image (not a Temporal
+child workflow — `LaunchPipelines` returns as soon as
+every `ExecuteWorkflow` start is acknowledged, keeping
+the synchronous backend call well within the API
+Gateway 29 s timeout). Each `ProcessImage` runs
+8 activities, 6 of which execute in parallel:
 
 1. Fan-out 3 × `ResizeAndUpload` (small / medium / large)
 2. 1 × `GenerateDescription` on the medium size
 3. Fan-out 3 × `ApplyWatermark`
 4. 1 × `StoreManifest` to DynamoDB
 
+```mermaid
+flowchart TD
+    LP[LaunchPipelines workflow]
+    LP -->|fan-out N images| PI1[ProcessImage<br/>image #1]
+    LP --> PI2[ProcessImage<br/>image #2]
+    LP --> PIN[ProcessImage<br/>image #N]
+
+    subgraph PI[ProcessImage workflow per image]
+        direction TB
+        R[ResizeAndUpload<br/>small / medium / large<br/>3 × parallel]
+        G[GenerateDescription<br/>on medium · Anthropic]
+        W[ApplyWatermark<br/>small / medium / large<br/>3 × parallel]
+        S[StoreManifest<br/>DynamoDB]
+        R --> G --> W --> S
+    end
+
+    PI1 -.-> PI
+```
+
 The workflow ID format is
 `image-pipeline-<pipelineId>-<imageId>` (where `<pipelineId>`
 and `<imageId>` are short 8-char hex IDs) so the Temporal UI
 can filter a whole burst with an `image-pipeline-<pipelineId>-`
 prefix search.
+
+### Deployment topology
+
+Both worker runtimes (ECS Fargate and AWS Lambda) are
+deployed side by side by `make deploy`. The UI's
+control panel exposes a selector, and the runtime is
+picked **per burst** — see
+[Deployment modes](#deployment-modes) for the
+trade-offs. The two diagrams below show the same
+ingress path with each runtime in turn.
+
+**ECS Fargate runtime** — long-running worker that
+long-polls Temporal Cloud.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CF as CloudFront
+    participant BE as Backend Lambda
+    participant S3 as S3 images
+    participant TC as Temporal Cloud
+    participant W as ECS Fargate worker
+    participant DDB as DynamoDB
+    participant AI as Anthropic API
+
+    Note over S3: Curated samples pre-uploaded under samples/
+
+    User->>CF: POST /api/workflows/start
+    CF->>BE: via API Gateway
+    BE->>TC: StartWorkflow(LaunchPipelines)
+    BE-->>User: { pipelineId, workflowIds }
+
+    W->>TC: long-poll task queue
+    TC-->>W: ProcessImage task
+    W->>S3: Get original (samples/...)
+    W->>S3: Put resized × 3
+    W->>AI: Describe
+    W->>S3: Put watermarked × 3
+    W->>DDB: PutItem manifest
+    W-->>TC: complete
+
+    User->>CF: GET /api/pipelines/{id}
+    CF->>BE: via API Gateway
+    BE->>DDB: Query
+    BE-->>User: manifest
+```
+
+**AWS Lambda runtime** — Temporal Cloud assumes an
+IAM role and invokes the Lambda worker per task.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CF as CloudFront
+    participant BE as Backend Lambda
+    participant S3 as S3 images
+    participant TC as Temporal Cloud
+    participant W as Lambda worker
+    participant DDB as DynamoDB
+    participant AI as Anthropic API
+
+    Note over S3: Curated samples pre-uploaded under samples/
+
+    User->>CF: POST /api/workflows/start
+    CF->>BE: via API Gateway
+    BE->>TC: StartWorkflow(LaunchPipelines)
+    BE-->>User: { pipelineId, workflowIds }
+
+    TC->>W: AssumeRole + Invoke(ProcessImage)
+    W->>S3: Get original (samples/...)
+    W->>S3: Put resized × 3
+    W->>AI: Describe
+    W->>S3: Put watermarked × 3
+    W->>DDB: PutItem manifest
+    W-->>TC: complete
+
+    User->>CF: GET /api/pipelines/{id}
+    CF->>BE: via API Gateway
+    BE->>DDB: Query
+    BE-->>User: manifest
+```
+
+The same shape applies locally in `make app-up`: Caddy
+plays the role of CloudFront, fronting both the static
+Nuxt SSG bundle and the API. There is a single
+long-running worker — no runtime selector.
+
+```mermaid
+sequenceDiagram
+    actor Browser
+    participant Caddy
+    participant BE as Backend
+    participant Moto as Moto S3
+    participant T as Temporal dev server
+    participant W as Worker
+    participant DDB as Moto DynamoDB
+    participant AI as Anthropic API
+
+    Note over Moto: Curated samples pre-uploaded under samples/
+
+    Browser->>Caddy: POST /api/workflows/start
+    Caddy->>BE: /api/workflows/start
+    BE->>T: StartWorkflow(LaunchPipelines)
+    BE-->>Browser: { pipelineId, workflowIds }
+
+    W->>T: long-poll task queue
+    T-->>W: ProcessImage task
+    W->>Moto: Get original (samples/...)
+    W->>Moto: Put resized × 3
+    W->>AI: Describe
+    W->>Moto: Put watermarked × 3
+    W->>DDB: PutItem manifest
+    W-->>T: complete
+
+    Browser->>Caddy: GET /api/pipelines/{id}
+    Caddy->>BE: /api/pipelines/{id}
+    BE->>DDB: Query
+    BE-->>Browser: manifest
+```
 
 ### Modules
 
@@ -304,9 +426,11 @@ via `GET /api/runtimes`; the UI's control panel shows
 a selector, and `POST /api/workflows/start` accepts a
 `runtime` field that picks the matching Temporal task
 queue (`image-processing-ecs` or
-`image-processing-lambda`). Child `ProcessImage`
-workflows inherit the parent `LaunchPipelines` queue,
-so a whole burst stays on a single runtime end-to-end.
+`image-processing-lambda`). The starter activity
+schedules each `ProcessImage` on the same task queue
+it was itself scheduled on (read from
+`activity.GetInfo`), so a whole burst stays on a
+single runtime end-to-end.
 
 The selector is **AWS-only**: it appears when Tofu has
 set `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
@@ -357,13 +481,21 @@ scale-in fires after 5 datapoints below 5 (-1 task,
 120 s cooldown).
 
 The collector authenticates with a Temporal Cloud
-service-account API key (Metrics Read-Only role).
-Provide it via the `TEMPORAL_METRICS_API_KEY` env
-variable in `.env`; Tofu creates the Secrets Manager
-secret automatically (same pattern as
-`ANTHROPIC_API_KEY`). When the variable is unset or
-empty, the autoscaling stack is skipped entirely and
-the ECS worker stays at `desired_count = 1`.
+service-account API key bearing the **Metrics
+Read-Only** account role. To mint one, create a
+[service account](https://docs.temporal.io/cloud/service-accounts)
+with that role and issue an
+[API key](https://docs.temporal.io/cloud/api-keys)
+for it (see also the Temporal Cloud
+[observability / OpenMetrics guide](https://docs.temporal.io/cloud/metrics/)
+for the endpoint shape and the supported metric
+series). Provide the key via the
+`TEMPORAL_METRICS_API_KEY` env variable in `.env`;
+Tofu creates the Secrets Manager secret automatically
+(same pattern as `ANTHROPIC_API_KEY`). When the
+variable is unset or empty, the autoscaling stack is
+skipped entirely and the ECS worker stays at
+`desired_count = 1`.
 
 **Reactivity caveat.** The OpenMetrics endpoint
 serves data with a fixed 3-minute aggregation lag,

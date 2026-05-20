@@ -5,68 +5,10 @@ Temporal Cloud + AWS for AWS architects and
 developers.
 
 See [README.md](README.md) for installation, usage,
-configuration, and architecture.
-
-## Tech stack
-
-- Go (Temporal SDK, AWS SDK v2, Anthropic SDK)
-- Nuxt 4 SSG, Tailwind, pnpm
-- Caddy (compose-mode reverse proxy fronting SSG + /api/*)
-- Temporal Cloud (workflow orchestration)
-- AWS — ECS Fargate, Lambda, API Gateway, S3,
-  DynamoDB, CloudFront
-- OpenTofu (IaC) — AWS provider in `eu-west-1` +
-  alias in `us-east-1` for ACM, plus Cloudflare DNS
-- Moto Server + Temporal CLI dev server for local dev
-
-## Build & run
-
-```bash
-make dev               # infra in Docker + worker/backend/frontend on host
-make app-up            # full stack in Docker (Caddy-fronted, single origin)
-make test              # unit tests
-make worker-lambda-zip # build build/worker.zip for Lambda deployment
-make deploy            # tofu init + apply + frontend-deploy
-                       # provisions both worker runtimes (ECS + Lambda);
-                       # pick one per burst from the UI control panel
-make frontend-deploy   # build Nuxt + sync to S3 + invalidate CloudFront
-make teardown          # tofu destroy + cleanup
-```
-
-## Modules
-
-- `cmd/` — entry points:
-  - `worker` — a single Go binary that runs in
-    four deployment modes (host, Docker, ECS
-    Fargate, AWS Lambda). The long-running modes
-    (host, Docker, ECS) expose `/healthz` on
-    `:8001` as a liveness probe. Lambda mode is
-    detected at startup via the presence of
-    `AWS_LAMBDA_FUNCTION_NAME` and uses
-    `go.temporal.io/sdk/contrib/aws/lambdaworker`.
-  - `backend` — Lambda or local HTTP on `:8000`.
-- `internal/workflows` — `LaunchPipelines` parent
-  workflow that fans out one child `ProcessImage`
-  workflow per image.
-- `internal/activities` — resize, describe, watermark,
-  store.
-- `internal/manifest` — shared types; **always**
-  iterate `manifest.SizeNames`, never the maps.
-- `internal/awsclient` — single AWS config that
-  honors `AWS_ENDPOINT_URL` so the same code runs
-  against Moto Server and real AWS.
-- `internal/anthropicclient` — Anthropic API wrapper.
-- `internal/temporalclient` — Temporal SDK client
-  shared by worker and backend; honors mTLS env
-  vars for Temporal Cloud.
-- `internal/api` — HTTP handlers under `/api/*`
-  (`presign`, `workflows/start`, `pipelines/{id}`)
-  plus `/healthz` at the root for container health
-  probes.
-- `frontend/` — Nuxt 4 SSG, two pages: `/` and
-  `/pipelines/[id]`.
-- `infra/` — OpenTofu modules (network, storage,
-  worker, backend, frontend, dns).
+configuration, and architecture. Tech stack, module
+layout, and build commands are derivable from
+`go.mod`, the directory tree, and the `Makefile` —
+not duplicated here.
 
 ## Agents
 
@@ -119,43 +61,56 @@ not shared with the team.
 
 ## Project-specific rules
 
+These are invariants that are easy to violate
+because they are not obvious from the code alone.
+
 - **Workflow determinism:** never iterate Go maps
   directly inside workflow code. Use the canonical
   ordered slice `manifest.SizeNames`. Use
   `workflow.Now()` / `workflow.GetLogger()` /
   `workflow.Sleep()`, never the `time` or `log`
   equivalents.
-- **All backend API routes are prefixed with `/api`.**
-  This is what makes CloudFront path-based routing
-  work cleanly (`/api/*` → API Gateway,
-  `/images/*` → S3 images bucket via OAC,
-  `/*` → S3 frontend bucket). The `/healthz`
-  liveness probe is the deliberate exception — both
-  the backend (`:8000`) and the worker (`:8001`)
-  expose it at the root for container orchestrators
-  (compose, ECS), and neither is reachable through
-  CloudFront.
-- **S3 prefix convention:** uploads under
-  `uploads/` (flat), derived artifacts under
-  `pipelines/{pipelineId}/...`. Lifecycle rules expire
-  `uploads/` after 7 days and `pipelines/` after 30.
+- **`ProcessImage` workflows are top-level, not
+  Temporal children of `LaunchPipelines`.** They are
+  launched via a starter activity that calls
+  `client.ExecuteWorkflow`, so the launcher returns
+  as soon as every start is acknowledged.
+- **Worker mode is detected at runtime**, not via
+  build flags: presence of `AWS_LAMBDA_FUNCTION_NAME`
+  switches the single Go binary into Lambda mode
+  (using `go.temporal.io/sdk/contrib/aws/lambdaworker`);
+  otherwise it long-polls.
+- **All backend API routes are prefixed with `/api`**
+  so CloudFront can dispatch by path (`/api/*` → API
+  Gateway, `/images/*` → S3 images bucket via OAC,
+  `/*` → S3 frontend bucket). The `/healthz` liveness
+  probe is the deliberate exception — both backend
+  (`:8000`) and worker (`:8001`) expose it at the
+  root for container orchestrators, and neither is
+  reachable through CloudFront.
+- **No upload path.** The bucket is pre-seeded with
+  curated samples under `samples/` (kept
+  indefinitely); `workflows/start` rejects any key
+  outside that prefix. Derived artifacts live under
+  `pipelines/{pipelineId}/...` and expire after
+  30 days.
 - **Anthropic API direct, not Bedrock.** Keeps local
   dev simple (Moto Server does not mock Bedrock).
-- **Env split:** `.env` is the canonical, deploy-shaped
-  configuration (Temporal Cloud, Anthropic, AWS region).
-  `.env.local` is an opt-in dev overlay layered on top by
-  host-mode dev targets only. Deploy targets load only
-  `.env`. The compose stack (`make app-up`) is self-
-  contained and does NOT read either file beyond
-  `ANTHROPIC_API_KEY` (compose-time interpolation).
-- **Worker runtime selection** happens per burst at the
-  API layer in AWS-deployed environments only. Tofu sets
-  `WORKER_TASK_QUEUE_ECS` and `WORKER_TASK_QUEUE_LAMBDA`
-  on the deployed backend Lambda; the backend then
-  advertises both via `GET /api/runtimes` and the UI
-  shows a selector. In local dev (`make dev`, `make
-  app-up`) those vars are unset, the API returns `[]`,
-  the UI hides the selector, and the single worker
-  polls one legacy queue (`image-processing`). See the
-  README's "Deployment modes" section for the full
-  picture.
+- **`internal/awsclient` honors `AWS_ENDPOINT_URL`**
+  so the same code path runs against Moto Server and
+  real AWS.
+- **Env split:** `.env` is the canonical deploy-shaped
+  configuration. `.env.local` is an opt-in dev overlay
+  layered on top by host-mode dev targets only.
+  Deploy targets load only `.env`. The compose stack
+  (`make app-up`) is self-contained and does NOT read
+  either file beyond `ANTHROPIC_API_KEY` (compose-time
+  interpolation).
+- **Worker runtime selection** happens per burst at
+  the API layer in AWS-deployed environments only.
+  Tofu sets `WORKER_TASK_QUEUE_ECS` and
+  `WORKER_TASK_QUEUE_LAMBDA` on the deployed backend
+  Lambda; the backend advertises both via
+  `GET /api/runtimes` and the UI shows a selector. In
+  local dev those vars are unset, the API returns
+  `[]`, and the single worker polls a fixed queue.
