@@ -41,7 +41,7 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	for i, id := range imageIDs {
 		images[i] = manifest.LaunchPipelineImage{
 			ImageID:  id,
-			Original: manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/" + id + ".jpg"},
+			Original: manifest.S3Ref{Key: "samples/" + id + ".jpg"},
 		}
 	}
 
@@ -75,7 +75,7 @@ func TestLaunchPipelines_PropagatesActivityError(t *testing.T) {
 	env.ExecuteWorkflow(workflows.LaunchPipelines, manifest.LaunchPipelinesInput{
 		PipelineID: "deadbeef",
 		Images: []manifest.LaunchPipelineImage{
-			{ImageID: "img-1", Original: manifest.S3Ref{Bucket: "b", Key: "k"}},
+			{ImageID: "img-1", Original: manifest.S3Ref{Key: "samples/img-1.jpg"}},
 		},
 	})
 

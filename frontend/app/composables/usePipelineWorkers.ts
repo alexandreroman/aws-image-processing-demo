@@ -1,17 +1,13 @@
-// Poll a pipeline's distinct worker count. While the pipeline is running we
-// poll every 3s. Once `done` flips true we slow to 5s and keep polling until
-// the worker count has been identical for 3 consecutive reads (or 120s
-// elapses), then stop. This catches identities that land seconds after the
-// apparent completion on larger Lambda bursts without forcing a manual
-// refresh. The workerCount stays `null` until the first successful fetch so
-// callers can render a skeleton.
+// Poll a pipeline's distinct worker count. Polls every 3s while the pipeline
+// is running. Once `done` flips true we fire one delayed refresh (to catch
+// identities that land seconds after the apparent completion on Lambda
+// bursts) and then stop. The workerCount stays `null` until the first
+// successful fetch so callers can render a skeleton.
 
 import { useIntervalFn } from '@vueuse/core';
 
 const POLL_MS = 3_000;
-const POST_DONE_POLL_MS = 5_000;
-const POST_DONE_STABLE_POLLS = 3;
-const POST_DONE_MAX_MS = 120_000;
+const POST_DONE_REFRESH_DELAY_MS = 5_000;
 
 export interface UsePipelineWorkersReturn {
   workerCount: Readonly<Ref<number | null>>;
@@ -33,13 +29,6 @@ export function usePipelineWorkers(
   let nextSeq = 0;
   let lastAppliedSeq = 0;
 
-  // Post-done stability tracking.
-  let stableCount = 0;
-  let lastStableValue: number | null = null;
-  let postDoneDeadline = 0;
-
-  const interval = computed(() => (toValue(done) ? POST_DONE_POLL_MS : POLL_MS));
-
   async function refresh() {
     const id = toValue(pipelineId);
     if (!id) return;
@@ -57,43 +46,30 @@ export function usePipelineWorkers(
     }
   }
 
-  const { pause, resume } = useIntervalFn(
-    async () => {
-      await refresh();
-      if (!toValue(done)) return;
-      // Post-done stop conditions: stable count or deadline.
-      const after = count.value;
-      if (after !== null && after === lastStableValue) {
-        stableCount += 1;
-      } else {
-        lastStableValue = after;
-        stableCount = after === null ? 0 : 1;
-      }
-      if (stableCount >= POST_DONE_STABLE_POLLS || Date.now() >= postDoneDeadline) {
-        pause();
-      }
-    },
-    interval,
-    { immediate: false, immediateCallback: false },
-  );
+  const { pause, resume } = useIntervalFn(refresh, POLL_MS, {
+    immediate: false,
+    immediateCallback: false,
+  });
 
-  function resetStability() {
-    stableCount = 0;
-    lastStableValue = null;
-    postDoneDeadline = Date.now() + POST_DONE_MAX_MS;
+  let postDoneTimer: ReturnType<typeof setTimeout> | null = null;
+  function clearPostDoneTimer() {
+    if (postDoneTimer !== null) {
+      clearTimeout(postDoneTimer);
+      postDoneTimer = null;
+    }
   }
 
   watch(
     () => toValue(pipelineId),
     (id) => {
       pause();
+      clearPostDoneTimer();
       if (!id) return;
       count.value = null;
       lastAppliedSeq = 0;
       nextSeq = 0;
-      resetStability();
       void refresh();
-      resume();
+      if (!toValue(done)) resume();
     },
     { immediate: true },
   );
@@ -101,20 +77,26 @@ export function usePipelineWorkers(
   watch(
     () => toValue(done),
     (isDone) => {
-      if (isDone) {
-        // Reset the stability window and fire an immediate refresh so we
-        // catch identities that landed right around the "done" flip without
-        // waiting a full slow-cadence tick.
-        resetStability();
-        void refresh();
-        resume();
-      } else if (toValue(pipelineId)) {
-        resume();
+      if (!isDone) {
+        clearPostDoneTimer();
+        if (toValue(pipelineId)) resume();
+        return;
       }
+      pause();
+      clearPostDoneTimer();
+      // One last refresh after a short delay so we catch identities that
+      // landed right around the "done" flip.
+      postDoneTimer = setTimeout(() => {
+        void refresh();
+        postDoneTimer = null;
+      }, POST_DONE_REFRESH_DELAY_MS);
     },
   );
 
-  onUnmounted(pause);
+  onUnmounted(() => {
+    pause();
+    clearPostDoneTimer();
+  });
 
   return {
     workerCount: count,

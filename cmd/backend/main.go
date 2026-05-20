@@ -18,20 +18,11 @@ import (
 	"github.com/alexandreroman/aws-image-processing-demo/internal/awsclient"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/temporalclient"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"go.temporal.io/sdk/client"
 )
 
-const (
-	httpAddr = ":8000"
-
-	// defaultTaskQueue is the single queue used when no per-runtime queue is
-	// configured. This is the local-dev / compose default; the deployed
-	// backend Lambda gets WORKER_TASK_QUEUE_ECS and WORKER_TASK_QUEUE_LAMBDA
-	// from Tofu and bypasses this fallback entirely.
-	defaultTaskQueue = "image-processing"
-)
+const httpAddr = ":8000"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -59,8 +50,6 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	if err != nil {
 		return nil, nil, err
 	}
-	s3c := awsclient.NewS3(awsCfg)
-	presigner := s3.NewPresignClient(s3c)
 	ddb := awsclient.NewDynamoDB(awsCfg)
 
 	tc, namespace, err := temporalclient.Dial(logger)
@@ -75,23 +64,19 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 	}
 
 	runtimes := buildRuntimes()
-	defaultQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
 	h := api.New(api.Dependencies{
-		Temporal:         tc,
-		Presigner:        presigner,
-		Dynamo:           ddb,
-		ImagesBucket:     bucket,
-		ImagesTable:      table,
-		Runtimes:         runtimes,
-		DefaultTaskQueue: defaultQueue,
-		Namespace:        namespace,
-		Logger:           logger,
+		Temporal:     tc,
+		Dynamo:       ddb,
+		ImagesBucket: bucket,
+		ImagesTable:  table,
+		Runtimes:     runtimes,
+		Namespace:    namespace,
+		Logger:       logger,
 	})
 
 	logger.Info("backend ready",
 		"bucket", bucket,
 		"table", table,
-		"defaultTaskQueue", defaultQueue,
 		"runtimes", runtimes,
 	)
 	return h, tc, nil
@@ -101,8 +86,8 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 // Presence (not value) of WORKER_TASK_QUEUE_ECS / WORKER_TASK_QUEUE_LAMBDA
 // is the signal: Tofu sets these on the deployed backend Lambda, so the
 // runtime selector only lights up in real deployments. In local dev /
-// compose neither var is set and the handler falls back to
-// DefaultTaskQueue.
+// compose neither var is set and the API falls back to its built-in
+// defaultTaskQueue.
 func buildRuntimes() []api.Runtime {
 	out := make([]api.Runtime, 0, 2)
 	if q := os.Getenv("WORKER_TASK_QUEUE_ECS"); q != "" {

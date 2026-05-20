@@ -75,7 +75,7 @@ test: ## Run Go unit tests
 	go test ./...
 
 .PHONY: check
-check: ## Run static checks across modules
+check: test ## Run unit tests and static checks across modules
 	go vet ./...
 	pnpm -C frontend lint
 

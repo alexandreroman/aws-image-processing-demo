@@ -22,7 +22,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
 	workflowpb "go.temporal.io/api/workflow/v1"
@@ -41,24 +40,26 @@ type Runtime struct {
 	TaskQueue string `json:"-"`
 }
 
+// defaultTaskQueue is the queue used when no per-runtime queue is configured
+// (local dev / compose). The deployed backend always populates Runtimes so it
+// never falls back to this value.
+const defaultTaskQueue = "image-processing"
+
 // Dependencies holds the runtime collaborators of the API. The struct is
 // the seam used both by main (production) and tests.
 type Dependencies struct {
 	Temporal     client.Client
-	Presigner    *s3.PresignClient
 	Dynamo       *dynamodb.Client
 	ImagesBucket string
 	ImagesTable  string
 	// Runtimes lists available worker deployments in display order. The first
 	// entry is the default when /api/workflows/start omits the runtime field.
-	Runtimes []Runtime
-	// DefaultTaskQueue is the fallback queue used when Runtimes is empty
-	// (e.g. local dev with a single worker process). The handler reports an
-	// empty runtime in the response and on /api/runtimes when this path is
-	// taken, so the frontend can hide the selector.
-	DefaultTaskQueue string
-	Namespace        string
-	Logger           *slog.Logger
+	// When empty (local dev / compose), the handler falls back to
+	// defaultTaskQueue and the response omits the runtime field so the
+	// frontend can hide the selector.
+	Runtimes  []Runtime
+	Namespace string
+	Logger    *slog.Logger
 }
 
 // Handler implements http.Handler. Build it once at startup; it is safe for
@@ -76,9 +77,7 @@ func New(deps Dependencies) *Handler {
 	if deps.Namespace == "" {
 		deps.Namespace = client.DefaultNamespace
 	}
-
 	h := &Handler{deps: deps, mux: http.NewServeMux()}
-	h.mux.HandleFunc("POST /api/uploads/presign", h.handlePresign)
 	h.mux.HandleFunc("POST /api/workflows/start", h.handleStart)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}", h.handlePipeline)
 	h.mux.HandleFunc("GET /api/pipelines/{pipelineId}/workers", h.handlePipelineWorkers)
@@ -130,53 +129,12 @@ func (h *Handler) handleRuntimes(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// --- /api/uploads/presign ---------------------------------------------------
-
-type presignRequest struct {
-	Count int `json:"count"`
-}
-
-type presignedURL struct {
-	URL string `json:"url"`
-	Key string `json:"key"`
-}
-
-const (
-	presignTTL    = 15 * time.Minute
-	maxPresignCnt = 50
-)
-
-func (h *Handler) handlePresign(w http.ResponseWriter, r *http.Request) {
-	var req presignRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body: "+err.Error())
-		return
-	}
-	if req.Count <= 0 || req.Count > maxPresignCnt {
-		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("count must be between 1 and %d, got %d", maxPresignCnt, req.Count))
-		return
-	}
-
-	out := make([]presignedURL, 0, req.Count)
-	for i := 0; i < req.Count; i++ {
-		key := "uploads/" + uuid.NewString() + ".jpg"
-		req, err := h.deps.Presigner.PresignPutObject(r.Context(), &s3.PutObjectInput{
-			Bucket:      aws.String(h.deps.ImagesBucket),
-			Key:         aws.String(key),
-			ContentType: aws.String("image/jpeg"),
-		}, s3.WithPresignExpires(presignTTL))
-		if err != nil {
-			h.deps.Logger.Error("presign failed", "err", err)
-			writeError(w, http.StatusInternalServerError, "presign failed")
-			return
-		}
-		out = append(out, presignedURL{URL: req.URL, Key: key})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
 // --- /api/workflows/start ---------------------------------------------------
+
+// maxBurst caps the number of images one /api/workflows/start call may
+// schedule. Keeps a single burst within reasonable Temporal Cloud / API
+// Gateway boundaries.
+const maxBurst = 50
 
 type startRequest struct {
 	Images  []manifest.S3Ref `json:"images"`
@@ -202,7 +160,7 @@ type startResponse struct {
 // returns without waiting on the launcher.
 //
 // When no runtimes are configured (local dev / compose), the handler falls
-// back to DefaultTaskQueue and omits the runtime field from the response so
+// back to defaultTaskQueue and omits the runtime field from the response so
 // the frontend can hide the selector.
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
@@ -216,42 +174,27 @@ func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	// Cap the burst at the same limit as presign so a caller cannot bypass
 	// it by signing URLs elsewhere and posting a larger batch here.
-	if len(req.Images) > maxPresignCnt {
+	if len(req.Images) > maxBurst {
 		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("images: at most %d allowed, got %d", maxPresignCnt, len(req.Images)))
+			fmt.Sprintf("images: at most %d allowed, got %d", maxBurst, len(req.Images)))
 		return
 	}
-	// Pin each S3Ref to the configured bucket and to prefixes the demo
-	// actually produces (presigned uploads or curated samples). Without
-	// this, a caller could queue workflows against arbitrary objects.
+	// Pin each S3Ref to the prefixes the demo actually serves (curated
+	// samples). Without this, a caller could queue workflows against
+	// arbitrary objects in the images bucket.
 	for i, img := range req.Images {
-		if img.Bucket != h.deps.ImagesBucket {
+		if !strings.HasPrefix(img.Key, "samples/") {
 			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("images[%d].bucket: must match the configured images bucket", i))
-			return
-		}
-		if !strings.HasPrefix(img.Key, "uploads/") && !strings.HasPrefix(img.Key, "samples/") {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("images[%d].key: must start with uploads/ or samples/", i))
+				fmt.Sprintf("images[%d].key: must start with samples/", i))
 			return
 		}
 	}
 
 	var (
-		taskQueue   string
+		taskQueue   = defaultTaskQueue
 		runtimeName string
 	)
-	if len(h.deps.Runtimes) == 0 {
-		// No per-runtime queues configured — local dev path. Fall back to the
-		// single default queue. The response omits the runtime field so the
-		// frontend can detect that no selection was made.
-		if h.deps.DefaultTaskQueue == "" {
-			h.deps.Logger.Error("start rejected: no task queue configured")
-			writeError(w, http.StatusInternalServerError, "no task queue configured")
-			return
-		}
-		taskQueue = h.deps.DefaultTaskQueue
-	} else {
+	if len(h.deps.Runtimes) > 0 {
 		runtime, ok := h.resolveRuntime(req.Runtime)
 		if !ok {
 			writeError(w, http.StatusBadRequest,
@@ -321,13 +264,9 @@ func (h *Handler) runtimeNames() []string {
 	return names
 }
 
-// shortID returns the first 8 hex chars of a UUID v4.
-//
-// Why 8 chars: a burst is at most a few dozen images per pipeline, so the
-// 32-bit space leaves collision probability well under one in a million,
-// and short IDs make URLs, logs, and the Temporal UI dramatically more
-// readable. WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE surfaces the
-// vanishingly rare collision as a start-workflow error.
+// shortID returns the first 8 hex chars of a UUID v4. 32 bits is ample for a
+// few dozen images per pipeline; WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE
+// catches the vanishingly rare collision.
 func shortID() string {
 	return uuid.NewString()[:8]
 }
@@ -394,9 +333,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// currentActivity and manifest-query lookups each make a Temporal RPC per
-	// running workflow. Cap the per-poll fan-out so a 48-workflow burst does
-	// not stall the 1 s frontend poll loop. The two caps are tracked
-	// independently so each feature stays tunable on its own.
+	// running workflow. Cap the per-poll fan-out (shared across both features)
+	// so a 48-workflow burst does not stall the 1 s frontend poll loop.
 	currentActivityLookups := 0
 	manifestQueryLookups := 0
 	seen := make(map[string]bool, len(executions))
@@ -439,7 +377,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			resp.Summary.Running++
 			// Best effort: surface the currently scheduled activity so the
 			// frontend can show "GenerateDescription…" mid-flight.
-			if currentActivityLookups < maxCurrentActivityLookups {
+			if currentActivityLookups < maxLookupsPerPoll {
 				currentActivityLookups++
 				if act := h.currentActivity(r.Context(), wf.WorkflowID); act != "" {
 					wf.CurrentActivity = act
@@ -448,7 +386,7 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 			// Best effort: surface the in-flight manifest so the gallery can
 			// show resized images before watermarking finishes. Skip when DDB
 			// already has the final manifest to avoid wasting lookup budget.
-			if !hasDDBManifest && manifestQueryLookups < maxManifestQueryLookups {
+			if !hasDDBManifest && manifestQueryLookups < maxLookupsPerPoll {
 				manifestQueryLookups++
 				if m := h.queryManifest(r.Context(), wf.WorkflowID); m != nil {
 					wf.ImageID = m.ImageID
@@ -539,15 +477,11 @@ func (h *Handler) listWorkflows(
 	return out, nil
 }
 
-// maxCurrentActivityLookups caps the number of DescribeWorkflowExecution
-// calls each /api/pipelines/{id} poll fires. Above this threshold the
-// currentActivity field is left empty on the remaining running workflows.
-const maxCurrentActivityLookups = 10
-
-// maxManifestQueryLookups caps the number of QueryWorkflow calls fired per
-// /api/pipelines/{id} poll to fetch in-flight manifests. Kept separate from
-// maxCurrentActivityLookups so the two features stay independently tunable.
-const maxManifestQueryLookups = 10
+// maxLookupsPerPoll caps the number of Temporal RPCs (DescribeWorkflowExecution
+// or QueryWorkflow) each /api/pipelines/{id} poll fires per best-effort
+// feature. Above this threshold the corresponding cosmetic field is left
+// unset on the remaining running workflows.
+const maxLookupsPerPoll = 10
 
 // currentActivity returns the name of the first pending activity for the
 // running workflow, or "" if none is reported. Errors are swallowed because
@@ -628,24 +562,7 @@ func (h *Handler) fetchManifests(
 // --- helpers ---------------------------------------------------------------
 
 func statusName(s enumspb.WorkflowExecutionStatus) string {
-	switch s {
-	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:
-		return "RUNNING"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
-		return "COMPLETED"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_FAILED:
-		return "FAILED"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_CANCELED:
-		return "CANCELED"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED:
-		return "TERMINATED"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW:
-		return "CONTINUED_AS_NEW"
-	case enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
-		return "TIMED_OUT"
-	default:
-		return "UNKNOWN"
-	}
+	return strings.TrimPrefix(s.String(), "WORKFLOW_EXECUTION_STATUS_")
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

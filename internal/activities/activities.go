@@ -53,9 +53,6 @@ func New(
 	if table == "" {
 		return nil, errors.New("activities: IMAGES_TABLE is required")
 	}
-	if ac == nil {
-		return nil, errors.New("activities: anthropic client is required")
-	}
 	return &Activities{
 		S3:           s3c,
 		Dynamo:       ddb,

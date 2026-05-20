@@ -32,8 +32,7 @@ const jpegQuality = 85
 
 // maxImageBytes caps the size of objects pulled from S3. With a 1 GiB worker
 // task and Go's image decoder allocating several times the raw size,
-// anything past ~25 MiB risks OOM. Enforced both via Content-Length and a
-// bounded body reader (defense in depth against a misreported header).
+// anything past ~25 MiB risks OOM. Enforced via Content-Length on GetObject.
 const maxImageBytes = 25 * 1024 * 1024
 
 // ResizeAndUpload downloads the original image, scales it to the target
@@ -77,7 +76,7 @@ func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manif
 
 	logger.Info("resize done", "imageId", in.ImageID, "size", in.SizeName, "bytes", buf.Len())
 	return manifest.Size{
-		S3Ref:  manifest.S3Ref{Bucket: a.ImagesBucket, Key: key},
+		S3Ref:  manifest.S3Ref{Key: key},
 		Width:  dst.Bounds().Dx(),
 		Height: dst.Bounds().Dy(),
 		Bytes:  int64(buf.Len()),
@@ -86,7 +85,7 @@ func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manif
 
 func (a *Activities) download(ctx context.Context, ref manifest.S3Ref) ([]byte, error) {
 	out, err := a.S3.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(ref.Bucket),
+		Bucket: aws.String(a.ImagesBucket),
 		Key:    aws.String(ref.Key),
 	})
 	if err != nil {
@@ -101,19 +100,7 @@ func (a *Activities) download(ctx context.Context, ref manifest.S3Ref) ([]byte, 
 		)
 	}
 
-	// LimitReader allows one extra byte so we can detect a misreported
-	// Content-Length and fail closed rather than truncating silently.
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(io.LimitReader(out.Body, maxImageBytes+1)); err != nil {
-		return nil, err
-	}
-	if buf.Len() > maxImageBytes {
-		return nil, temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("image too large: streamed >%d bytes", maxImageBytes),
-			"ImageTooLarge", nil,
-		)
-	}
-	return buf.Bytes(), nil
+	return io.ReadAll(out.Body)
 }
 
 func (a *Activities) upload(ctx context.Context, key string, body []byte, contentType string) error {

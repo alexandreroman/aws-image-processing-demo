@@ -3,11 +3,6 @@ variable "name_prefix" {
   type        = string
 }
 
-variable "aws_region" {
-  description = "AWS region — used to scope kms:ViaService in the task policy."
-  type        = string
-}
-
 variable "temporal_address" {
   description = "Temporal gRPC endpoint passed to the worker as TEMPORAL_ADDRESS."
   type        = string

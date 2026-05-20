@@ -6,7 +6,6 @@ import (
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
-	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -31,15 +30,11 @@ func LaunchPipelines(ctx workflow.Context, in manifest.LaunchPipelinesInput) err
 	logger.Info("LaunchPipelines start",
 		"pipelineId", in.PipelineID, "imageCount", len(in.Images))
 
-	startOpts := workflow.ActivityOptions{
-		StartToCloseTimeout: 15 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    3,
-		},
-	}
-	actCtx := workflow.WithActivityOptions(ctx, startOpts)
+	// StartProcessImage is a thin gRPC call (client.ExecuteWorkflow) so a
+	// short timeout + default retry policy is plenty.
+	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 5 * time.Second,
+	})
 
 	workflowIDs := make([]string, len(in.Images))
 	for i, img := range in.Images {

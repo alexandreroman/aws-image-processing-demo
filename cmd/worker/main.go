@@ -21,6 +21,7 @@ import (
 	"github.com/alexandreroman/aws-image-processing-demo/internal/workflows"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/contrib/aws/lambdaworker"
 	"go.temporal.io/sdk/contrib/sysinfo"
 	"go.temporal.io/sdk/worker"
@@ -28,9 +29,14 @@ import (
 )
 
 const (
-	defaultTaskQueue      = "image-processing"
-	defaultDeploymentName = "image-processing"
-	healthAddr            = ":8001"
+	defaultTaskQueue = "image-processing"
+	healthAddr       = ":8001"
+	// defaultMaxConcurrentActivities caps in-flight activities so a large
+	// burst cannot exhaust the worker's memory — each Resize holds a decoded
+	// RGBA buffer. Aligned across host/compose/ECS/Lambda for predictable
+	// burst behavior; override per deployment with
+	// WORKER_MAX_CONCURRENT_ACTIVITIES.
+	defaultMaxConcurrentActivities = 4
 )
 
 // buildID identifies this worker's deployment version. Injected at Lambda
@@ -56,31 +62,35 @@ func main() {
 	}
 }
 
-func runLongRunning(logger *slog.Logger) error {
+// setup is the shared boot path: load AWS clients, dial Temporal, build the
+// Activities struct, and resolve the task queue. Returns the Temporal client
+// so each runner can decide when to close it.
+func setup(logger *slog.Logger) (*activities.Activities, client.Client, string, string, error) {
 	ctx := context.Background()
-
 	s3c, ddb, anth, err := loadAWSClients(ctx)
 	if err != nil {
-		return err
+		return nil, nil, "", "", err
 	}
-
 	tc, namespace, err := temporalclient.Dial(logger)
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	acts, err := activities.New(s3c, ddb, anth, tc)
+	if err != nil {
+		tc.Close()
+		return nil, nil, "", "", err
+	}
+	return acts, tc, namespace, envOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue), nil
+}
+
+func runLongRunning(logger *slog.Logger) error {
+	acts, tc, namespace, taskQueue, err := setup(logger)
 	if err != nil {
 		return err
 	}
 	defer tc.Close()
 
-	acts, err := activities.New(s3c, ddb, anth, tc)
-	if err != nil {
-		return err
-	}
-
-	taskQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
-
-	// Cap concurrent activities so a large burst cannot exhaust the worker's memory
-	// (each Resize holds a decoded RGBA buffer). 4 is the aligned default across all
-	// runtimes (host/compose/ECS/Lambda) for predictable burst behavior.
-	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 4)
+	maxConcurrent := envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", defaultMaxConcurrentActivities)
 	w := worker.New(tc, taskQueue, worker.Options{
 		MaxConcurrentActivityExecutionSize: maxConcurrent,
 		// Report real CPU/RAM in worker heartbeats so the Temporal Cloud
@@ -134,30 +144,20 @@ func runLongRunning(logger *slog.Logger) error {
 }
 
 func runLambda(logger *slog.Logger) error {
-	ctx := context.Background()
-
-	s3c, ddb, anth, err := loadAWSClients(ctx)
-	if err != nil {
-		return err
-	}
-
 	// The lambdaworker manages its own per-invocation Temporal connection for
 	// the worker itself. The Activities struct still needs an independent,
 	// process-scoped client so StartProcessImage can schedule top-level child
 	// workflows from inside an activity. The Lambda execution environment is
 	// process-stable across warm invocations, so this client is reused.
-	tc, namespace, err := temporalclient.Dial(logger)
+	acts, tc, namespace, taskQueue, err := setup(logger)
 	if err != nil {
 		return err
 	}
 	defer tc.Close()
 
-	taskQueue := temporalclient.EnvOr("TEMPORAL_TASK_QUEUE", defaultTaskQueue)
-	deploymentName := temporalclient.EnvOr("WORKER_DEPLOYMENT_NAME", defaultDeploymentName)
-
-	acts, err := activities.New(s3c, ddb, anth, tc)
-	if err != nil {
-		return err
+	deploymentName := os.Getenv("WORKER_DEPLOYMENT_NAME")
+	if deploymentName == "" {
+		return errors.New("worker: WORKER_DEPLOYMENT_NAME is required in Lambda mode")
 	}
 
 	logger.Info("lambda worker starting",
@@ -184,7 +184,7 @@ func runLambda(logger *slog.Logger) error {
 		}
 		ctx.ClientOptions = opts
 		ctx.TaskQueue = taskQueue
-		ctx.WorkerOptions.MaxConcurrentActivityExecutionSize = envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", 4)
+		ctx.WorkerOptions.MaxConcurrentActivityExecutionSize = envIntOr("WORKER_MAX_CONCURRENT_ACTIVITIES", defaultMaxConcurrentActivities)
 		// Report real CPU/RAM in heartbeats. On Lambda this gives a snapshot
 		// of each invocation's container footprint in Temporal Cloud's Worker
 		// Hosts view — parity with the long-running path.
@@ -227,9 +227,16 @@ func loadAWSClients(ctx context.Context) (*s3.Client, *dynamodb.Client, *anthrop
 	return s3c, ddb, anth, nil
 }
 
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func envIntOr(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
 	}

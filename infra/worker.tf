@@ -26,7 +26,7 @@ module "worker_ecs" {
   aws_region           = var.aws_region
   temporal_address     = var.temporal_address
   temporal_namespace   = var.temporal_namespace
-  temporal_task_queue  = var.worker_task_queue_ecs
+  temporal_task_queue  = local.worker_task_queue_ecs
   temporal_tls_enabled = local.temporal_tls_enabled
   worker_image         = local.worker_image_pinned
 
@@ -54,7 +54,7 @@ module "worker_otel_collector" {
   name_prefix         = local.name_prefix
   aws_region          = var.aws_region
   temporal_namespace  = var.temporal_namespace
-  temporal_task_queue = var.worker_task_queue_ecs
+  temporal_task_queue = local.worker_task_queue_ecs
 
   cluster_id   = module.worker_ecs.cluster_id
   cluster_name = module.worker_ecs.cluster_name
@@ -68,10 +68,9 @@ module "worker_lambda" {
   source = "./worker-lambda"
 
   name_prefix          = local.name_prefix
-  aws_region           = var.aws_region
   temporal_address     = var.temporal_address
   temporal_namespace   = var.temporal_namespace
-  temporal_task_queue  = var.worker_task_queue_lambda
+  temporal_task_queue  = local.worker_task_queue_lambda
   temporal_tls_enabled = local.temporal_tls_enabled
 
   worker_max_concurrent_activities = var.worker_max_concurrent_activities

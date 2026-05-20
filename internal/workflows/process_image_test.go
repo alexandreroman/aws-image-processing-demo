@@ -49,7 +49,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		pipelineID = "deadbeef"
 		imageID    = "img-1"
 	)
-	original := manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"}
+	original := manifest.S3Ref{Key: "samples/foo.jpg"}
 
 	// Expect one resize per size name.
 	for _, name := range manifest.SizeNames {
@@ -57,7 +57,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		s.env.OnActivity(s.acts.ResizeAndUpload, mock.Anything, mock.MatchedBy(func(in activities.ResizeInput) bool {
 			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == name
 		})).Return(manifest.Size{
-			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
+			S3Ref:  manifest.S3Ref{Key: key},
 			Width:  manifest.SizeWidths[name],
 			Height: manifest.SizeWidths[name] * 3 / 4,
 			Bytes:  1000,
@@ -78,8 +78,7 @@ func (s *ProcessImageSuite) TestHappyPath() {
 		s.env.OnActivity(s.acts.ApplyWatermark, mock.Anything, mock.MatchedBy(func(in activities.WatermarkInput) bool {
 			return in.PipelineID == pipelineID && in.ImageID == imageID && in.SizeName == name
 		})).Return(manifest.S3Ref{
-			Bucket: "test-bucket",
-			Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/" + name + ".jpg",
+			Key: "pipelines/" + pipelineID + "/watermarked/" + imageID + "/" + name + ".jpg",
 		}, nil).Once()
 	}
 
@@ -169,7 +168,7 @@ func runAndRecordActivities(t *testing.T) []string {
 	for _, name := range manifest.SizeNames {
 		key := "pipelines/" + pipelineID + "/resized/" + imageID + "/" + name + ".jpg"
 		env.OnActivity(acts.ResizeAndUpload, mock.Anything, mock.Anything).Return(manifest.Size{
-			S3Ref:  manifest.S3Ref{Bucket: "test-bucket", Key: key},
+			S3Ref:  manifest.S3Ref{Key: key},
 			Width:  manifest.SizeWidths[name],
 			Height: manifest.SizeWidths[name] * 3 / 4,
 			Bytes:  1000,
@@ -180,15 +179,14 @@ func runAndRecordActivities(t *testing.T) []string {
 		Labels:      []string{"a"},
 	}, nil)
 	env.OnActivity(acts.ApplyWatermark, mock.Anything, mock.Anything).Return(manifest.S3Ref{
-		Bucket: "test-bucket",
-		Key:    "pipelines/" + pipelineID + "/watermarked/" + imageID + "/medium.jpg",
+		Key: "pipelines/" + pipelineID + "/watermarked/" + imageID + "/medium.jpg",
 	}, nil)
 	env.OnActivity(acts.StoreManifest, mock.Anything, mock.Anything).Return(nil)
 
 	env.ExecuteWorkflow(workflows.ProcessImage, manifest.ProcessImageInput{
 		PipelineID: pipelineID,
 		ImageID:    imageID,
-		Original:   manifest.S3Ref{Bucket: "test-bucket", Key: "uploads/foo.jpg"},
+		Original:   manifest.S3Ref{Key: "samples/foo.jpg"},
 	})
 	require.True(t, env.IsWorkflowCompleted())
 	require.NoError(t, env.GetWorkflowError())

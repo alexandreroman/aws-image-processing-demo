@@ -42,18 +42,6 @@ variable "temporal_namespace" {
   type        = string
 }
 
-variable "worker_task_queue_ecs" {
-  description = "Temporal task queue served by the ECS Fargate worker."
-  type        = string
-  default     = "image-processing-ecs"
-}
-
-variable "worker_task_queue_lambda" {
-  description = "Temporal task queue served by the Lambda worker."
-  type        = string
-  default     = "image-processing-lambda"
-}
-
 variable "worker_image" {
   description = "Container image for the Fargate worker."
   type        = string

@@ -72,24 +72,24 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 		return manifest.Manifest{}, err
 	}
 
-	// 1) Fan-out resize: one future per size.
-	resizeFutures := make(map[string]workflow.Future, len(manifest.SizeNames))
+	// 1) Fan-out resize: one future per size, indexed positionally alongside
+	//    manifest.SizeNames so we never iterate a map in workflow code.
+	resizeFutures := make([]workflow.Future, len(manifest.SizeNames))
 	resizeCtx := workflow.WithActivityOptions(ctx, cpuOpts)
-	for _, sizeName := range manifest.SizeNames {
-		f := workflow.ExecuteActivity(resizeCtx, (*activities.Activities).ResizeAndUpload, activities.ResizeInput{
+	for i, sizeName := range manifest.SizeNames {
+		resizeFutures[i] = workflow.ExecuteActivity(resizeCtx, (*activities.Activities).ResizeAndUpload, activities.ResizeInput{
 			PipelineID: in.PipelineID,
 			ImageID:    in.ImageID,
 			SizeName:   sizeName,
 			Original:   in.Original,
 		})
-		resizeFutures[sizeName] = f
 	}
 
 	// 2) Fan-in resize. Iterate the canonical slice for deterministic order.
 	sizes := make(map[string]manifest.Size, len(manifest.SizeNames))
-	for _, sizeName := range manifest.SizeNames {
+	for i, sizeName := range manifest.SizeNames {
 		var sz manifest.Size
-		if err := resizeFutures[sizeName].Get(ctx, &sz); err != nil {
+		if err := resizeFutures[i].Get(ctx, &sz); err != nil {
 			return manifest.Manifest{}, err
 		}
 		sizes[sizeName] = sz
@@ -109,23 +109,22 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 
 	// 4) Fan-out watermark: one future per size, watermarking the resized
 	//    output (not the original).
-	watermarkFutures := make(map[string]workflow.Future, len(manifest.SizeNames))
+	watermarkFutures := make([]workflow.Future, len(manifest.SizeNames))
 	watermarkCtx := workflow.WithActivityOptions(ctx, cpuOpts)
-	for _, sizeName := range manifest.SizeNames {
-		f := workflow.ExecuteActivity(watermarkCtx, (*activities.Activities).ApplyWatermark, activities.WatermarkInput{
+	for i, sizeName := range manifest.SizeNames {
+		watermarkFutures[i] = workflow.ExecuteActivity(watermarkCtx, (*activities.Activities).ApplyWatermark, activities.WatermarkInput{
 			PipelineID: in.PipelineID,
 			ImageID:    in.ImageID,
 			SizeName:   sizeName,
 			Source:     sizes[sizeName].S3Ref,
 		})
-		watermarkFutures[sizeName] = f
 	}
 
 	// 5) Fan-in watermark.
 	watermarked := make(map[string]manifest.S3Ref, len(manifest.SizeNames))
-	for _, sizeName := range manifest.SizeNames {
+	for i, sizeName := range manifest.SizeNames {
 		var ref manifest.S3Ref
-		if err := watermarkFutures[sizeName].Get(ctx, &ref); err != nil {
+		if err := watermarkFutures[i].Get(ctx, &ref); err != nil {
 			return manifest.Manifest{}, err
 		}
 		watermarked[sizeName] = ref

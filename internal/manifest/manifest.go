@@ -14,10 +14,11 @@ func ProcessImageWorkflowID(pipelineID, imageID string) string {
 	return fmt.Sprintf("image-pipeline-%s-%s", pipelineID, imageID)
 }
 
-// S3Ref points to an object in S3.
+// S3Ref points to an object in S3. The bucket is implicit (configured at the
+// worker / backend boundary) so the same code path is reused across local dev,
+// compose, and AWS without threading bucket names through every payload.
 type S3Ref struct {
-	Bucket string `json:"bucket"`
-	Key    string `json:"key"`
+	Key string `json:"key"`
 }
 
 // Size describes one resized version of an image.

@@ -1,7 +1,6 @@
 # --- S3 images bucket ------------------------------------------------------
 #
-# Holds three logical sets of objects:
-#   uploads/    — visitor uploads, expire after 7 days
+# Holds two logical sets of objects:
 #   pipelines/  — derived artifacts (resized + watermarked), expire after 30
 #   samples/    — preloaded demo pool, never expires
 
@@ -41,48 +40,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
   }
 }
 
-# SECURITY: `allowed_origins = ["*"]` lets ANY web origin issue presigned
-# PUTs against this bucket. That is acceptable for this demo, but it is
-# NOT safe for production — combined with our presign role it broadens
-# the blast radius of any leaked presigned URL beyond the demo frontend.
-#
-# Why it is wide open today: locking CORS to `https://${subdomain}.${domain}`
-# requires knowing the public hostname at bucket-creation time, but the
-# bucket is referenced by the worker task definition which is provisioned
-# before the CloudFront distribution exists, so there is a chicken-and-egg
-# cycle in a single `tofu apply`.
-#
-# Post-deploy hardening (run after the first successful apply):
-#   1. Set `allowed_origins` to the CloudFront / custom-domain URL only
-#      (e.g. ["https://demo.example.com"]).
-#   2. Re-apply; nothing else depends on the wide-open rule.
-resource "aws_s3_bucket_cors_configuration" "images" {
-  bucket = aws_s3_bucket.images.id
-
-  cors_rule {
-    allowed_methods = ["PUT"]
-    allowed_origins = ["*"]
-    allowed_headers = ["*"]
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
-  }
-}
-
 resource "aws_s3_bucket_lifecycle_configuration" "images" {
   bucket = aws_s3_bucket.images.id
-
-  rule {
-    id     = "expire-uploads"
-    status = "Enabled"
-
-    filter {
-      prefix = "uploads/"
-    }
-
-    expiration {
-      days = 7
-    }
-  }
 
   rule {
     id     = "expire-pipelines"

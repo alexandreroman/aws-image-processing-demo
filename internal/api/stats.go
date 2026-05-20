@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"go.temporal.io/api/workflowservice/v1"
 )
@@ -29,34 +30,28 @@ type StatsResponse struct {
 	WindowDays      int   `json:"windowDays"`
 }
 
-// statResult carries one count's value-or-error from a goroutine back
-// to the handler. We use a per-result struct rather than errgroup so a
-// single Visibility failure cannot poison the other count: each field
-// is decided independently via collectStat.
-type statResult struct {
-	value int64
-	err   error
-}
-
 func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	run := func(query string, out chan<- statResult) {
-		n, err := h.countWorkflows(ctx, query)
-		out <- statResult{value: n, err: err}
+	// Fan the three independent counts out in parallel; one Visibility hiccup
+	// must not poison the other counters, so failures land as a -1 sentinel.
+	queries := [3]string{queryImagesProcessed, queryImagesFailed, queryBurstsLaunched}
+	var counts [3]int64
+	var wg sync.WaitGroup
+	for i, q := range queries {
+		wg.Add(1)
+		go func(i int, q string) {
+			defer wg.Done()
+			n, err := h.countWorkflows(ctx, q)
+			if err != nil {
+				h.deps.Logger.Warn("stats count failed", "query", q, "err", err)
+				counts[i] = -1
+				return
+			}
+			counts[i] = n
+		}(i, q)
 	}
-
-	processedCh := make(chan statResult, 1)
-	failedCh := make(chan statResult, 1)
-	burstsCh := make(chan statResult, 1)
-	go run(queryImagesProcessed, processedCh)
-	go run(queryImagesFailed, failedCh)
-	go run(queryBurstsLaunched, burstsCh)
-
-	resp := StatsResponse{WindowDays: statsWindowDays}
-	resp.ImagesProcessed = h.collectStat(<-processedCh, queryImagesProcessed)
-	resp.ImagesFailed = h.collectStat(<-failedCh, queryImagesFailed)
-	resp.BurstsLaunched = h.collectStat(<-burstsCh, queryBurstsLaunched)
+	wg.Wait()
 
 	// Browsers respect max-age; CloudFront and Cloudflare honor s-maxage and
 	// serve stale during refresh / origin failure (stale-while-revalidate /
@@ -65,17 +60,12 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 		"Cache-Control",
 		"public, max-age=5, s-maxage=15, stale-while-revalidate=30, stale-if-error=300",
 	)
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// collectStat returns the count value, or the -1 sentinel after logging
-// a warning when the underlying CountWorkflow call failed.
-func (h *Handler) collectStat(r statResult, query string) int64 {
-	if r.err != nil {
-		h.deps.Logger.Warn("stats count failed", "query", query, "err", r.err)
-		return -1
-	}
-	return r.value
+	writeJSON(w, http.StatusOK, StatsResponse{
+		ImagesProcessed: counts[0],
+		ImagesFailed:    counts[1],
+		BurstsLaunched:  counts[2],
+		WindowDays:      statsWindowDays,
+	})
 }
 
 // countWorkflows wraps client.CountWorkflow with the demo's

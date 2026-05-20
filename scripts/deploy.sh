@@ -55,11 +55,8 @@ echo "==> Uploading sample images"
 echo "==> Building frontend"
 pnpm -C "${frontend_dir}" install --frozen-lockfile
 
-# Inject the real images bucket name so the SSG bundle targets the right
-# S3 bucket in prod; the dev default lives in frontend/nuxt.config.ts.
 NUXT_PUBLIC_API_BASE="" \
 NUXT_PUBLIC_S3_PUBLIC_URL="" \
-NUXT_PUBLIC_SAMPLES_BUCKET="$(tofu -chdir="${infra_dir}" output -raw images_bucket)" \
   pnpm -C "${frontend_dir}" generate
 
 frontend_bucket="$(tofu -chdir="${infra_dir}" output -raw frontend_bucket)"

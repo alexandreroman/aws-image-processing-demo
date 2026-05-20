@@ -35,38 +35,10 @@ resource "aws_iam_role_policy_attachment" "backend_logs" {
 }
 
 data "aws_iam_policy_document" "backend" {
-  # Presigned uploads: the backend signs `PutObject` URLs scoped to
-  # `uploads/`. The signature must match the action the browser performs,
-  # so the role itself needs `s3:PutObject` on that prefix even though the
-  # Lambda never uploads directly.
-  statement {
-    sid     = "ImagesBucketPresignPut"
-    actions = ["s3:PutObject"]
-    resources = [
-      "${aws_s3_bucket.images.arn}/uploads/*",
-    ]
-  }
-
   statement {
     sid       = "ImagesTableRead"
     actions   = ["dynamodb:Query"]
     resources = [aws_dynamodb_table.images.arn]
-  }
-
-  # Temporal Cloud mTLS material is injected as Lambda env vars via the
-  # Secrets Manager data sources below; this statement grants the role the
-  # ability to fetch the same secrets at runtime if the Lambda is later
-  # changed to pull them lazily.
-  dynamic "statement" {
-    for_each = local.temporal_tls_enabled ? [1] : []
-    content {
-      sid     = "ReadTemporalTLSSecrets"
-      actions = ["secretsmanager:GetSecretValue"]
-      resources = [
-        aws_secretsmanager_secret.temporal_tls_cert[0].arn,
-        aws_secretsmanager_secret.temporal_tls_key[0].arn,
-      ]
-    }
   }
 }
 
@@ -109,8 +81,8 @@ resource "aws_lambda_function" "backend" {
       {
         TEMPORAL_ADDRESS         = var.temporal_address
         TEMPORAL_NAMESPACE       = var.temporal_namespace
-        WORKER_TASK_QUEUE_ECS    = var.worker_task_queue_ecs
-        WORKER_TASK_QUEUE_LAMBDA = var.worker_task_queue_lambda
+        WORKER_TASK_QUEUE_ECS    = local.worker_task_queue_ecs
+        WORKER_TASK_QUEUE_LAMBDA = local.worker_task_queue_lambda
         IMAGES_BUCKET            = aws_s3_bucket.images.bucket
         IMAGES_TABLE             = aws_dynamodb_table.images.name
         # Pin CORS to the only origin that legitimately calls this API.

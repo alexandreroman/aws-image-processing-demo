@@ -3,7 +3,6 @@
 // `$fetch` elsewhere.
 
 export interface S3Ref {
-  bucket: string;
   key: string;
 }
 
@@ -88,13 +87,11 @@ export interface PipelineWorkers {
   workerCount: number;
 }
 
-type FetchOptions = Parameters<typeof $fetch>[1];
-
 export function useApi() {
   const config = useRuntimeConfig();
   const baseUrl = `${config.public.apiBase.replace(/\/$/, '')}/api`;
 
-  function apiFetch<T>(path: string, opts?: FetchOptions): Promise<T> {
+  function apiFetch<T>(path: string, opts?: Parameters<typeof $fetch>[1]): Promise<T> {
     const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     return $fetch<T>(url, opts);
   }

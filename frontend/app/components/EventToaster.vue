@@ -1,15 +1,10 @@
 <script setup lang="ts">
 const { toasts, dismiss } = useToast();
 
-function colorFor(kind: 'info' | 'success' | 'error'): string {
-  switch (kind) {
-    case 'success':
-      return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100';
-    case 'error':
-      return 'border-rose-500/40 bg-rose-500/10 text-rose-100';
-    default:
-      return 'border-primary/40 bg-primary/10 text-primary-50';
-  }
+function colorFor(kind: 'success' | 'error'): string {
+  return kind === 'success'
+    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+    : 'border-rose-500/40 bg-rose-500/10 text-rose-100';
 }
 </script>
 

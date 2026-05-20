@@ -5,6 +5,11 @@ locals {
     Project   = var.project_name
     ManagedBy = "OpenTofu"
   }
+
+  # Task queues are pinned per runtime; they are not user knobs because the
+  # backend looks them up by canonical name (`ecs` / `lambda`).
+  worker_task_queue_ecs    = "image-processing-ecs"
+  worker_task_queue_lambda = "image-processing-lambda"
 }
 
 # Random suffix appended to globally-unique resource names (S3 buckets,

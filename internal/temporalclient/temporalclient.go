@@ -28,8 +28,8 @@ const pemHeader = "-----BEGIN"
 // returns the assembled options and the resolved namespace so callers can log
 // and propagate it without re-reading the env. It does not dial.
 func Options(logger *slog.Logger) (client.Options, string, error) {
-	address := EnvOr("TEMPORAL_ADDRESS", client.DefaultHostPort)
-	namespace := EnvOr("TEMPORAL_NAMESPACE", client.DefaultNamespace)
+	address := envOr("TEMPORAL_ADDRESS", client.DefaultHostPort)
+	namespace := envOr("TEMPORAL_NAMESPACE", client.DefaultNamespace)
 
 	opts := client.Options{
 		HostPort:  address,
@@ -65,9 +65,8 @@ func Dial(logger *slog.Logger) (client.Client, string, error) {
 	return tc, namespace, nil
 }
 
-// EnvOr returns os.Getenv(key) when set and non-empty, otherwise fallback.
-// Exported so the worker and backend binaries can share a single helper.
-func EnvOr(key, fallback string) string {
+// envOr returns os.Getenv(key) when set and non-empty, otherwise fallback.
+func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}

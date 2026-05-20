@@ -205,7 +205,6 @@ In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants 
 
 ```mermaid
 graph TD
-    User[Browser] -->|PUT presigned upload| S3[(S3 images bucket)]
     User -->|POST /api/*| CF[CloudFront]
     CF -->|/api/*| APIGW[API Gateway]
     APIGW --> BE[Backend Lambda]

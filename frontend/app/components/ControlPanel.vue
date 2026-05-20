@@ -3,10 +3,8 @@ import type { RuntimeName } from '~/composables/useApi';
 
 const api = useApi();
 const toast = useToast();
-const config = useRuntimeConfig();
 
 const SAMPLE_COUNT = 50;
-const samplesBucket = config.public.samplesBucket;
 
 // Canonical list of runtimes the UI knows how to render. The actual set
 // shown is the intersection of this list and what the backend advertises
@@ -59,11 +57,10 @@ function pickRandomSamples<T>(pool: T[], k: number): T[] {
   return a.slice(0, k);
 }
 
-function pickRandomSampleRefs(n: number): { bucket: string; key: string }[] {
+function pickRandomSampleRefs(n: number): { key: string }[] {
   const pool = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
   const k = Math.min(n, pool.length);
   return pickRandomSamples(pool, k).map((id) => ({
-    bucket: samplesBucket,
     key: `samples/${id}.jpg`,
   }));
 }

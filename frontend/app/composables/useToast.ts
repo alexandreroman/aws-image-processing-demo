@@ -1,53 +1,38 @@
-// Tiny global toast bus. Components push toasts; <EventToaster> consumes
-// them. Backed by a single module-level reactive array so multiple
-// instances stay in sync.
+// Tiny global toast bus. Components push toasts via success()/error();
+// <EventToaster> consumes them. Backed by a single module-level reactive
+// array so multiple instances stay in sync.
 
-export type ToastKind = 'info' | 'success' | 'error';
+export type ToastKind = 'success' | 'error';
 
 export interface Toast {
   id: number;
   kind: ToastKind;
   title: string;
   body?: string;
-  ttlMs: number;
 }
 
-const DEFAULT_TTL_MS = 4_000;
+const TTL_MS = 4_000;
 
 const toasts = ref<Toast[]>([]);
 let nextId = 1;
 
 export function useToast() {
-  function push(
-    title: string,
-    opts: { kind?: ToastKind; body?: string; ttlMs?: number } = {},
-  ): number {
+  function push(kind: ToastKind, title: string, body?: string) {
     const id = nextId++;
-    const toast: Toast = {
-      id,
-      kind: opts.kind ?? 'info',
-      title,
-      body: opts.body,
-      ttlMs: opts.ttlMs ?? DEFAULT_TTL_MS,
-    };
-    toasts.value = [...toasts.value, toast];
+    toasts.value = [...toasts.value, { id, kind, title, body }];
     if (import.meta.client) {
-      window.setTimeout(() => dismiss(id), toast.ttlMs);
+      window.setTimeout(() => dismiss(id), TTL_MS);
     }
-    return id;
   }
 
   function dismiss(id: number) {
     toasts.value = toasts.value.filter((t) => t.id !== id);
   }
 
-  function success(title: string, body?: string) {
-    return push(title, { kind: 'success', body });
-  }
-
-  function error(title: string, body?: string) {
-    return push(title, { kind: 'error', body });
-  }
-
-  return { toasts, dismiss, success, error };
+  return {
+    toasts,
+    dismiss,
+    success: (title: string, body?: string) => push('success', title, body),
+    error: (title: string, body?: string) => push('error', title, body),
+  };
 }

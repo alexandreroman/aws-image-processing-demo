@@ -13,13 +13,13 @@ const props = withDefaults(
 
 const config = useRuntimeConfig();
 
-function publicUrl(bucket: string, key: string): string {
+function publicUrl(key: string): string {
   const base = config.public.s3PublicUrl.replace(/\/$/, '');
   if (!base) {
     // Same-origin via reverse proxy (/images/* → S3 in prod, Moto in compose).
     return `/images/${key}`;
   }
-  return `${base}/${bucket}/${key}`;
+  return `${base}/${key}`;
 }
 
 interface CompletedThumb {
@@ -64,8 +64,8 @@ function bestThumb(w: WorkflowItem): CachedThumb | null {
         imageId: m.imageId,
         description: m.description ?? '',
         labels: m.labels ?? [],
-        thumbUrl: publicUrl(wmMedium.bucket, wmMedium.key),
-        largeUrl: publicUrl(wmLarge.bucket, wmLarge.key),
+        thumbUrl: publicUrl(wmMedium.key),
+        largeUrl: publicUrl(wmLarge.key),
       },
     };
   }
@@ -79,8 +79,8 @@ function bestThumb(w: WorkflowItem): CachedThumb | null {
         imageId: m.imageId,
         description: m.description ?? '',
         labels: m.labels ?? [],
-        thumbUrl: publicUrl(szMedium.bucket, szMedium.key),
-        largeUrl: publicUrl(szLarge.bucket, szLarge.key),
+        thumbUrl: publicUrl(szMedium.key),
+        largeUrl: publicUrl(szLarge.key),
       },
     };
   }

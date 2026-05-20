@@ -93,19 +93,6 @@ data "aws_iam_policy_document" "worker_task" {
     )
   }
 
-  # KMS decrypt is needed when Secrets Manager values are encrypted with
-  # the account's AWS-managed key. Scoped via kms:ViaService so this role
-  # cannot decrypt anything outside Secrets Manager in the worker region.
-  statement {
-    sid       = "DecryptSecretsManagerKMS"
-    actions   = ["kms:Decrypt"]
-    resources = ["*"]
-    condition {
-      test     = "StringEquals"
-      variable = "kms:ViaService"
-      values   = ["secretsmanager.${var.aws_region}.amazonaws.com"]
-    }
-  }
 }
 
 resource "aws_iam_role_policy" "worker_task" {

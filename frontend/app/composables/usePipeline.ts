@@ -1,15 +1,13 @@
-// Poll a single pipeline with adaptive backoff: start at 1s, slow to 2s after
-// 10s, then 3s after 30s. Stops once everything is done (running === 0 &&
-// total > 0) or when the component using it unmounts.
+// Poll a single pipeline with adaptive backoff: 1s for the first 10s, then
+// 2s thereafter. Stops once everything is done (running === 0 && total > 0)
+// or when the component using it unmounts.
 
 import { useIntervalFn } from '@vueuse/core';
 import type { Pipeline, PipelineSummary, WorkflowItem } from './useApi';
 
 const POLL_FAST_MS = 1_000;
-const POLL_MEDIUM_MS = 2_000;
-const POLL_SLOW_MS = 3_000;
-const SLOW_AFTER_MS = 30_000;
-const MEDIUM_AFTER_MS = 10_000;
+const POLL_SLOW_MS = 2_000;
+const SLOW_AFTER_MS = 10_000;
 
 export interface UsePipelineReturn {
   summary: ComputedRef<PipelineSummary>;
@@ -72,13 +70,9 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   let pollStartedAt = 0;
 
   function updatePollInterval() {
-    const elapsed = Date.now() - pollStartedAt;
-    const next
-      = elapsed >= SLOW_AFTER_MS
-        ? POLL_SLOW_MS
-        : elapsed >= MEDIUM_AFTER_MS
-          ? POLL_MEDIUM_MS
-          : POLL_FAST_MS;
+    const next = Date.now() - pollStartedAt >= SLOW_AFTER_MS
+      ? POLL_SLOW_MS
+      : POLL_FAST_MS;
     if (next !== pollIntervalMs.value) {
       pollIntervalMs.value = next;
     }

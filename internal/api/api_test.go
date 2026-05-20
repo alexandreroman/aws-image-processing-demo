@@ -10,103 +10,19 @@ import (
 	"testing"
 )
 
-// newTestHandler builds a Handler with only the fields handlePresign needs
-// for its validation paths. Presigner is left nil because every test case
-// here errors out before reaching it. DefaultTaskQueue is set so the
-// fallback path is also exercised when needed; it is harmless when
-// Runtimes is non-empty.
+// newTestHandler builds a Handler with only the fields handleStart needs
+// for its validation paths.
 func newTestHandler() *Handler {
 	return New(Dependencies{
-		ImagesBucket:     "test-bucket",
-		Runtimes:         []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
-		DefaultTaskQueue: "image-processing",
+		ImagesBucket: "test-bucket",
+		Runtimes:     []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
 	})
 }
 
-// newTestHandlerWithDefaultQueueOnly mirrors newTestHandler but leaves
-// Runtimes empty so the local-dev fallback path can be exercised.
-func newTestHandlerWithDefaultQueueOnly() *Handler {
-	return New(Dependencies{
-		ImagesBucket:     "test-bucket",
-		DefaultTaskQueue: "image-processing",
-	})
-}
-
-// newTestHandlerWithoutAnyQueue mirrors newTestHandler but leaves both
-// Runtimes and DefaultTaskQueue empty so the misconfiguration path can be
-// exercised.
-func newTestHandlerWithoutAnyQueue() *Handler {
+// newTestHandlerWithoutRuntimes mirrors newTestHandler but leaves Runtimes
+// empty so the local-dev fallback path can be exercised.
+func newTestHandlerWithoutRuntimes() *Handler {
 	return New(Dependencies{ImagesBucket: "test-bucket"})
-}
-
-func TestHandlePresign_Validation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name           string
-		body           string
-		contentTypeRaw bool // when true, send body verbatim (used for empty body)
-		wantStatus     int
-		wantErrSubstr  string
-	}{
-		{
-			name:          "negative count",
-			body:          `{"count":-1}`,
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "count must be between",
-		},
-		{
-			name:          "zero count",
-			body:          `{"count":0}`,
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "count must be between",
-		},
-		{
-			name:          "count above limit",
-			body:          `{"count":51}`,
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "count must be between",
-		},
-		{
-			name:          "empty body",
-			body:          "",
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "invalid body",
-		},
-		{
-			name:          "malformed json",
-			body:          `{"count":`,
-			wantStatus:    http.StatusBadRequest,
-			wantErrSubstr: "invalid body",
-		},
-	}
-
-	h := newTestHandler()
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := httptest.NewRequest(http.MethodPost, "/api/uploads/presign",
-				bytes.NewBufferString(tc.body))
-			req.Header.Set("Content-Type", "application/json")
-			rec := httptest.NewRecorder()
-
-			h.ServeHTTP(rec, req)
-
-			if rec.Code != tc.wantStatus {
-				t.Fatalf("status: got %d, want %d (body=%s)", rec.Code, tc.wantStatus, rec.Body.String())
-			}
-			if tc.wantErrSubstr != "" {
-				var resp map[string]string
-				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-					t.Fatalf("decode response: %v (body=%s)", err, rec.Body.String())
-				}
-				if !strings.Contains(resp["error"], tc.wantErrSubstr) {
-					t.Fatalf("error %q does not contain %q", resp["error"], tc.wantErrSubstr)
-				}
-			}
-		})
-	}
 }
 
 // postJSON drives the handler with a JSON body and decodes the {"error": ...}
@@ -137,19 +53,19 @@ func TestHandleStart_RejectsBadS3Refs(t *testing.T) {
 		wantErrSubstr string
 	}{
 		{
-			name:          "wrong bucket",
-			body:          `{"images":[{"bucket":"someone-elses-bucket","key":"uploads/x.jpg"}]}`,
-			wantErrSubstr: "must match the configured images bucket",
+			name:          "forbidden key prefix pipelines",
+			body:          `{"images":[{"key":"pipelines/foo.jpg"}]}`,
+			wantErrSubstr: "must start with samples/",
 		},
 		{
-			name:          "forbidden key prefix pipelines",
-			body:          `{"images":[{"bucket":"test-bucket","key":"pipelines/foo.jpg"}]}`,
-			wantErrSubstr: "must start with uploads/ or samples/",
+			name:          "forbidden key prefix uploads",
+			body:          `{"images":[{"key":"uploads/foo.jpg"}]}`,
+			wantErrSubstr: "must start with samples/",
 		},
 		{
 			name:          "forbidden key prefix bare",
-			body:          `{"images":[{"bucket":"test-bucket","key":"evil"}]}`,
-			wantErrSubstr: "must start with uploads/ or samples/",
+			body:          `{"images":[{"key":"evil"}]}`,
+			wantErrSubstr: "must start with samples/",
 		},
 	}
 
@@ -174,9 +90,9 @@ func TestHandleStart_RejectsBurstAboveCap(t *testing.T) {
 
 	// Build N otherwise-valid refs so the cap check fires before per-image
 	// validation has a chance to reject anything.
-	refs := make([]string, maxPresignCnt+1)
+	refs := make([]string, maxBurst+1)
 	for i := range refs {
-		refs[i] = `{"bucket":"test-bucket","key":"uploads/x.jpg"}`
+		refs[i] = `{"key":"samples/1.jpg"}`
 	}
 	body := `{"images":[` + strings.Join(refs, ",") + `]}`
 
@@ -185,7 +101,7 @@ func TestHandleStart_RejectsBurstAboveCap(t *testing.T) {
 	if status != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
 	}
-	wantSubstr := fmt.Sprintf("at most %d", maxPresignCnt)
+	wantSubstr := fmt.Sprintf("at most %d", maxBurst)
 	if !strings.Contains(gotErr, wantSubstr) {
 		t.Fatalf("error %q does not contain %q", gotErr, wantSubstr)
 	}
@@ -208,7 +124,7 @@ func TestHandleStart_RejectsUnknownRuntime(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler()
-	body := `{"images":[{"bucket":"test-bucket","key":"uploads/x.jpg"}],"runtime":"firecracker"}`
+	body := `{"images":[{"key":"samples/1.jpg"}],"runtime":"firecracker"}`
 	status, gotErr := postJSON(t, h, "/api/workflows/start", body)
 	if status != http.StatusBadRequest {
 		t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
@@ -250,7 +166,7 @@ func TestHandleRuntimes(t *testing.T) {
 	t.Run("unconfigured returns empty array", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestHandlerWithDefaultQueueOnly()
+		h := newTestHandlerWithoutRuntimes()
 		req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -266,39 +182,17 @@ func TestHandleRuntimes(t *testing.T) {
 	})
 }
 
-func TestHandlePresign_CountErrorMentionsActualValue(t *testing.T) {
-	t.Parallel()
-
-	h := newTestHandler()
-	req := httptest.NewRequest(http.MethodPost, "/api/uploads/presign",
-		bytes.NewBufferString(`{"count":999}`))
-	rec := httptest.NewRecorder()
-
-	h.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status: got %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-	var resp map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if !strings.Contains(resp["error"], "999") {
-		t.Fatalf("expected error to mention the offending count, got %q", resp["error"])
-	}
-}
-
-// TestHandleStart_FallbackToDefaultTaskQueue exercises the local-dev path
-// where Runtimes is empty and the handler falls back to DefaultTaskQueue.
-// We only assert the validation rejections that fire BEFORE the Temporal
-// call — the happy path would NPE on the nil client and is out of scope.
-func TestHandleStart_FallbackToDefaultTaskQueue(t *testing.T) {
+// TestHandleStart_LocalDevPath exercises the local-dev path where Runtimes
+// is empty and the handler falls back to the built-in defaultTaskQueue
+// constant. We only assert the validation rejections that fire BEFORE the
+// Temporal call — the happy path would NPE on the nil client.
+func TestHandleStart_LocalDevPath(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty images still rejected", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestHandlerWithDefaultQueueOnly()
+		h := newTestHandlerWithoutRuntimes()
 		status, gotErr := postJSON(t, h, "/api/workflows/start", `{"images":[]}`)
 		if status != http.StatusBadRequest {
 			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
@@ -308,32 +202,17 @@ func TestHandleStart_FallbackToDefaultTaskQueue(t *testing.T) {
 		}
 	})
 
-	t.Run("bad bucket still rejected", func(t *testing.T) {
+	t.Run("bad key still rejected", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestHandlerWithDefaultQueueOnly()
-		body := `{"images":[{"bucket":"someone-else","key":"uploads/x.jpg"}]}`
+		h := newTestHandlerWithoutRuntimes()
+		body := `{"images":[{"key":"pipelines/foo.jpg"}]}`
 		status, gotErr := postJSON(t, h, "/api/workflows/start", body)
 		if status != http.StatusBadRequest {
 			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
 		}
-		if !strings.Contains(gotErr, "must match the configured images bucket") {
-			t.Fatalf("error %q does not mention the bucket mismatch", gotErr)
-		}
-	})
-
-	t.Run("no task queue configured returns 500", func(t *testing.T) {
-		t.Parallel()
-
-		h := newTestHandlerWithoutAnyQueue()
-		body := `{"images":[{"bucket":"test-bucket","key":"uploads/x.jpg"}]}`
-		status, gotErr := postJSON(t, h, "/api/workflows/start", body)
-		if status != http.StatusInternalServerError {
-			t.Fatalf("status: got %d, want %d (err=%q)",
-				status, http.StatusInternalServerError, gotErr)
-		}
-		if !strings.Contains(gotErr, "no task queue configured") {
-			t.Fatalf("error %q does not mention the missing queue", gotErr)
+		if !strings.Contains(gotErr, "must start with samples/") {
+			t.Fatalf("error %q does not mention the key prefix", gotErr)
 		}
 	})
 }

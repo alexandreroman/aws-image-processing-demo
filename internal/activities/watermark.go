@@ -27,16 +27,16 @@ type WatermarkInput struct {
 //go:embed assets/temporal-logo.png
 var temporalLogoPNG []byte
 
-// temporalLogo is the decoded source logo, cached at package init.
-var temporalLogo = mustDecodeLogo()
-
-func mustDecodeLogo() image.Image {
+// temporalLogo is the decoded source logo, cached at package init. The asset
+// is embedded at build time; a decode failure here means the binary was
+// tampered with, so panicking via the init expression is the right answer.
+var temporalLogo = func() image.Image {
 	img, err := png.Decode(bytes.NewReader(temporalLogoPNG))
 	if err != nil {
 		panic(fmt.Errorf("watermark: decode embedded logo: %w", err))
 	}
 	return img
-}
+}()
 
 // ApplyWatermark composites the Temporal logo on a rounded translucent plate at
 // the bottom edge, centered horizontally, and uploads the result to the
@@ -71,7 +71,7 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 	}
 
 	logger.Info("watermark done", "imageId", in.ImageID, "size", in.SizeName)
-	return manifest.S3Ref{Bucket: a.ImagesBucket, Key: key}, nil
+	return manifest.S3Ref{Key: key}, nil
 }
 
 // stampWatermark draws the Temporal logo on a rounded translucent plate at the
