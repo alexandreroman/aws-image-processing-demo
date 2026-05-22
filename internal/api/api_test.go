@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/converter"
 )
 
 // newTestHandler builds a Handler with only the fields handleStart needs
@@ -216,6 +221,58 @@ func TestHandleStart_LocalDevPath(t *testing.T) {
 			t.Fatalf("error %q does not mention the key prefix", gotErr)
 		}
 	})
+}
+
+// queryNotFoundTemporal stubs only the QueryWorkflow call used by
+// fetchPipelineWorkflowIDs and returns a Temporal NotFound for any ID,
+// simulating a request for an unknown pipeline.
+type queryNotFoundTemporal struct {
+	client.Client
+}
+
+func (queryNotFoundTemporal) QueryWorkflow(
+	_ context.Context, workflowID, _, _ string, _ ...any,
+) (converter.EncodedValue, error) {
+	return nil, serviceerror.NewNotFoundf(
+		"workflow not found for ID: %s", workflowID)
+}
+
+func TestHandlePipeline_UnknownPipelineReturns404(t *testing.T) {
+	t.Parallel()
+
+	h := New(Dependencies{Temporal: queryNotFoundTemporal{}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/pipelines/deadbeef", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status: got %d, want %d (body=%s)",
+			rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v (body=%s)", err, rec.Body.String())
+	}
+	if !strings.Contains(resp["error"], "deadbeef") {
+		t.Fatalf("error %q does not name the pipeline", resp["error"])
+	}
+}
+
+func TestHandlePipelineWorkers_UnknownPipelineReturns404(t *testing.T) {
+	t.Parallel()
+
+	h := New(Dependencies{Temporal: queryNotFoundTemporal{}})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/pipelines/deadbeef/workers", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status: got %d, want %d (body=%s)",
+			rec.Code, http.StatusNotFound, rec.Body.String())
+	}
 }
 
 func TestPipelineTiming_AllCompleted(t *testing.T) {

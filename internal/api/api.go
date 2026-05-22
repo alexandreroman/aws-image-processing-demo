@@ -9,6 +9,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	workflowpb "go.temporal.io/api/workflow/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
@@ -307,16 +309,24 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manifests, err := h.fetchManifests(r.Context(), pipelineID)
+	// Resolve the launcher first so an unknown pipelineId returns 404 cleanly
+	// without spending a DynamoDB Query on a pipeline that does not exist.
+	workflowIDs, err := h.fetchPipelineWorkflowIDs(r.Context(), pipelineID)
 	if err != nil {
-		h.deps.Logger.Error("fetch manifests failed", "pipelineId", pipelineID, "err", err)
+		var notFound *serviceerror.NotFound
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound,
+				fmt.Sprintf("pipeline %q not found", pipelineID))
+			return
+		}
+		h.deps.Logger.Error("fetch launcher result failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to read pipeline: "+err.Error())
 		return
 	}
 
-	workflowIDs, err := h.fetchPipelineWorkflowIDs(r.Context(), pipelineID)
+	manifests, err := h.fetchManifests(r.Context(), pipelineID)
 	if err != nil {
-		h.deps.Logger.Error("fetch launcher result failed", "pipelineId", pipelineID, "err", err)
+		h.deps.Logger.Error("fetch manifests failed", "pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to read pipeline: "+err.Error())
 		return
 	}

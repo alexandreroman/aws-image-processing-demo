@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 )
 
 // workersResponse is the JSON payload of
@@ -35,6 +37,12 @@ func (h *Handler) handlePipelineWorkers(w http.ResponseWriter, r *http.Request) 
 
 	childIDs, err := h.fetchPipelineWorkflowIDs(r.Context(), pipelineID)
 	if err != nil {
+		var notFound *serviceerror.NotFound
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound,
+				fmt.Sprintf("pipeline %q not found", pipelineID))
+			return
+		}
 		h.deps.Logger.Error("fetch launcher result failed",
 			"pipelineId", pipelineID, "err", err)
 		writeError(w, http.StatusInternalServerError,
