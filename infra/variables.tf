@@ -54,6 +54,18 @@ variable "worker_max_concurrent_activities" {
   default     = 4
 }
 
+variable "worker_lambda_max_instances" {
+  description = "Caps the maximum number of Lambda worker instances (one per concurrent execution). Use -1 (the AWS API sentinel) to disable the reservation and fall back to unreserved account concurrency."
+  type        = number
+  default     = 10
+}
+
+variable "worker_ecs_max_instances" {
+  description = "Caps the maximum number of ECS worker instances (the service's desired_count) when autoscaling is enabled (TEMPORAL_METRICS_API_KEY set). Ignored otherwise — the service stays at desired_count = 1."
+  type        = number
+  default     = 5
+}
+
 variable "temporal_cloud_aws_account_ids" {
   description = <<-EOT
     AWS account IDs of the Temporal Cloud Lambda invoker cells. The default

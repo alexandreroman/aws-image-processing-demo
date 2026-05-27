@@ -123,6 +123,8 @@ resource "aws_lambda_function" "worker" {
   function_name = "${var.name_prefix}-worker"
   role          = aws_iam_role.worker_execution.arn
 
+  reserved_concurrent_executions = var.worker_lambda_max_instances
+
   filename         = local.worker_zip
   source_code_hash = local.worker_zip_exists ? filebase64sha256(local.worker_zip) : null
 

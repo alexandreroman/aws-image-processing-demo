@@ -89,6 +89,8 @@ load_env() {
   [[ -n "${AWS_REGION:-}" ]] && export TF_VAR_aws_region="${AWS_REGION}"
   [[ -n "${WORKER_IMAGE:-}" ]] && export TF_VAR_worker_image="${WORKER_IMAGE}"
   [[ -n "${WORKER_MAX_CONCURRENT_ACTIVITIES:-}" ]] && export TF_VAR_worker_max_concurrent_activities="${WORKER_MAX_CONCURRENT_ACTIVITIES}"
+  [[ -n "${WORKER_LAMBDA_MAX_INSTANCES:-}" ]] && export TF_VAR_worker_lambda_max_instances="${WORKER_LAMBDA_MAX_INSTANCES}"
+  [[ -n "${WORKER_ECS_MAX_INSTANCES:-}" ]] && export TF_VAR_worker_ecs_max_instances="${WORKER_ECS_MAX_INSTANCES}"
   [[ -n "${TEMPORAL_CLOUD_EXTERNAL_ID:-}" ]] && export TF_VAR_temporal_cloud_external_id="${TEMPORAL_CLOUD_EXTERNAL_ID}"
 
   local custom_domain=0

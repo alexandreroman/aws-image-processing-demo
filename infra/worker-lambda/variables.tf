@@ -28,6 +28,12 @@ variable "worker_max_concurrent_activities" {
   type        = number
 }
 
+variable "worker_lambda_max_instances" {
+  description = "Caps the maximum number of Lambda worker instances (one per concurrent execution). Use -1 (the AWS API sentinel) to disable the reservation and fall back to unreserved account concurrency."
+  type        = number
+  default     = 10
+}
+
 variable "images_bucket_arn" {
   description = "ARN of the S3 images bucket — used to scope task-role permissions."
   type        = string

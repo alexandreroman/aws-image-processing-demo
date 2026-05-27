@@ -41,7 +41,8 @@ module "worker_ecs" {
   temporal_tls_cert_secret_arn = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_cert[0].arn : ""
   temporal_tls_key_secret_arn  = local.temporal_tls_enabled ? aws_secretsmanager_secret.temporal_tls_key[0].arn : ""
 
-  autoscaling_enabled = var.temporal_metrics_api_key != ""
+  autoscaling_enabled      = var.temporal_metrics_api_key != ""
+  autoscaling_max_capacity = var.worker_ecs_max_instances
 
   subnet_ids = aws_subnet.public[*].id
   vpc_id     = aws_vpc.main.id
@@ -74,6 +75,7 @@ module "worker_lambda" {
   temporal_tls_enabled = local.temporal_tls_enabled
 
   worker_max_concurrent_activities = var.worker_max_concurrent_activities
+  worker_lambda_max_instances      = var.worker_lambda_max_instances
 
   images_bucket_arn  = aws_s3_bucket.images.arn
   images_bucket_name = aws_s3_bucket.images.bucket

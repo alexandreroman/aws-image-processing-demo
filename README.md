@@ -206,6 +206,8 @@ load only `.env`. Both files are gitignored — copy from
 | `CLOUDFLARE_ZONE_ID`                 | Cloudflare zone ID for the demo domain                       | (empty)                            |
 | `WORKER_IMAGE`                       | Override the Fargate worker image                            | (GHCR `:latest`)                   |
 | `WORKER_MAX_CONCURRENT_ACTIVITIES`   | Max activities a worker runs concurrently                    | `4`                                |
+| `WORKER_LAMBDA_MAX_INSTANCES`        | Cap on Lambda worker instances (-1 = unreserved)             | `10`                               |
+| `WORKER_ECS_MAX_INSTANCES`           | Cap on ECS worker instances when autoscaling is enabled      | `5`                                |
 
 > **Note — `TEMPORAL_CLOUD_EXTERNAL_ID`.** This is the
 > `sts:ExternalId` trust-condition value Temporal Cloud
