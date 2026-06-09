@@ -88,4 +88,6 @@ module "worker_lambda" {
 
   temporal_cloud_aws_account_ids = var.temporal_cloud_aws_account_ids
   temporal_cloud_external_id     = var.temporal_cloud_external_id
+
+  deployment_name_suffix = var.worker_lambda_deployment_suffix
 }

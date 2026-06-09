@@ -12,5 +12,5 @@ output "invoker_role_arn" {
 
 output "deployment_name" {
   description = "Temporal Worker Deployment name the Lambda worker registers under. Consumed by scripts/register-worker-deployment.sh."
-  value       = "${var.name_prefix}-worker-lambda"
+  value       = local.deployment_name
 }

@@ -91,6 +91,7 @@ load_env() {
   [[ -n "${WORKER_MAX_CONCURRENT_ACTIVITIES:-}" ]] && export TF_VAR_worker_max_concurrent_activities="${WORKER_MAX_CONCURRENT_ACTIVITIES}"
   [[ -n "${WORKER_LAMBDA_MAX_INSTANCES:-}" ]] && export TF_VAR_worker_lambda_max_instances="${WORKER_LAMBDA_MAX_INSTANCES}"
   [[ -n "${WORKER_ECS_MAX_INSTANCES:-}" ]] && export TF_VAR_worker_ecs_max_instances="${WORKER_ECS_MAX_INSTANCES}"
+  [[ -n "${WORKER_LAMBDA_DEPLOYMENT_SUFFIX:-}" ]] && export TF_VAR_worker_lambda_deployment_suffix="${WORKER_LAMBDA_DEPLOYMENT_SUFFIX}"
   [[ -n "${TEMPORAL_CLOUD_EXTERNAL_ID:-}" ]] && export TF_VAR_temporal_cloud_external_id="${TEMPORAL_CLOUD_EXTERNAL_ID}"
 
   local custom_domain=0

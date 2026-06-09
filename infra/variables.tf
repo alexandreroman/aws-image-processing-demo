@@ -66,6 +66,12 @@ variable "worker_ecs_max_instances" {
   default     = 5
 }
 
+variable "worker_lambda_deployment_suffix" {
+  description = "Optional suffix for the Lambda Temporal Worker Deployment name. See module worker-lambda var.deployment_name_suffix."
+  type        = string
+  default     = ""
+}
+
 variable "temporal_cloud_aws_account_ids" {
   description = <<-EOT
     AWS account IDs of the Temporal Cloud Lambda invoker cells. The default

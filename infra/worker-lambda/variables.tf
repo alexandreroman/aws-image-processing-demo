@@ -96,3 +96,9 @@ variable "temporal_cloud_external_id" {
   sensitive   = true
   default     = ""
 }
+
+variable "deployment_name_suffix" {
+  description = "Optional suffix appended to the Temporal Worker Deployment name (…-worker-lambda-<suffix>). Use to roll onto a fresh deployment name when the existing one is wedged on the Temporal Cloud side. Empty = no suffix."
+  type        = string
+  default     = ""
+}

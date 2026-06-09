@@ -15,6 +15,12 @@ locals {
   # time, so we leave it unconditionally set.
   worker_zip_exists   = fileexists(local.worker_zip)
   create_invoker_role = length(var.temporal_cloud_aws_account_ids) > 0 && var.temporal_cloud_external_id != ""
+
+  # Temporal Worker Deployment name. The optional suffix lets us roll onto a
+  # fresh deployment name when the existing one is wedged on the Temporal Cloud
+  # side. Surfaced to the worker via WORKER_DEPLOYMENT_NAME and to the
+  # registration script via the `deployment_name` output — keeping both in sync.
+  deployment_name = "${var.name_prefix}-worker-lambda${var.deployment_name_suffix != "" ? "-${var.deployment_name_suffix}" : ""}"
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
@@ -156,7 +162,7 @@ resource "aws_lambda_function" "worker" {
         # registration script consumes the same value via the Tofu output
         # `worker_lambda_deployment_name`, so changes here flow there
         # automatically — no string drift across sites.
-        WORKER_DEPLOYMENT_NAME           = "${var.name_prefix}-worker-lambda"
+        WORKER_DEPLOYMENT_NAME           = local.deployment_name
         WORKER_MAX_CONCURRENT_ACTIVITIES = tostring(var.worker_max_concurrent_activities)
         ANTHROPIC_API_KEY                = data.aws_secretsmanager_secret_version.anthropic_api_key.secret_string
       },
