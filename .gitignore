@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 
+# cmux per-workspace generated compose override
+compose.override.yaml
+
 # Go
 /bin/
 /tmp/
