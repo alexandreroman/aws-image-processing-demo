@@ -1,7 +1,7 @@
 // Command backend serves the demo's REST API.
 //
-// If AWS_ENDPOINT_URL is set (Moto), run as HTTP on :8000; otherwise start
-// the Lambda handler.
+// If AWS_ENDPOINT_URL is set (Moto), run as HTTP on the port from PORT
+// (default :8000); otherwise start the Lambda handler.
 package main
 
 import (
@@ -22,7 +22,15 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-const httpAddr = ":8000"
+// httpAddr returns the HTTP listen address, honoring the PORT env var so
+// host-side dev (e.g. `make dev` under Casper/cmux) can bind a remapped port.
+// Defaults to :8000 when PORT is unset.
+func httpAddr() string {
+	if port := os.Getenv("PORT"); port != "" {
+		return ":" + port
+	}
+	return ":8000"
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -101,8 +109,9 @@ func buildRuntimes() []api.Runtime {
 
 func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler, tc client.Client) {
 	defer tc.Close()
+	addr := httpAddr()
 	srv := &http.Server{
-		Addr:              httpAddr,
+		Addr:              addr,
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -116,7 +125,7 @@ func runHTTP(ctx context.Context, logger *slog.Logger, h http.Handler, tc client
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	logger.Info("HTTP server listening", "addr", httpAddr)
+	logger.Info("HTTP server listening", "addr", addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("HTTP server stopped with error", "err", err)
 		os.Exit(1)

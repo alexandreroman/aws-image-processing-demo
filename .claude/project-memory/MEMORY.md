@@ -18,6 +18,7 @@ in this directory.
 - [No workflow.GetVersion in ProcessImage workflows](references/workflow_no_versioning.md) — workflows are short-lived; rollouts ship code directly without versioning gates
 - [Worktree env symlinks](references/worktree_env_symlinks.md) — new git worktrees need both `.env` and `.env.local` symlinked from the main worktree, otherwise `make dev` is broken
 - [cmux per-workspace compose port isolation](references/cmux_compose_port_isolation.md) — `.cmux/post-create.sh` writes a gitignored `compose.override.yaml` remapping host ports off `CMUX_PORT` (`!override` tag) so parallel worktrees don't collide on `make app-up`
+- [Casper local-config support](references/casper_local_config.md) — `.casper.json` + `make worktree-ports` mirror the cmux fan-out (from `CASPER_PORT`); Makefile parses the override back for the banner and host `make dev`; keep both fan-outs byte-compatible
 - [Cleanup recipe for orphan Temporal Worker Deployments](references/temporal_worker_deployment_cleanup.md) — `set-current-version --unversioned` first, then `delete-version --skip-drainage`, then `delete`
 - [Temporal WorkflowExecutionStatus.String() pitfall](references/temporal_status_enum_string.md) — `.String()` returns CamelCase ("Running"), not the SCREAMING_SNAKE constant; keep the explicit `statusName` switch
 - [Keep WORKER_MAX_CONCURRENT_ACTIVITIES env knob](references/worker_max_concurrent_activities.md) — deliberate demo dial for burst/autoscaling/backpressure; do not prune as dead config

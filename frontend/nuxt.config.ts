@@ -46,11 +46,13 @@ export default defineNuxtConfig({
     // CloudFront / Caddy for the same single-origin routing.
     devProxy: {
       '/api': {
-        target: 'http://localhost:8000/api',
+        target: process.env.NUXT_DEV_API_TARGET ?? 'http://localhost:8000/api',
         changeOrigin: true,
       },
       '/images': {
-        target: 'http://localhost:4566/aws-image-processing-demo-images-local',
+        target:
+          process.env.NUXT_DEV_IMAGES_TARGET ??
+          'http://localhost:4566/aws-image-processing-demo-images-local',
         changeOrigin: true,
       },
     },
