@@ -95,7 +95,7 @@ frontend/node_modules: frontend/package.json
 
 .PHONY: app-up
 app-up: ## Bring up the full stack in Docker (infra + worker + backend + frontend)
-	docker-compose up -d --build
+	docker-compose up -d
 	$(show_urls)
 
 .PHONY: app-down
