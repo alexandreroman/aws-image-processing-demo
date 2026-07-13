@@ -16,8 +16,8 @@ WORKDIR /src
 
 # Module cache layer.
 COPY go.mod go.sum* ./
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
+    --mount=type=cache,id=gomod,target=/go/pkg/mod \
     go mod download
 
 # Source.
@@ -26,8 +26,8 @@ COPY . .
 ENV CGO_ENABLED=0 \
     GOOS=linux
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
+    --mount=type=cache,id=gomod,target=/go/pkg/mod \
     go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker && \
     go build -trimpath -ldflags="-s -w" -o /out/backend ./cmd/backend
 
