@@ -78,10 +78,14 @@ worker: ## Run the Temporal worker with hot reload
 
 .PHONY: frontend
 frontend: ## Run the Nuxt dev server with hot reload
+# The pnpm launcher resolves the `packageManager` pin from its own working directory, and
+# `-C` is applied only afterwards. Every host-side call therefore enters frontend/ first and
+# goes through corepack, so it runs the pinned pnpm rather than whatever is on the PATH.
+	cd frontend && \
 	PORT=$(FRONTEND_PORT) \
 	NUXT_DEV_API_TARGET=http://localhost:$(BACKEND_PORT)/api \
 	NUXT_DEV_IMAGES_TARGET=http://localhost:$(MOTO_PORT)/aws-image-processing-demo-images-local \
-	pnpm -C frontend dev
+	corepack pnpm dev
 
 .PHONY: dev
 dev: frontend/node_modules infra-up ## Start infra, then run backend + worker + frontend on the host with hot reload
@@ -89,7 +93,7 @@ dev: frontend/node_modules infra-up ## Start infra, then run backend + worker + 
 	@$(MAKE) -j backend worker frontend
 
 frontend/node_modules: frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml
-	pnpm -C frontend install
+	cd frontend && corepack pnpm install
 
 ##@ Stack
 
@@ -115,7 +119,7 @@ test: ## Run Go unit tests
 .PHONY: check
 check: test ## Run unit tests and static checks across modules
 	go vet ./...
-	pnpm -C frontend lint
+	cd frontend && corepack pnpm lint
 
 ##@ Build
 

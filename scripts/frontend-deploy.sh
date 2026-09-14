@@ -16,11 +16,16 @@ source "${repo_root}/scripts/lib/env.sh"
 load_env
 
 echo "==> Building frontend"
-pnpm -C "${frontend_dir}" install --frozen-lockfile
+# pnpm resolves the `packageManager` pin from its own working directory, so run it from
+# inside frontend/ (in a subshell, to leave this script's cwd alone) and via corepack.
+(cd "${frontend_dir}" && corepack pnpm install --frozen-lockfile)
 
-NUXT_PUBLIC_API_BASE="" \
-NUXT_PUBLIC_S3_PUBLIC_URL="" \
-  pnpm -C "${frontend_dir}" generate
+(
+  cd "${frontend_dir}"
+  NUXT_PUBLIC_API_BASE="" \
+  NUXT_PUBLIC_S3_PUBLIC_URL="" \
+    corepack pnpm generate
+)
 
 frontend_bucket="$(tofu -chdir="${infra_dir}" output -raw frontend_bucket)"
 distribution_id="$(tofu -chdir="${infra_dir}" output -raw cloudfront_distribution_id)"
