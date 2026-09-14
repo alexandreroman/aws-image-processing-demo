@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Rebuild the Nuxt frontend, sync to S3, and invalidate CloudFront.
 #
-# Skips `tofu apply`: assumes the infra is already provisioned and
-# pulls bucket/distribution names from Tofu outputs. Use this for
-# fast iteration on the frontend only.
+# Runs `tofu init` so the Tofu outputs are readable, then skips
+# `tofu apply`: assumes the infra is already provisioned and pulls
+# bucket/distribution names from Tofu outputs. Use this for fast
+# iteration on the frontend only.
 
 set -euo pipefail
 
@@ -18,6 +19,9 @@ frontend_dir="${repo_root}/frontend"
 # shellcheck disable=SC1091
 source "${repo_root}/scripts/lib/env.sh"
 load_env
+
+echo "==> Initializing OpenTofu"
+tofu -chdir="${infra_dir}" init
 
 echo "==> Building frontend"
 # pnpm resolves the `packageManager` pin from its own working directory, so run it from

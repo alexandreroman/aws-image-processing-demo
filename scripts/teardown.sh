@@ -3,9 +3,10 @@
 # scripts/deploy.sh.
 #
 # Steps:
-#   1. Empty the images and frontend S3 buckets
+#   1. tofu init.
+#   2. Empty the images and frontend S3 buckets
 #      (Tofu cannot delete non-empty buckets).
-#   2. tofu destroy.
+#   3. tofu destroy.
 #
 # Set INTERACTIVE=0 to skip the destroy prompt
 # (useful in CI). Default is interactive.
@@ -42,6 +43,12 @@ empty_bucket() {
   echo "Emptying s3://${bucket}"
   aws s3 rm "s3://${bucket}" --recursive >/dev/null || true
 }
+
+# Must run before the empty_bucket calls, not just before the destroy: in an
+# uninitialized directory `tofu output` fails, empty_bucket silently skips the
+# bucket, and the destroy then dies on a non-empty bucket.
+echo "==> Initializing OpenTofu"
+tofu -chdir="${infra_dir}" init
 
 echo "==> Emptying S3 buckets"
 empty_bucket images_bucket
