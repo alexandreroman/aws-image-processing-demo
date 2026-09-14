@@ -14,13 +14,10 @@
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 
-# Module cache layer.
-COPY go.mod go.sum* ./
-RUN --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
-    --mount=type=cache,id=gomod,target=/go/pkg/mod \
-    go mod download
-
-# Source.
+# Source. Modules are resolved during `go build`, which fetches only what
+# ./cmd/worker and ./cmd/backend import, rather than the whole module graph —
+# that graph also covers dependencies reachable only from the `tool` directives
+# in go.mod (Air and its transitive tree), which the image never builds.
 COPY . .
 
 ENV CGO_ENABLED=0 \
