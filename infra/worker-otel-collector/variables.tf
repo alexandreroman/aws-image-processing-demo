@@ -23,11 +23,6 @@ variable "cluster_id" {
   type        = string
 }
 
-variable "cluster_name" {
-  description = "Name of the existing ECS cluster (only used for tagging / log clarity)."
-  type        = string
-}
-
 variable "subnet_ids" {
   description = "Subnet IDs the ECS service places the collector task into."
   type        = list(string)
@@ -55,4 +50,9 @@ variable "collector_image" {
   EOT
   type        = string
   default     = "public.ecr.aws/aws-observability/aws-otel-collector:v0.47.0"
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch retention for the collector log group."
+  type        = number
 }

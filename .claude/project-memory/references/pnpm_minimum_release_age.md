@@ -26,4 +26,5 @@ opt-out. An entry is removable once its version clears the window;
 left in place it grants that one package a permanent bypass. A fresh
 transitive dependency of a newly bumped library is the usual trigger,
 so expect this during dependency-update passes. See
-[[pnpm_build_approvals]] and [[pnpm_corepack_invocation]].
+[pnpm dependency build approvals](pnpm_build_approvals.md) and
+[pnpm invocations run from inside frontend/](pnpm_corepack_invocation.md).

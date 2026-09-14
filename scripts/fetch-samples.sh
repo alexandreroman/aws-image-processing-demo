@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Download 50 sample images from Picsum into
-# frontend/public/sample-images/ as 1.jpg .. 50.jpg.
+# samples/ as 1.jpg .. 50.jpg.
 #
 # License: Picsum (https://picsum.photos) serves CC0
 # photographs by Unsplash photographers, free for any
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-samples_dir="${repo_root}/frontend/public/sample-images"
+samples_dir="${repo_root}/samples"
 
 mkdir -p "${samples_dir}"
 

@@ -17,10 +17,11 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-// ClaudeInvalidInputErrorType is the application error type returned by
-// GenerateDescription when the model rejects or cannot parse the image.
-// Exported so the workflow can reference the same literal in its
-// NonRetryableErrorTypes list without risk of drift.
+// ClaudeInvalidInputErrorType is the application error type carried by the
+// non-retryable error GenerateDescription returns when the model rejects or
+// cannot parse the image. It surfaces in the workflow history and in the
+// Temporal UI, so operators can tell a bad image from a transient API
+// failure at a glance.
 const ClaudeInvalidInputErrorType = "ClaudeInvalidInput"
 
 // Activities bundles the external clients and configuration used by every

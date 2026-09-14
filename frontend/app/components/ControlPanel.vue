@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RuntimeName } from '~/composables/useApi';
+import type { RuntimeName, S3Ref } from '~/composables/useApi';
 
 const api = useApi();
 const toast = useToast();
@@ -24,23 +24,18 @@ const submitting = ref(false);
 const availableRuntimes = ref<RuntimeName[]>([]);
 const selectedRuntime = ref<RuntimeName>('ecs');
 
-const awsAvailable = computed(() => availableRuntimes.value.length > 1);
+// The backend advertises either both runtimes or none, so a partial list
+// means the runtime registry is not configured.
+const awsAvailable = computed(() => availableRuntimes.value.length === KNOWN_RUNTIMES.length);
 
-const selectedIndex = computed(() => {
-  const i = KNOWN_RUNTIMES.indexOf(selectedRuntime.value);
-  return i < 0 ? 0 : i;
-});
+const selectedIndex = computed(() => KNOWN_RUNTIMES.indexOf(selectedRuntime.value));
 
 onMounted(async () => {
   try {
     const runtimes = await api.getRuntimes();
-    const filtered = KNOWN_RUNTIMES.filter((r) =>
+    availableRuntimes.value = KNOWN_RUNTIMES.filter((r) =>
       runtimes.some((entry) => entry.name === r),
     );
-    availableRuntimes.value = filtered;
-    if (filtered.length > 0 && !filtered.includes(selectedRuntime.value)) {
-      selectedRuntime.value = filtered[0]!;
-    }
   } catch (err) {
     // Initial-load failure shouldn't toast — leave the selector disabled
     // and let the user retry by submitting a burst.
@@ -48,28 +43,21 @@ onMounted(async () => {
   }
 });
 
-function pickRandomSamples<T>(pool: T[], k: number): T[] {
-  const a = [...pool];
-  for (let i = a.length - 1; i > 0; i--) {
+// Fisher-Yates shuffle over the whole sample pool, then take the first `n`.
+function pickRandomSampleKeys(n: number): S3Ref[] {
+  const ids = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
+  for (let i = ids.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
+    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
   }
-  return a.slice(0, k);
-}
-
-function pickRandomSampleRefs(n: number): { key: string }[] {
-  const pool = Array.from({ length: SAMPLE_COUNT }, (_, i) => i + 1);
-  const k = Math.min(n, pool.length);
-  return pickRandomSamples(pool, k).map((id) => ({
-    key: `samples/${id}.jpg`,
-  }));
+  return ids.slice(0, n).map((id) => ({ key: `samples/${id}.jpg` }));
 }
 
 async function startBurst() {
   if (submitting.value) return;
   submitting.value = true;
   try {
-    const images = pickRandomSampleRefs(count.value);
+    const images = pickRandomSampleKeys(count.value);
     // Only forward the runtime when AWS is actually wired — otherwise
     // the backend treats the field as unset and routes via its
     // DefaultTaskQueue.
@@ -130,40 +118,42 @@ async function startBurst() {
         Worker runtime
       </legend>
       <div
-        role="radiogroup"
-        aria-label="Worker runtime"
-        class="relative isolate mt-2 grid gap-1 p-1 rounded-md
+        class="relative isolate mt-2 grid grid-cols-2 gap-1 p-1 rounded-md
           bg-surface-elevated border border-surface-border"
-        :style="{ gridTemplateColumns: `repeat(${KNOWN_RUNTIMES.length}, minmax(0, 1fr))` }"
       >
+        <!-- Sliding pill behind the labels: one column wide, minus the
+             container padding (0.5rem) and the single 0.25rem gap. -->
         <span
           v-if="awsAvailable"
           aria-hidden="true"
           class="pointer-events-none absolute top-1 bottom-1 left-1 rounded-sm
-            bg-primary shadow-glow transition-transform duration-200 ease-out
+            w-[calc((100%-0.75rem)/2)] bg-primary shadow-glow
+            transition-transform duration-200 ease-out
             motion-reduce:transition-none"
-          :style="{
-            width: `calc((100% - 0.5rem - ${KNOWN_RUNTIMES.length - 1} * 0.25rem) / ${KNOWN_RUNTIMES.length})`,
-            transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))`,
-          }"
+          :style="{ transform: `translateX(calc(${selectedIndex} * (100% + 0.25rem)))` }"
         />
-        <button
+        <!-- Native radios (visually hidden) so the browser provides arrow-key
+             navigation, focus management and the disabled cascade. -->
+        <label
           v-for="r in KNOWN_RUNTIMES"
           :key="r"
-          type="button"
-          role="radio"
-          :aria-checked="awsAvailable && selectedRuntime === r"
-          :tabindex="awsAvailable && selectedRuntime === r ? 0 : -1"
-          class="relative z-10 text-xs font-medium py-1.5 rounded-sm
-            transition-colors focus-visible:outline-hidden focus-visible:ring-2
-            focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="relative z-10 text-xs font-medium py-1.5 rounded-sm text-center
+            cursor-pointer transition-colors
+            has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/60
+            has-[:disabled]:opacity-50 has-[:disabled]:cursor-not-allowed"
           :class="awsAvailable && selectedRuntime === r
             ? 'text-bg'
             : 'text-ink-200 hover:text-ink-100'"
-          @click="selectedRuntime = r"
         >
+          <input
+            v-model="selectedRuntime"
+            type="radio"
+            name="runtime"
+            :value="r"
+            class="sr-only"
+          >
           {{ RUNTIME_LABELS[r] }}
-        </button>
+        </label>
       </div>
     </fieldset>
 

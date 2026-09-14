@@ -1,33 +1,24 @@
 ---
-name: "IaC provider versions in infra/"
-description: "AWS provider ~> 6.0 and Cloudflare provider ~> 5.0; v5 renamed cloudflare_record to cloudflare_dns_record (uses content not value, FQDN names)"
+name: "Cloudflare provider v5 breaking changes in infra/"
+description: "The v5 DNS resource rename and attribute changes that shape infra/dns.tf"
 type: project
 ---
 
-# IaC provider versions in infra/
+# Cloudflare provider v5 breaking changes in infra/
 
-`infra/providers.tf` pins `hashicorp/aws ~> 6.0` and
-`cloudflare/cloudflare ~> 5.0`. Both providers have
-current-stable major bumps that ship breaking changes
-we already accommodate.
+`infra/dns.tf` targets the Cloudflare provider v5 API.
+Most Cloudflare DNS examples online still use the v4
+spellings, which fail here:
 
-**Why:** As of 2026-05, AWS v6 and Cloudflare v5 are
-the GA lines. Verify current stable versions via
-context7 before changing constraints.
+- the resource is `cloudflare_dns_record`, not
+  `cloudflare_record`
+- the record body attribute is `content`, not `value`
+- `name` takes the full FQDN, not just the host portion
+- `proxied = false` is mandatory — ACM DNS validation
+  needs the record unproxied
 
-**How to apply:**
-- Cloudflare v5 breaking changes that already shape
-  `infra/dns.tf`:
-  - resource renamed `cloudflare_record` →
-    `cloudflare_dns_record`
-  - attribute renamed `value` → `content`
-  - `name` requires the full FQDN, not just the host
-    portion
-  - `proxied = false` stays mandatory (ACM DNS
-    validation needs the unproxied record)
-- AWS v6 used here without surprises — default tags
-  in the provider block plus
-  `aws_s3_bucket_lifecycle_configuration` with
-  `filter { prefix = "..." }` blocks.
-- See [[images_bucket_naming]] for the matching bucket
-  / table naming rules.
+**How to apply:** verify current stable provider versions
+via context7 before touching the constraints in
+`infra/providers.tf`. See
+[AWS resource naming](images_bucket_naming.md) for the
+matching bucket / table naming rules.

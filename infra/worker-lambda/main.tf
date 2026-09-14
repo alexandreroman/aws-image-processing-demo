@@ -6,13 +6,13 @@
 
 locals {
   worker_zip = "${path.module}/../../build/worker.zip"
-  # filebase64sha256() reads the file at expression-eval time, which happens
-  # even when this module is instantiated with count = 0 at the root (the
-  # default ECS path). Guard the read with fileexists() so `tofu plan`
-  # succeeds without the zip on disk. `filename` itself is just a string —
-  # it doesn't touch disk until apply, and the AWS provider's "exactly one
-  # of filename/image_uri/s3_bucket" rule rejects a null value at validate
-  # time, so we leave it unconditionally set.
+  # filebase64sha256() reads the file at expression-eval time, so `tofu plan`
+  # would fail whenever it runs before `make worker-lambda-zip` has produced
+  # the artifact (a fresh clone, a plan-only review). Guard the read with
+  # fileexists(). `filename` itself is just a string — it doesn't touch disk
+  # until apply, and the AWS provider's "exactly one of
+  # filename/image_uri/s3_bucket" rule rejects a null value at validate time,
+  # so we leave it unconditionally set.
   worker_zip_exists   = fileexists(local.worker_zip)
   create_invoker_role = length(var.temporal_cloud_aws_account_ids) > 0 && var.temporal_cloud_external_id != ""
 
@@ -25,7 +25,7 @@ locals {
 
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/aws/lambda/${var.name_prefix}-worker"
-  retention_in_days = 14
+  retention_in_days = var.log_retention_days
 }
 
 # --- IAM: Lambda execution role ------------------------------------------
@@ -53,36 +53,9 @@ resource "aws_iam_role_policy_attachment" "worker_logs" {
 }
 
 data "aws_iam_policy_document" "worker_task" {
-  # Reads: visitor uploads, the preloaded sample pool, and read-back of
-  # derived artifacts (GenerateDescription + ApplyWatermark both fetch
-  # the resized variant before processing it).
-  statement {
-    sid     = "ImagesBucketRead"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${var.images_bucket_arn}/uploads/*",
-      "${var.images_bucket_arn}/samples/*",
-      "${var.images_bucket_arn}/pipelines/*",
-    ]
-  }
-
-  # Writes: derived artifacts only — resized and watermarked variants.
-  statement {
-    sid     = "ImagesBucketWritePipelines"
-    actions = ["s3:PutObject"]
-    resources = [
-      "${var.images_bucket_arn}/pipelines/*",
-    ]
-  }
-
-  statement {
-    sid = "ImagesTableRW"
-    actions = [
-      "dynamodb:PutItem",
-      "dynamodb:Query",
-    ]
-    resources = [var.images_table_arn]
-  }
+  # Images bucket + table access is shared with the ECS runtime and rendered
+  # by the root module; this runtime only adds its own secrets grant.
+  source_policy_documents = [var.task_policy_json]
 
   # Secrets the Lambda fetches at deploy time (env injection) and could
   # re-fetch at runtime. Anthropic is always present; TLS secrets only when
@@ -98,7 +71,6 @@ data "aws_iam_policy_document" "worker_task" {
       ] : [],
     )
   }
-
 }
 
 resource "aws_iam_role_policy" "worker_task" {

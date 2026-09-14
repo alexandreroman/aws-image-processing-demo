@@ -132,12 +132,3 @@ variable "temporal_tls_key_pem" {
   sensitive   = true
   default     = ""
 }
-
-variable "enable_custom_domain" {
-  description = <<-EOT
-    Gates ACM certificate + Cloudflare DNS records + CloudFront alias config.
-    Set false to ship a demo on the default *.cloudfront.net hostname.
-  EOT
-  type        = bool
-  default     = true
-}

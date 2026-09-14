@@ -61,7 +61,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
 
 # --- DynamoDB image manifests ---------------------------------------------
 #
-# Composite key (pipelineId, imageId) — matches the LocalStack init schema
+# Composite key (pipelineId, imageId) — matches the local emulator's init schema
 # in compose.yaml so the same Go code path works against both backends.
 
 resource "aws_dynamodb_table" "images" {

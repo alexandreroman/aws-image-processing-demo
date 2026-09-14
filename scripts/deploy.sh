@@ -9,9 +9,9 @@
 #   5. Register the Temporal Worker Deployment version for the
 #      Lambda runtime so Temporal Cloud can route workflows to it.
 #   6. Upload sample images.
-#   7. Build the Nuxt frontend.
-#   8. Sync to S3 and invalidate CloudFront.
-#   9. Print the demo URL.
+#   7. Hand off to scripts/frontend-deploy.sh: build the Nuxt
+#      frontend, sync to S3, invalidate CloudFront, print the
+#      demo URL.
 #
 # The ECS worker autoscaler is now an ADOT Collector ECS task
 # scraping Temporal Cloud's OpenMetrics endpoint — there is no
@@ -24,7 +24,6 @@ set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 infra_dir="${repo_root}/infra"
-frontend_dir="${repo_root}/frontend"
 
 # shellcheck disable=SC1091
 source "${repo_root}/scripts/lib/env.sh"
@@ -52,31 +51,7 @@ echo "==> Registering Temporal Worker Deployment version"
 echo "==> Uploading sample images"
 "${repo_root}/scripts/upload-samples.sh"
 
-echo "==> Building frontend"
-# pnpm resolves the `packageManager` pin from its own working directory, so run it from
-# inside frontend/ (in a subshell, to leave this script's cwd alone) and via corepack.
-(cd "${frontend_dir}" && corepack pnpm install --frozen-lockfile)
-
-(
-  cd "${frontend_dir}"
-  NUXT_PUBLIC_API_BASE="" \
-  NUXT_PUBLIC_S3_PUBLIC_URL="" \
-    corepack pnpm generate
-)
-
-frontend_bucket="$(tofu -chdir="${infra_dir}" output -raw frontend_bucket)"
-distribution_id="$(tofu -chdir="${infra_dir}" output -raw cloudfront_distribution_id)"
-
-echo "==> Syncing frontend to s3://${frontend_bucket}"
-aws s3 sync "${frontend_dir}/.output/public/" \
-  "s3://${frontend_bucket}/" --delete
-
-echo "==> Invalidating CloudFront (${distribution_id})"
-aws cloudfront create-invalidation \
-  --distribution-id "${distribution_id}" \
-  --paths '/*' >/dev/null
-
-demo_url="$(tofu -chdir="${infra_dir}" output -raw demo_url)"
-echo
-echo "Deployment complete."
-echo "Demo URL: ${demo_url}"
+echo "==> Building and deploying the frontend"
+# Same build + sync + invalidate + report sequence as `make frontend-deploy`.
+# The script loads .env itself, so calling it here is safe.
+"${repo_root}/scripts/frontend-deploy.sh" "Deployment complete."

@@ -22,11 +22,7 @@ sync under load", "Note that ProcessImage
 workflows skip workflow.GetVersion", "Stream
 in-flight image previews to the gallery").
 Mixing Conventional Commits in would break
-the stylistic uniformity. Confirmed on
-2026-05-15 after a bulk rewrite of the
-`feature/code-review` branch where commits
-originally typed `fix:`/`chore:`/`refactor:`
-were rewritten to match `main`.
+the stylistic uniformity.
 
 **How to apply:** when writing any commit on
 this repo, drop type prefixes and scopes

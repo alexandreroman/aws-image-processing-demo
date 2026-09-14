@@ -52,7 +52,7 @@ resource "aws_iam_role_policy" "backend" {
 
 resource "aws_cloudwatch_log_group" "backend" {
   name              = "/aws/lambda/${local.name_prefix}-backend"
-  retention_in_days = 14
+  retention_in_days = local.log_retention_days
 }
 
 resource "aws_lambda_function" "backend" {
@@ -88,7 +88,7 @@ resource "aws_lambda_function" "backend" {
         # Pin CORS to the only origin that legitimately calls this API.
         # Without this, the handler falls back to "*" and the API
         # advertises itself to arbitrary origins.
-        ALLOWED_ORIGIN = local.use_custom_domain ? "https://${var.subdomain}.${var.domain_name}" : "https://${aws_cloudfront_distribution.demo.domain_name}"
+        ALLOWED_ORIGIN = local.demo_url
       },
       local.temporal_tls_enabled ? {
         TEMPORAL_TLS_CERT = data.aws_secretsmanager_secret_version.temporal_tls_cert[0].secret_string

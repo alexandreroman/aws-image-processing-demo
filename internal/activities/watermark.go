@@ -44,7 +44,6 @@ var temporalLogo = func() image.Image {
 func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (manifest.S3Ref, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("watermark start", "imageId", in.ImageID, "size", in.SizeName)
-	activity.RecordHeartbeat(ctx, "download")
 
 	raw, err := a.download(ctx, in.Source)
 	if err != nil {
@@ -56,7 +55,6 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 		return manifest.S3Ref{}, fmt.Errorf("watermark: decode: %w", err)
 	}
 
-	activity.RecordHeartbeat(ctx, "stamp")
 	stamped := stampWatermark(src)
 
 	var buf bytes.Buffer
@@ -65,7 +63,6 @@ func (a *Activities) ApplyWatermark(ctx context.Context, in WatermarkInput) (man
 	}
 
 	key := watermarkedKey(in.PipelineID, in.ImageID, in.SizeName)
-	activity.RecordHeartbeat(ctx, "upload")
 	if err := a.upload(ctx, key, buf.Bytes(), "image/jpeg"); err != nil {
 		return manifest.S3Ref{}, fmt.Errorf("watermark: upload: %w", err)
 	}
@@ -84,35 +81,29 @@ func stampWatermark(src image.Image) image.Image {
 		maxLogoH = 80
 		padX     = 8
 		padY     = 6
-		marginX  = 8
 		marginY  = 20
 	)
 
 	bounds := src.Bounds()
 	imgW, imgH := bounds.Dx(), bounds.Dy()
+	if imgW < minDim || imgH < minDim {
+		return src
+	}
 
 	dst := image.NewRGBA(bounds)
 	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
-
-	if imgW < minDim || imgH < minDim {
-		return dst
-	}
 
 	logoBounds := temporalLogo.Bounds()
 	logoOrigW, logoOrigH := logoBounds.Dx(), logoBounds.Dy()
 
 	// Target logo height: ~11% of the shorter image side, clamped.
-	logoH := min(imgW, imgH) * 11 / 100
-	logoH = clamp(logoH, minLogoH, maxLogoH)
+	logoH := min(max(min(imgW, imgH)*11/100, minLogoH), maxLogoH)
 	logoW := logoH * logoOrigW / logoOrigH
 
 	plateW := logoW + 2*padX
 	plateH := logoH + 2*padY
 
-	radius := max(4, logoH/4)
-	if m := min(plateW, plateH) / 2; radius > m {
-		radius = m
-	}
+	radius := min(max(4, logoH/4), min(plateW, plateH)/2)
 
 	plateX0 := bounds.Min.X + (imgW-plateW)/2
 	plateY0 := bounds.Max.Y - plateH - marginY
@@ -133,14 +124,9 @@ func stampWatermark(src image.Image) image.Image {
 
 // roundedRectMask returns an alpha mask of size w×h with rounded corners of
 // radius r. Corners are aliased; the plate is small enough that this is fine.
+// r is clamped by the caller to at most half the shorter side.
 func roundedRectMask(w, h, r int) *image.Alpha {
 	mask := image.NewAlpha(image.Rect(0, 0, w, h))
-	if r <= 0 {
-		for i := range mask.Pix {
-			mask.Pix[i] = 255
-		}
-		return mask
-	}
 	r2 := r * r
 	for y := 0; y < h; y++ {
 		// Distance to the nearest horizontal edge of the inner rect.
@@ -159,25 +145,14 @@ func roundedRectMask(w, h, r int) *image.Alpha {
 			case x >= w-r:
 				dx = x - (w - r - 1)
 			}
+			// dx and dy are both within [0, r], so a pixel on an edge (dx or
+			// dy zero) always satisfies this too.
 			var a uint8
-			switch {
-			case dx == 0 || dy == 0:
-				a = 255
-			case dx*dx+dy*dy <= r2:
+			if dx*dx+dy*dy <= r2 {
 				a = 255
 			}
 			mask.Pix[y*mask.Stride+x] = a
 		}
 	}
 	return mask
-}
-
-func clamp(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
 }

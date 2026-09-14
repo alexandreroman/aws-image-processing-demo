@@ -135,7 +135,7 @@ const paths = computed<BuiltPaths>(() => {
     completedSteps.push(`L ${x} ${yScale(prev.completed, yMax)}`);
     completedSteps.push(`L ${x} ${yScale(p.completed, yMax)}`);
 
-    failedSteps.push(`L ${x} ${yScale(prev.completed, yMax)}`);
+    failedSteps.push(`L ${x} ${yScale(prev.completed + prev.failed, yMax)}`);
     failedSteps.push(`L ${x} ${yScale(p.completed + p.failed, yMax)}`);
 
     runningSteps.push(`L ${x} ${yScale(prev.running, yMax)}`);
@@ -242,40 +242,38 @@ const summaryRows = computed(() => [
           role="img"
           aria-label="Pipeline timeline chart"
         >
-          <line
-            v-if="hasData"
-            :x1="PAD_L"
-            :x2="VB_W - PAD_R"
-            :y1="paths.targetY"
-            :y2="paths.targetY"
-            stroke="currentColor"
-            class="text-ink-500"
-            stroke-width="0.5"
-            stroke-dasharray="2 2"
-            vector-effect="non-scaling-stroke"
-          />
-          <path
-            v-if="paths.completedArea"
-            :d="paths.completedArea"
-            fill="rgb(52 211 153 / 0.35)"
-            stroke="rgb(52 211 153)"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-          <path
-            v-if="paths.failedArea"
-            :d="paths.failedArea"
-            fill="rgb(244 63 94 / 0.35)"
-          />
-          <path
-            v-if="paths.runningLine"
-            :d="paths.runningLine"
-            fill="none"
-            stroke="rgb(167 139 250)"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-            vector-effect="non-scaling-stroke"
-          />
+          <g v-if="hasData">
+            <line
+              :x1="PAD_L"
+              :x2="VB_W - PAD_R"
+              :y1="paths.targetY"
+              :y2="paths.targetY"
+              stroke="currentColor"
+              class="text-ink-500"
+              stroke-width="0.5"
+              stroke-dasharray="2 2"
+              vector-effect="non-scaling-stroke"
+            />
+            <path
+              :d="paths.completedArea"
+              fill="rgb(52 211 153 / 0.35)"
+              stroke="rgb(52 211 153)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+            <path
+              :d="paths.failedArea"
+              fill="rgb(244 63 94 / 0.35)"
+            />
+            <path
+              :d="paths.runningLine"
+              fill="none"
+              stroke="rgb(167 139 250)"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+            />
+          </g>
         </svg>
 
         <div

@@ -1,57 +1,38 @@
 <script setup lang="ts">
-// Animates a typical workflow execution on a 14-tick loop.
-type Activity =
-  | { y: number; key: 'resize'; label: string; subs: true }
-  | { y: number; key: 'watermark'; label: string; subs: true }
-  | { y: number; key: 'describe'; label: string; subs: false; service: string }
-  | { y: number; key: 'store'; label: string; subs: false; service: string };
+// Animates a typical workflow execution on a 14-tick loop. Every number below
+// is the tick at which the corresponding box turns green.
+interface Activity {
+  key: string;
+  /** Vertical centre of the activity row in the SVG viewBox. */
+  y: number;
+  label: string;
+  /** Ticks for the S/M/L sub-boxes, for activities that fan out per size. */
+  subs?: [number, number, number];
+  /** Badge for the external service the activity calls, and its tick. */
+  service?: { label: string; tick: number };
+  /** Tick at which the activity's check mark completes. */
+  step: number;
+}
 
 const activities: Activity[] = [
-  { y: 105, key: 'resize', label: 'Resize', subs: true },
-  { y: 155, key: 'describe', label: 'Describe with AI', subs: false, service: 'AI' },
-  { y: 205, key: 'watermark', label: 'Watermark', subs: true },
-  { y: 255, key: 'store', label: 'Store results', subs: false, service: 'DB' },
+  { key: 'resize', y: 105, label: 'Resize', subs: [1, 2, 3], step: 4 },
+  { key: 'describe', y: 155, label: 'Describe with AI', service: { label: 'AI', tick: 5 }, step: 6 },
+  { key: 'watermark', y: 205, label: 'Watermark', subs: [7, 8, 9], step: 10 },
+  { key: 'store', y: 255, label: 'Store results', service: { label: 'DB', tick: 11 }, step: 12 },
 ];
-
-type StepKey = Activity['key'];
-
-const completion: Record<
-  StepKey,
-  { subs: [number, number, number] | null; service?: number | null; step: number }
-> = {
-  resize: { subs: [1, 2, 3], step: 4 },
-  describe: { subs: null, service: 5, step: 6 },
-  watermark: { subs: [7, 8, 9], step: 10 },
-  store: { subs: null, service: 11, step: 12 },
-};
-
-const activeTicks: Record<StepKey, [number, number]> = {
-  resize: [1, 4],
-  describe: [5, 6],
-  watermark: [7, 10],
-  store: [11, 12],
-};
 
 const tick = ref(0);
 let timer: ReturnType<typeof setInterval> | null = null;
 
-function subDone(stepKey: StepKey, idx: number): boolean {
-  const subs = completion[stepKey].subs;
-  return subs ? tick.value >= subs[idx]! : false;
+function isDone(atTick: number | undefined): boolean {
+  return atTick !== undefined && tick.value >= atTick;
 }
 
-function stepDone(stepKey: StepKey): boolean {
-  return tick.value >= completion[stepKey].step;
-}
-
-function serviceDone(stepKey: StepKey): boolean {
-  const service = completion[stepKey].service;
-  return service != null && tick.value >= service;
-}
-
-function arrowActive(stepKey: StepKey): boolean {
-  const [start, end] = activeTicks[stepKey];
-  return tick.value >= start && tick.value <= end;
+// The branch arrow flows from the activity's first sub-step (or its service
+// call, for activities that have no sub-steps) until the activity completes.
+function arrowActive(a: Activity): boolean {
+  const start = a.subs?.[0] ?? a.service?.tick ?? a.step;
+  return tick.value >= start && tick.value <= a.step;
 }
 
 onMounted(() => {
@@ -84,31 +65,31 @@ onBeforeUnmount(() => {
     >
       <!-- nodes -->
       <g class="text-ink-100" font-family="ui-sans-serif, system-ui" font-size="14">
-        <g class="node">
+        <g>
           <rect
-x="20"  y="160" width="120" height="40" rx="8"
+            x="20" y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-surface-border" stroke-width="1"/>
-          <text x="80"  y="184" text-anchor="middle" class="fill-ink-100">Browser</text>
+          <text x="80" y="184" text-anchor="middle" class="fill-ink-100">Browser</text>
         </g>
-        <g class="node">
+        <g>
           <rect
-x="200" y="160" width="120" height="40" rx="8"
+            x="200" y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-accent" stroke-width="1.5"/>
           <text x="260" y="184" text-anchor="middle" class="fill-accent font-semibold">
             App
           </text>
         </g>
-        <g class="node">
+        <g>
           <rect
-x="380" y="160" width="170" height="40" rx="8"
+            x="380" y="160" width="170" height="40" rx="8"
             class="fill-surface-elevated stroke-primary" stroke-width="1.5"/>
           <text x="465" y="184" text-anchor="middle" class="fill-primary font-semibold">
             Temporal Cloud
           </text>
         </g>
-        <g class="node">
+        <g>
           <rect
-x="610" y="160" width="120" height="40" rx="8"
+            x="610" y="160" width="120" height="40" rx="8"
             class="fill-surface-elevated stroke-accent" stroke-width="1.5"/>
           <text x="670" y="184" text-anchor="middle" class="fill-accent font-semibold">
             Workers
@@ -128,7 +109,7 @@ x="610" y="160" width="120" height="40" rx="8"
             <g v-for="(sx, si) in [922, 954, 986]" :key="si">
               <rect
                 :x="sx" :y="a.y - 10" width="28" height="20" rx="4"
-                :class="subDone(a.key, si)
+                :class="isDone(a.subs?.[si])
                   ? 'fill-emerald-500/20 stroke-emerald-400'
                   : 'fill-surface stroke-surface-border'"
                 stroke-width="1"
@@ -136,7 +117,7 @@ x="610" y="160" width="120" height="40" rx="8"
               />
               <text
                 :x="sx + 14" :y="a.y + 4" text-anchor="middle" font-size="11"
-                :class="subDone(a.key, si) ? 'fill-emerald-300' : 'fill-ink-300'"
+                :class="isDone(a.subs?.[si]) ? 'fill-emerald-300' : 'fill-ink-300'"
                 style="transition: fill 220ms ease"
               >
                 {{ ['S', 'M', 'L'][si] }}
@@ -144,10 +125,10 @@ x="610" y="160" width="120" height="40" rx="8"
             </g>
           </template>
 
-          <template v-if="'service' in a">
+          <template v-if="a.service">
             <rect
               x="986" :y="a.y - 10" width="28" height="20" rx="4"
-              :class="serviceDone(a.key)
+              :class="isDone(a.service.tick)
                 ? 'fill-emerald-500/20 stroke-emerald-400'
                 : 'fill-surface stroke-surface-border'"
               stroke-width="1"
@@ -155,14 +136,14 @@ x="610" y="160" width="120" height="40" rx="8"
             />
             <text
               x="1000" :y="a.y + 4" text-anchor="middle" font-size="11"
-              :class="serviceDone(a.key) ? 'fill-emerald-300' : 'fill-ink-300'"
+              :class="isDone(a.service.tick) ? 'fill-emerald-300' : 'fill-ink-300'"
               style="transition: fill 220ms ease"
             >
-              {{ a.service }}
+              {{ a.service.label }}
             </text>
           </template>
 
-          <g class="text-emerald-500" :class="{ 'is-done': stepDone(a.key) }">
+          <g class="text-emerald-500" :class="{ 'is-done': isDone(a.step) }">
             <circle
               cx="1040" :cy="a.y" r="10"
               fill="none" stroke="currentColor" stroke-width="2"
@@ -181,7 +162,7 @@ x="610" y="160" width="120" height="40" rx="8"
           <!-- branch arrow -->
           <path
             :d="`M 730 180 C 775 180, 775 ${a.y}, 820 ${a.y}`"
-            :class="['arrow', arrowActive(a.key) ? 'text-ink-300' : 'arrow--idle text-surface-border']"
+            :class="['arrow', arrowActive(a) ? 'text-ink-300' : 'arrow--idle text-surface-border']"
             fill="none"
             stroke="currentColor"
             stroke-width="2"

@@ -2,10 +2,12 @@ package activities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
 	enumspb "go.temporal.io/api/enums/v1"
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 )
@@ -32,6 +34,9 @@ type StartProcessImageInput struct {
 // (LaunchPipelines) fan out child executions that are fully independent
 // top-level workflows — no parent/child relationship, no
 // PARENT_CLOSE_POLICY plumbing.
+//
+// The activity is idempotent: since the workflow ID is derived from the
+// input, a retry that finds the execution already started reports success.
 func (a *Activities) StartProcessImage(
 	ctx context.Context, in StartProcessImageInput,
 ) (string, error) {
@@ -54,6 +59,15 @@ func (a *Activities) StartProcessImage(
 		Original:   in.Image.Original,
 	}
 	if _, err := a.Temporal.ExecuteWorkflow(ctx, opts, "ProcessImage", procIn); err != nil {
+		// Activity results are at-least-once: a start that succeeded but whose
+		// result was lost (worker restart, task timeout) is retried, and the
+		// reuse policy then rejects it as a duplicate. The image is already
+		// being processed, so that is a success, not a failure.
+		var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+		if errors.As(err, &alreadyStarted) {
+			logger.Info("ProcessImage already started", "workflowId", workflowID)
+			return workflowID, nil
+		}
 		return "", fmt.Errorf("start %s: %w", workflowID, err)
 	}
 	return workflowID, nil

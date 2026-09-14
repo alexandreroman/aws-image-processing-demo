@@ -19,7 +19,7 @@ let nextId = 1;
 export function useToast() {
   function push(kind: ToastKind, title: string, body?: string) {
     const id = nextId++;
-    toasts.value = [...toasts.value, { id, kind, title, body }];
+    toasts.value.push({ id, kind, title, body });
     if (import.meta.client) {
       window.setTimeout(() => dismiss(id), TTL_MS);
     }

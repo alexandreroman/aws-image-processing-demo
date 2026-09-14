@@ -6,6 +6,7 @@ import (
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
 	"github.com/alexandreroman/aws-image-processing-demo/internal/manifest"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -25,15 +26,22 @@ const GetWorkflowIDsQuery = "getWorkflowIDs"
 // to this launcher — so this workflow can return as soon as the starts are
 // acknowledged, keeping the synchronous backend call well within the API
 // Gateway 29 s timeout.
+//
+// The first failed start aborts the launcher and abandons the remaining
+// ones; executions already started keep running. That is a deliberate demo
+// trade-off — the burst is simply relaunched.
 func LaunchPipelines(ctx workflow.Context, in manifest.LaunchPipelinesInput) error {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("LaunchPipelines start",
 		"pipelineId", in.PipelineID, "imageCount", len(in.Images))
 
-	// StartProcessImage is a thin gRPC call (client.ExecuteWorkflow) so a
-	// short timeout + default retry policy is plenty.
+	// StartProcessImage is a thin, idempotent gRPC call
+	// (client.ExecuteWorkflow), so a short timeout is enough. The attempt cap
+	// matters: without it the SDK retries forever and the launcher never
+	// completes when a start keeps failing.
 	actCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	})
 
 	workflowIDs := make([]string, len(in.Images))
@@ -46,7 +54,7 @@ func LaunchPipelines(ctx workflow.Context, in manifest.LaunchPipelinesInput) err
 	if err := workflow.SetQueryHandler(ctx, GetWorkflowIDsQuery, func() ([]string, error) {
 		return workflowIDs, nil
 	}); err != nil {
-		return fmt.Errorf("set query handler: %w", err)
+		return err
 	}
 
 	// Fan-out: schedule all starter activities in one pass so the underlying

@@ -64,28 +64,77 @@ resource "aws_cloudfront_function" "images_rewrite" {
   EOT
 }
 
+# --- CloudFront Function: SPA fallback for the frontend origin --------------
+#
+# Nuxt deep links such as /pipelines/{id} are client-rendered, so the S3
+# frontend bucket holds no object for them and answers 403. The fallback
+# CANNOT be expressed as a `custom_error_response`: CloudFront applies those
+# distribution-wide, across every cache behavior. A 404 from the backend on
+# /api/pipelines/{unknown} would reach the browser as 200 + an HTML page,
+# and a missing /images/... key (403 from S3 + OAC) would land an HTML page
+# inside an <img>. Rewriting at viewer-request keeps the fallback attached to
+# the default cache behavior — that is, to /* only.
+
+resource "aws_cloudfront_function" "spa_fallback" {
+  name    = "${local.name_prefix}-spa-fallback"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  comment = "Serve Nuxt's SPA fallback document for client-rendered routes"
+  code    = <<-EOT
+    function handler(event) {
+      var req = event.request;
+
+      // "/" is resolved by the distribution's default root object.
+      if (req.uri === '/') {
+        return req;
+      }
+
+      // Anything with a file extension is a real object in the bucket
+      // (/_nuxt/*.js, /favicon.ico, /200.html, ...): serve it as-is.
+      if (req.uri.split('/').pop().indexOf('.') !== -1) {
+        return req;
+      }
+
+      // 200.html is Nuxt's lightweight SPA fallback, with no prerendered
+      // route baked in; the router renders the real route in the browser.
+      // Serving index.html here would hydrate the home page instead.
+      req.uri = '/200.html';
+      return req;
+    }
+  EOT
+}
+
 # --- CloudFront distribution ----------------------------------------------
 #
-# Two origins, two behaviours:
-#   /api/*  → API Gateway, no caching, forward viewer headers
-#   /*      → S3 + OAC, with SPA fallback (404 → 200 /index.html)
+# Three origins, three behaviours:
+#   /api/*    → API Gateway, origin-driven caching, forward viewer headers
+#   /images/* → S3 images bucket + OAC, /images/ prefix stripped
+#   /*        → S3 frontend bucket + OAC, with SPA fallback to /200.html
 
 locals {
   s3_origin_id     = "s3-frontend"
   api_origin_id    = "api-gateway"
   images_origin_id = "s3-images"
 
+  # AWS-managed policies, referenced by their well-known IDs.
+  managed_cache_policy_caching_optimized   = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  managed_origin_request_policy_all_viewer = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
   # API Gateway URLs look like https://<id>.execute-api.<region>.amazonaws.com.
   # CloudFront origins want a bare host name.
-  api_origin_host = replace(
-    replace(aws_apigatewayv2_api.backend.api_endpoint, "https://", ""),
-    "/", "",
+  api_origin_host = trimsuffix(
+    trimprefix(aws_apigatewayv2_api.backend.api_endpoint, "https://"),
+    "/",
   )
 
-  cloudfront_aliases = (
-    var.enable_custom_domain && var.domain_name != ""
-    ? ["${var.subdomain}.${var.domain_name}"]
-    : []
+  cloudfront_aliases = local.use_custom_domain ? [local.cert_fqdn] : []
+
+  # Public entry point of the demo. Also fed to the backend as ALLOWED_ORIGIN
+  # and printed by the deploy scripts via the `demo_url` output.
+  demo_url = (
+    local.use_custom_domain
+    ? "https://${local.cert_fqdn}"
+    : "https://${aws_cloudfront_distribution.demo.domain_name}"
   )
 }
 
@@ -160,7 +209,9 @@ resource "aws_cloudfront_distribution" "demo" {
     origin_access_control_id = aws_cloudfront_origin_access_control.images.id
   }
 
-  # Default: serve the static site from S3.
+  # Default: serve the static site from S3, with the SPA fallback scoped to
+  # this behavior only. See frontend/Caddyfile for the matching local
+  # compose-stack rule.
   default_cache_behavior {
     target_origin_id       = local.s3_origin_id
     viewer_protocol_policy = "redirect-to-https"
@@ -169,7 +220,12 @@ resource "aws_cloudfront_distribution" "demo" {
     compress               = true
 
     # AWS-managed "CachingOptimized" policy.
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id = local.managed_cache_policy_caching_optimized
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_fallback.arn
+    }
   }
 
   # /api/* → Lambda, never cached, forward all viewer signals.
@@ -182,10 +238,10 @@ resource "aws_cloudfront_distribution" "demo" {
     compress               = true
 
     # Origin Cache-Control drives the TTL via the custom policy above.
-    # AllViewerExceptHostHeader (managed: b689b0a8-…) keeps forwarding the
-    # full request envelope to Lambda regardless of cache-key shape.
+    # AllViewerExceptHostHeader keeps forwarding the full request envelope
+    # to Lambda regardless of cache-key shape.
     cache_policy_id          = aws_cloudfront_cache_policy.api.id
-    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    origin_request_policy_id = local.managed_origin_request_policy_all_viewer
   }
 
   # /images/* → S3 images bucket. CloudFront Function strips the
@@ -199,31 +255,12 @@ resource "aws_cloudfront_distribution" "demo" {
     compress               = true
 
     # CachingOptimized — derived images are immutable per key.
-    cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id = local.managed_cache_policy_caching_optimized
 
     function_association {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.images_rewrite.arn
     }
-  }
-
-  # SPA fallback: Nuxt /pipelines/[id] is client-rendered, so S3 returns 403
-  # for any unknown key. CloudFront rewrites to /200.html — Nuxt's lightweight
-  # SPA fallback with no prerendered route baked in. Serving /index.html would
-  # hydrate the home page on /pipelines/{id} refreshes. See frontend/Caddyfile
-  # for the matching local compose-stack rule.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/200.html"
-    error_caching_min_ttl = 10
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/200.html"
-    error_caching_min_ttl = 10
   }
 
   restrictions {
@@ -233,17 +270,9 @@ resource "aws_cloudfront_distribution" "demo" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = !(var.enable_custom_domain && var.domain_name != "")
-    acm_certificate_arn = (
-      var.enable_custom_domain && var.domain_name != ""
-      ? aws_acm_certificate_validation.cf[0].certificate_arn
-      : null
-    )
-    ssl_support_method = (
-      var.enable_custom_domain && var.domain_name != ""
-      ? "sni-only"
-      : null
-    )
+    cloudfront_default_certificate = !local.use_custom_domain
+    acm_certificate_arn            = local.use_custom_domain ? aws_acm_certificate_validation.cf[0].certificate_arn : null
+    ssl_support_method             = local.use_custom_domain ? "sni-only" : null
     # Enforce TLS 1.2 (2021 policy) regardless of cert source. The default
     # CloudFront certificate supports TLSv1.2_2021, so there is no reason
     # to fall back to the legacy `TLSv1` SSL policy.
@@ -251,15 +280,20 @@ resource "aws_cloudfront_distribution" "demo" {
   }
 }
 
-# --- S3 bucket policy: grant CloudFront OAC read access -------------------
+# --- S3 bucket policies: grant CloudFront OAC read access -----------------
+#
+# Same document for both buckets, differing only in the resource ARN.
 
-data "aws_iam_policy_document" "frontend_oac" {
+data "aws_iam_policy_document" "oac_read" {
+  for_each = {
+    frontend = aws_s3_bucket.frontend.arn
+    images   = aws_s3_bucket.images.arn
+  }
+
   statement {
-    sid     = "AllowCloudFrontOACRead"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${aws_s3_bucket.frontend.arn}/*",
-    ]
+    sid       = "AllowCloudFrontOACRead"
+    actions   = ["s3:GetObject"]
+    resources = ["${each.value}/*"]
 
     principals {
       type        = "Service"
@@ -276,33 +310,10 @@ data "aws_iam_policy_document" "frontend_oac" {
 
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
-  policy = data.aws_iam_policy_document.frontend_oac.json
-}
-
-# --- S3 bucket policy: grant CloudFront OAC read on the images bucket -----
-
-data "aws_iam_policy_document" "images_oac" {
-  statement {
-    sid     = "AllowCloudFrontOACRead"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${aws_s3_bucket.images.arn}/*",
-    ]
-
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.demo.arn]
-    }
-  }
+  policy = data.aws_iam_policy_document.oac_read["frontend"].json
 }
 
 resource "aws_s3_bucket_policy" "images" {
   bucket = aws_s3_bucket.images.id
-  policy = data.aws_iam_policy_document.images_oac.json
+  policy = data.aws_iam_policy_document.oac_read["images"].json
 }

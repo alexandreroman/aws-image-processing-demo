@@ -50,6 +50,10 @@ not shared with the team.
 - Line length limits for readability:
   - Text / Markdown: 80 columns max
   - Code: 120 columns max
+  - Exception: files under `.claude/project-memory/`
+    follow the project-memory skill's own
+    150-character cap for frontmatter `description:`
+    fields and `MEMORY.md` index lines
 - Follow standard Markdown conventions: blank line
   before and after headings, blank line before and
   after lists, fenced code blocks with a language tag
@@ -62,7 +66,10 @@ not shared with the team.
 ## Project-specific rules
 
 These are invariants that are easy to violate
-because they are not obvious from the code alone.
+because they are not obvious from the code alone. The
+README is the reference for everything else — setup,
+configuration, and architecture — so the pointers
+below are deliberate, not summaries to expand.
 
 - **Workflow determinism:** never iterate Go maps
   directly inside workflow code. Use the canonical
@@ -74,43 +81,33 @@ because they are not obvious from the code alone.
   Temporal children of `LaunchPipelines`.** They are
   launched via a starter activity that calls
   `client.ExecuteWorkflow`, so the launcher returns
-  as soon as every start is acknowledged.
-- **Worker mode is detected at runtime**, not via
-  build flags: presence of `AWS_LAMBDA_FUNCTION_NAME`
-  switches the single Go binary into Lambda mode
-  (using `go.temporal.io/sdk/contrib/aws/lambdaworker`);
-  otherwise it long-polls.
-- **All backend API routes are prefixed with `/api`**
-  so CloudFront can dispatch by path (`/api/*` → API
-  Gateway, `/images/*` → S3 images bucket via OAC,
-  `/*` → S3 frontend bucket). The `/healthz` liveness
-  probe is the deliberate exception — both backend
-  (`:8000`) and worker (`:8001`) expose it at the
-  root for container orchestrators, and neither is
-  reachable through CloudFront.
+  as soon as every start is acknowledged. Comments,
+  docs, and tests must never call them children.
 - **No upload path.** The bucket is pre-seeded with
-  curated samples under `samples/` (kept
-  indefinitely); `workflows/start` rejects any key
-  outside that prefix. Derived artifacts live under
-  `pipelines/{pipelineId}/...` and expire after
+  curated samples under `samples/` at the repo root
+  (kept indefinitely); `workflows/start` rejects any
+  key outside that prefix. Derived artifacts live
+  under `pipelines/{pipelineId}/...` and expire after
   30 days.
-- **Anthropic API direct, not Bedrock.** Keeps local
-  dev simple (Moto Server does not mock Bedrock).
 - **`internal/awsclient` honors `AWS_ENDPOINT_URL`**
   so the same code path runs against Moto Server and
   real AWS.
-- **Env split:** `.env` is the canonical deploy-shaped
-  configuration. `.env.local` is an opt-in dev overlay
-  layered on top by host-mode dev targets only.
-  Deploy targets load only `.env`. The compose stack
-  (`make app-up`) is self-contained and does NOT read
-  either file beyond `ANTHROPIC_API_KEY` (compose-time
-  interpolation).
-- **Worker runtime selection** happens per burst at
-  the API layer in AWS-deployed environments only.
-  Tofu sets `WORKER_TASK_QUEUE_ECS` and
-  `WORKER_TASK_QUEUE_LAMBDA` on the deployed backend
-  Lambda; the backend advertises both via
-  `GET /api/runtimes` and the UI shows a selector. In
-  local dev those vars are unset, the API returns
-  `[]`, and the single worker polls a fixed queue.
+- **`make dev` and `make app-up` are deliberately
+  separate**: host processes with hot reload against
+  Docker infra, versus the whole stack in Docker.
+  Never collapse them into one target.
+- **Worker mode is detected at runtime**, not via build
+  flags — see [Deployment](README.md#deployment).
+- **All backend API routes are prefixed with `/api`**,
+  with `/healthz` at the root as the deliberate
+  exception — see
+  [Request flow](README.md#request-flow).
+- **Env split:** `.env` is canonical, `.env.local` is a
+  host-mode-only dev overlay, and the compose stack
+  reads neither — see
+  [Configuration](README.md#configuration).
+- **Worker runtime selection is per burst**, and only
+  in AWS-deployed environments — see
+  [Per-burst runtime selection](README.md#per-burst-runtime-selection).
+- **Anthropic API direct, not Bedrock** — see
+  [Prerequisites](README.md#prerequisites).

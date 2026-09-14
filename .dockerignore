@@ -5,8 +5,6 @@
 # build daemon refuses out-of-context symlinks.
 .env
 .env.*
-.env.local
-.env.*.local
 
 # Secrets / mTLS material — never bake into images.
 ca.pem
@@ -58,7 +56,9 @@ README.md
 scripts/
 
 # The worker and backend Dockerfile targets only build Go binaries from
-# cmd/ and internal/, so the frontend and infra trees just bloat the
-# context. The frontend image has its own context (./frontend).
+# cmd/ and internal/, so the frontend, infra and sample-image trees just
+# bloat the context. The frontend image has its own context (./frontend);
+# the samples are uploaded to S3, never baked into an image.
 frontend/
 infra/
+samples/

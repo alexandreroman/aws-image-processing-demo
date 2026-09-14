@@ -1,5 +1,6 @@
 // Package awsclient builds an AWS SDK v2 config that transparently targets
-// LocalStack when AWS_ENDPOINT_URL is set, and real AWS otherwise.
+// the local emulator (Moto Server) when AWS_ENDPOINT_URL is set, and real
+// AWS otherwise.
 //
 // The same Go code runs against both, which is the design constraint that
 // keeps local dev and production behavior in sync.
@@ -34,15 +35,13 @@ func Load(ctx context.Context) (aws.Config, error) {
 	return config.LoadDefaultConfig(ctx, opts...)
 }
 
-// NewS3 builds an S3 client. When AWS_ENDPOINT_URL is set (LocalStack),
-// path-style addressing is forced — virtual-hosted style does not work with
-// localhost-rooted endpoints.
+// NewS3 builds an S3 client. When AWS_ENDPOINT_URL is set (the local
+// emulator), path-style addressing is forced — virtual-hosted style does not
+// work with localhost-rooted endpoints.
 func NewS3(cfg aws.Config) *s3.Client {
-	usingLocalStack := os.Getenv("AWS_ENDPOINT_URL") != ""
+	pathStyle := os.Getenv("AWS_ENDPOINT_URL") != ""
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
-		if usingLocalStack {
-			o.UsePathStyle = true
-		}
+		o.UsePathStyle = pathStyle
 	})
 }
 

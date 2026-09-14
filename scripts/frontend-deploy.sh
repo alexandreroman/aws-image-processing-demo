@@ -7,6 +7,10 @@
 
 set -euo pipefail
 
+# Optional $1: the closing banner, so scripts/deploy.sh can reuse this script
+# for its own last steps without announcing a frontend-only deployment.
+completion_message="${1:-Frontend deployment complete.}"
+
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 infra_dir="${repo_root}/infra"
 frontend_dir="${repo_root}/frontend"
@@ -41,5 +45,5 @@ aws cloudfront create-invalidation \
 
 demo_url="$(tofu -chdir="${infra_dir}" output -raw demo_url)"
 echo
-echo "Frontend deployment complete."
+echo "${completion_message}"
 echo "Demo URL: ${demo_url}"

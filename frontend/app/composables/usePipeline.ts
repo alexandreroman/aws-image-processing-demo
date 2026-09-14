@@ -13,6 +13,7 @@ export interface UsePipelineReturn {
   summary: ComputedRef<PipelineSummary>;
   workflows: ComputedRef<WorkflowItem[]>;
   durationMs: ComputedRef<number | null>;
+  isDone: ComputedRef<boolean>;
   loaded: ComputedRef<boolean>;
   error: Ref<Error | null>;
   refresh: () => Promise<void>;
@@ -40,7 +41,6 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
   const isDone = computed<boolean>(() => {
     const p = pipeline.value;
     if (!p) return false;
-    if (p.completedAt) return true;
     return p.summary.total > 0 && p.summary.running === 0;
   });
   const durationMs = computed<number | null>(() => (isDone.value ? pipeline.value?.durationMs ?? null : null));
@@ -61,6 +61,11 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     const seq = ++nextSeq;
     try {
       const result = await api.getPipeline(id);
+      // The page component is reused across /pipelines/A -> /pipelines/B, so a
+      // reply for the pipeline we just left must not land on the new one.
+      if (id !== toValue(pipelineId)) {
+        return;
+      }
       if (seq <= lastAppliedSeq) {
         return;
       }
@@ -68,6 +73,9 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
       pipeline.value = result;
       error.value = null;
     } catch (err) {
+      if (id !== toValue(pipelineId)) {
+        return;
+      }
       if (seq <= lastAppliedSeq) {
         return;
       }
@@ -97,27 +105,27 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     { immediate: false, immediateCallback: false },
   );
 
-  function startPolling() {
-    pollStartedAt = Date.now();
-    pollIntervalMs.value = POLL_FAST_MS;
-    resume();
-  }
-
   watch(isDone, (done) => {
     if (done) {
       pause();
     }
-  }, { immediate: true });
+  });
 
   watch(
     () => toValue(pipelineId),
     (id) => {
+      // Drop the previous pipeline's snapshot so the page never renders it
+      // under the new id while the first poll is still in flight.
+      pipeline.value = null;
+      error.value = null;
       if (!id) {
         pause();
         return;
       }
       void refresh();
-      startPolling();
+      pollStartedAt = Date.now();
+      pollIntervalMs.value = POLL_FAST_MS;
+      resume();
     },
     { immediate: true },
   );
@@ -130,6 +138,7 @@ export function usePipeline(pipelineId: MaybeRefOrGetter<string>): UsePipelineRe
     summary,
     workflows,
     durationMs,
+    isDone,
     loaded,
     error,
     refresh,

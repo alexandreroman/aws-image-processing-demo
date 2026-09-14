@@ -23,7 +23,6 @@ function publicUrl(key: string): string {
 }
 
 interface CompletedThumb {
-  workflowId: string;
   imageId: string;
   description: string;
   labels: string[];
@@ -33,11 +32,11 @@ interface CompletedThumb {
 
 type TileStatus = 'completed' | 'running' | 'failed';
 
-// image: when status='completed' the final variant, when status='running' an in-flight resized preview behind the spinner.
+// image: when status='completed' the final variant, when status='running' an
+// in-flight resized preview behind the spinner.
 interface Tile {
   workflowId: string;
   status: TileStatus;
-  currentActivity?: string;
   image?: CompletedThumb;
   title: string;
 }
@@ -60,7 +59,6 @@ function bestThumb(w: WorkflowItem): CachedThumb | null {
     return {
       kind: 'watermarked',
       thumb: {
-        workflowId: w.workflowId,
         imageId: m.imageId,
         description: m.description ?? '',
         labels: m.labels ?? [],
@@ -75,7 +73,6 @@ function bestThumb(w: WorkflowItem): CachedThumb | null {
     return {
       kind: 'resized',
       thumb: {
-        workflowId: w.workflowId,
         imageId: m.imageId,
         description: m.description ?? '',
         labels: m.labels ?? [],
@@ -89,57 +86,60 @@ function bestThumb(w: WorkflowItem): CachedThumb | null {
 
 // Why: latch the best variant seen per workflow — resized first, then upgrade to
 // watermarked when it arrives; never regress (poll responses can be stale or
-// lack the in-flight manifest entirely).
+// lack the in-flight manifest entirely, because the backend caps in-flight
+// manifest queries at 10 per poll).
 const completedCache = ref<Map<string, CachedThumb>>(new Map());
 
-watchEffect(() => {
-  let changed = false;
-  const next = completedCache.value;
-  for (const w of props.workflows) {
-    const existing = next.get(w.workflowId);
-    if (existing?.kind === 'watermarked') continue;
-    const candidate = bestThumb(w);
-    if (!candidate) continue;
-    if (!existing) {
-      next.set(w.workflowId, candidate);
-      changed = true;
-    } else if (candidate.kind === 'watermarked') {
-      next.set(w.workflowId, candidate);
-      changed = true;
+watch(
+  () => props.workflows,
+  (workflows) => {
+    // `completedCache.value` is a reactive Map proxy, so mutating it in place
+    // already notifies dependents — no need to reassign a copy.
+    const cache = completedCache.value;
+    for (const w of workflows) {
+      const existing = cache.get(w.workflowId);
+      if (existing?.kind === 'watermarked') continue;
+      const candidate = bestThumb(w);
+      if (!candidate) continue;
+      if (!existing || candidate.kind === 'watermarked') {
+        cache.set(w.workflowId, candidate);
+      }
     }
-  }
-  if (changed) {
-    completedCache.value = new Map(next);
-  }
-});
+  },
+  { immediate: true },
+);
 
-function toTile(w: WorkflowItem): Tile {
+// Prefer a latched watermarked variant (a later poll may no longer report the
+// manifest at all), otherwise take this poll's best and fall back to the cache.
+function thumbFor(w: WorkflowItem): CompletedThumb | undefined {
   const cached = completedCache.value.get(w.workflowId);
-  if (cached) {
-    if (cached.kind === 'watermarked') {
-      return {
-        workflowId: w.workflowId,
-        status: 'completed',
-        image: cached.thumb,
-        title: cached.thumb.description || cached.thumb.imageId,
-      };
-    }
+  if (cached?.kind === 'watermarked') return cached.thumb;
+  return bestThumb(w)?.thumb ?? cached?.thumb;
+}
+
+// Branch on the workflow status first: the thumb cache is only a rendering
+// aid, it must never decide whether a workflow is still running.
+function toTile(w: WorkflowItem): Tile {
+  if (w.status === 'COMPLETED') {
+    const image = thumbFor(w);
     return {
       workflowId: w.workflowId,
-      status: 'running',
-      currentActivity: w.currentActivity,
-      image: cached.thumb,
-      title: `Running: ${w.currentActivity ?? '…'}`,
+      status: 'completed',
+      image,
+      title: image ? image.description || image.imageId : w.imageId,
     };
   }
+
   if (w.status === 'RUNNING' || w.status === 'CONTINUED_AS_NEW') {
     return {
       workflowId: w.workflowId,
       status: 'running',
-      currentActivity: w.currentActivity,
+      image: thumbFor(w),
       title: `Running: ${w.currentActivity ?? '…'}`,
     };
   }
+
+  // Terminal but unsuccessful: FAILED / TERMINATED / TIMED_OUT / CANCELED.
   return {
     workflowId: w.workflowId,
     status: 'failed',
@@ -160,12 +160,11 @@ const completedTiles = computed<CompletedTile[]>(() =>
   tiles.value.filter((t): t is CompletedTile => t.image != null && t.status === 'completed'),
 );
 
-const slotCount = computed<number>(() => {
-  if (props.expectedCount === 0 && tiles.value.length === 0) {
-    return DEFAULT_PLACEHOLDER_SLOTS;
-  }
-  return Math.max(props.expectedCount, tiles.value.length);
-});
+const slotCount = computed<number>(
+  // Zero means nothing is known yet (no burst size handed over, no poll landed),
+  // so fall back to a placeholder grid.
+  () => Math.max(props.expectedCount, tiles.value.length) || DEFAULT_PLACEHOLDER_SLOTS,
+);
 
 type Slot = { kind: 'tile'; tile: Tile } | { kind: 'pending'; index: number };
 
@@ -176,42 +175,47 @@ const slots = computed<Slot[]>(() =>
   }),
 );
 
-const selectedIndex = ref<number | null>(null);
+// Why a workflow id and not a position: `completedTiles` grows on every poll,
+// so a stored index would point at a different image moments later.
+const selectedId = ref<string | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 const prevButton = ref<HTMLButtonElement | null>(null);
 const nextButton = ref<HTMLButtonElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
 
 const selected = computed<CompletedThumb | null>(() => {
-  if (selectedIndex.value === null) return null;
-  return completedTiles.value[selectedIndex.value]?.image ?? null;
+  if (selectedId.value === null) return null;
+  const tile = completedTiles.value.find((t) => t.workflowId === selectedId.value);
+  return tile?.image ?? null;
 });
 
 function openModal(tile: CompletedTile): void {
-  const index = completedTiles.value.findIndex(
-    (t) => t.workflowId === tile.workflowId,
-  );
-  if (index === -1) return;
   previouslyFocused
     = typeof document !== 'undefined'
       ? (document.activeElement as HTMLElement | null)
       : null;
-  selectedIndex.value = index;
+  selectedId.value = tile.workflowId;
 }
 
 function closeModal(): void {
-  selectedIndex.value = null;
+  selectedId.value = null;
+}
+
+// Resolve the current position at call time, against the latest tile order.
+function step(delta: number): void {
+  const tiles = completedTiles.value;
+  if (selectedId.value === null || tiles.length <= 1) return;
+  const index = tiles.findIndex((t) => t.workflowId === selectedId.value);
+  if (index === -1) return;
+  selectedId.value = tiles[(index + delta + tiles.length) % tiles.length]!.workflowId;
 }
 
 function prev(): void {
-  if (selectedIndex.value === null || completedTiles.value.length <= 1) return;
-  const n = completedTiles.value.length;
-  selectedIndex.value = (selectedIndex.value - 1 + n) % n;
+  step(-1);
 }
 
 function next(): void {
-  if (selectedIndex.value === null || completedTiles.value.length <= 1) return;
-  selectedIndex.value = (selectedIndex.value + 1) % completedTiles.value.length;
+  step(1);
 }
 
 // Cycle Tab/Shift+Tab among the modal's focusable controls. Kept inline
@@ -237,9 +241,11 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 // Lock body scroll + bind Escape only while a modal is open. Guarded for SSG.
-watch(selected, (item) => {
+// Watching the boolean, not `selected`: arrow-key navigation swaps one image
+// for another and must not re-run the focus and listener side effects.
+watch(() => selected.value !== null, (isOpen) => {
   if (typeof document === 'undefined') return;
-  if (item) {
+  if (isOpen) {
     document.documentElement.classList.add('overflow-hidden');
     document.addEventListener('keydown', onKeydown);
     // Wait for the modal to render before moving focus into it.
@@ -247,7 +253,7 @@ watch(selected, (item) => {
   } else {
     document.documentElement.classList.remove('overflow-hidden');
     document.removeEventListener('keydown', onKeydown);
-    previouslyFocused?.blur();
+    previouslyFocused?.focus();
     previouslyFocused = null;
   }
 });
@@ -352,19 +358,22 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else-if="slot.kind === 'tile'"
+          v-else-if="slot.kind === 'tile' && slot.tile.status === 'failed'"
           class="animate-fade-in"
         >
           <div
             class="aspect-square rounded-md bg-rose-500/10 border
               border-rose-500/40 flex items-center justify-center text-rose-400
               text-2xl font-bold"
-            aria-hidden="true"
+            role="img"
+            :aria-label="`Failed: ${slot.tile.title}`"
           >
-            ×
+            <span aria-hidden="true">×</span>
           </div>
         </div>
 
+        <!-- Reserved slot: either no workflow yet, or a completed one whose
+             manifest this poll did not return. -->
         <div
           v-else
           aria-hidden="true"

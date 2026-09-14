@@ -127,23 +127,25 @@ temporal workflow start \
   --workflow-id "manual-$(uuidgen)" \
   --input '{
     "pipelineId": "manual",
-    "imageId": "dog",
-    "original": {
-      "bucket": "aws-image-processing-demo-images-local",
-      "key": "samples/dog.jpg"
-    }
+    "imageId": "sample-1",
+    "original": { "key": "samples/1.jpg" }
   }'
 ```
 
-The image must already be present in the bucket
-(upload it manually with `aws --endpoint-url
-http://localhost:4566 s3 cp ...` first).
+The bucket is implicit — the worker resolves it from
+`IMAGES_BUCKET`. The key must already exist: both
+`make infra-up` and `make app-up` seed `samples/1.jpg`
+… `samples/50.jpg` into the dev bucket, and
+`scripts/upload-samples.sh` re-syncs them on demand.
 
 ### Run unit tests
 
 ```bash
 make test
 ```
+
+`make test` runs `go test -race ./...` — the race
+detector is always on, matching CI.
 
 ### Deploy to AWS
 
@@ -159,7 +161,15 @@ cp .env.example .env
 
 make deploy
 # runs: scripts/deploy.sh
-#       (build-lambda, tofu init+apply, frontend build+sync, CF invalidation)
+#   1. build the Lambda artifacts — dist/backend/bootstrap
+#      (backend) and build/worker.zip (worker)
+#   2. tofu init + tofu apply
+#   3. scripts/register-worker-deployment.sh — registers the
+#      Lambda worker deployment version with Temporal Cloud;
+#      without it the Lambda runtime never receives tasks
+#   4. scripts/upload-samples.sh — syncs samples/ to the
+#      images bucket
+#   5. frontend build + S3 sync + CloudFront invalidation
 ```
 
 To re-deploy only the frontend (typical iteration):
@@ -179,14 +189,17 @@ make teardown
 All configuration is via environment variables, loaded
 through two layers of files: `.env` is the canonical,
 deploy-shaped configuration (Temporal Cloud, Anthropic,
-AWS region). `.env.local` is an opt-in overlay that
-local-dev Make targets (`make dev`, `make backend`,
-`make worker`, `make frontend`, `make app-up`,
-`make infra-up`, `make test`, `make check`) layer on top
-to point at Moto + a Temporal dev server. Deploy targets
+AWS region). `.env.local` is an opt-in overlay that the
+host-mode targets (`make dev`, `make backend`,
+`make worker`, `make frontend`, `make infra-up`,
+`make test`, `make check`) layer on top to point at
+Moto + a Temporal dev server. Deploy targets
 (`make deploy`, `make frontend-deploy`, `make teardown`)
-load only `.env`. Both files are gitignored — copy from
-`.env.example` / `.env.local.example`.
+load only `.env`, and the compose stack (`make app-up`)
+reads neither — it inlines every dev constant and
+interpolates just `ANTHROPIC_API_KEY`. Both files are
+gitignored — copy from `.env.example` /
+`.env.local.example`.
 
 **Canonical (`.env`)** — required for `make deploy`:
 
@@ -200,6 +213,7 @@ load only `.env`. Both files are gitignored — copy from
 | `ANTHROPIC_API_KEY`                  | Anthropic API key                                            | (required)                         |
 | `TEMPORAL_METRICS_API_KEY`           | Metrics-Read-Only API key (ECS autoscaling, see below)       | (empty = ECS autoscaling disabled) |
 | `AWS_REGION`                         | AWS region for the deployment                                | `eu-west-1`                        |
+| `AWS_PROFILE`                        | AWS CLI / SSO profile used by the deploy scripts             | (CLI default chain)                |
 | `DOMAIN_NAME`                        | Custom-domain root; empty uses the CloudFront default        | (empty)                            |
 | `SUBDOMAIN`                          | Subdomain when `DOMAIN_NAME` is set                          | `demo`                             |
 | `CLOUDFLARE_API_TOKEN`               | Cloudflare DNS token (only with `DOMAIN_NAME`)               | (empty)                            |
@@ -208,6 +222,7 @@ load only `.env`. Both files are gitignored — copy from
 | `WORKER_MAX_CONCURRENT_ACTIVITIES`   | Max activities a worker runs concurrently                    | `4`                                |
 | `WORKER_LAMBDA_MAX_INSTANCES`        | Cap on Lambda worker instances (-1 = unreserved)             | `10`                               |
 | `WORKER_ECS_MAX_INSTANCES`           | Cap on ECS worker instances when autoscaling is enabled      | `5`                                |
+| `WORKER_LAMBDA_DEPLOYMENT_SUFFIX`    | Roll the Lambda Worker Deployment onto a fresh name          | (empty)                            |
 
 > **Note — `TEMPORAL_CLOUD_EXTERNAL_ID`.** This is the
 > `sts:ExternalId` trust-condition value Temporal Cloud
@@ -218,7 +233,10 @@ load only `.env`. Both files are gitignored — copy from
 > you and your namespace. Leaving it empty disables the
 > Lambda invoker role (ECS-only deploy).
 
-**Dev overlay (`.env.local`)** — layered on top of `.env` only by host-mode dev targets (`make dev`, `make backend`, `make worker`, `make frontend`, `make infra-up`, `make test`, `make check`):
+**Dev overlay (`.env.local`)** — layered on top of `.env`
+only by the host-mode targets (`make dev`, `make backend`,
+`make worker`, `make frontend`, `make infra-up`,
+`make test`, `make check`):
 
 | Variable             | Description                                       | Value                                              |
 | -------------------- | ------------------------------------------------- | -------------------------------------------------- |
@@ -230,7 +248,10 @@ load only `.env`. Both files are gitignored — copy from
 | `TEMPORAL_TLS_CERT`  | Disable mTLS for the local dev server             | empty (optional)                                   |
 | `TEMPORAL_TLS_KEY`   | Disable mTLS for the local dev server             | empty (optional)                                   |
 
-In `make app-up` (fully containerized), `compose.yaml` embeds the dev constants directly — `.env.local` is not consulted. Only `ANTHROPIC_API_KEY` is interpolated from `.env` at compose-time.
+`make app-up` (fully containerized) consults neither file:
+`compose.yaml` inlines the dev constants in each service's
+`environment:` block, and only `ANTHROPIC_API_KEY` is
+interpolated from `.env` at compose-time.
 
 ## Architecture
 
@@ -279,7 +300,7 @@ prefix search.
 
 | Module                     | Description                                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `cmd/worker`               | Temporal worker (host / Docker / ECS Fargate / AWS Lambda); `/healthz` on `:8001` in long-running modes |
+| `cmd/worker`               | Temporal worker (host / Docker / ECS Fargate / Lambda); `/healthz` on `:8001` in long-running modes    |
 | `cmd/backend`              | Backend — Lambda or local HTTP server on `:8000`                                                       |
 | `internal/workflows`       | `LaunchPipelines` and `ProcessImage` workflows                                                         |
 | `internal/activities`      | Resize, describe, watermark, store activities                                                          |
@@ -298,9 +319,10 @@ The worker is a single Go binary that runs in four
 execution contexts from the same source — the context
 is selected by the environment, not by build flags. In
 prod, `make deploy` provisions both the ECS Fargate
-and the AWS Lambda worker side by side: it builds the
-worker container for ECS, packages `build/worker.zip`
-for Lambda, and applies both Tofu stacks in one go.
+and the AWS Lambda worker side by side: ECS pulls the
+multi-arch worker image CI publishes to GHCR, while
+Lambda runs the `build/worker.zip` the deploy script
+packages locally.
 
 | Context     | How to run                                | Process model         | Key trade-off                                       |
 | ----------- | ----------------------------------------- | --------------------- | --------------------------------------------------- |
@@ -355,13 +377,11 @@ low-volume workloads where cost matters more than
 steady-state latency, Lambda is the attractive
 option.
 
-### Request flow per runtime
+### Request flow
 
-The two diagrams below show the same ingress path with
-each runtime in turn.
-
-**ECS Fargate runtime** — long-running worker that
-long-polls Temporal Cloud.
+Both runtimes share the same ingress path; only the way
+the worker acquires a task differs. The diagram below
+shows the **ECS Fargate** runtime.
 
 ```mermaid
 sequenceDiagram
@@ -396,40 +416,28 @@ sequenceDiagram
     BE-->>User: manifest
 ```
 
-**AWS Lambda runtime** — Temporal Cloud assumes an
-IAM role and invokes the Lambda worker per task.
+On the **AWS Lambda** runtime, the participant is the
+Lambda worker and the two long-poll lines
+(`W->>TC: long-poll task queue` and
+`TC-->>W: ProcessImage task`) collapse into a single
+`TC->>W: AssumeRole + Invoke(ProcessImage)`: Temporal
+Cloud assumes an IAM role in your account and invokes
+the worker function per task. Every other step is
+identical: both ingress legs and the S3, Anthropic, and
+DynamoDB calls.
 
-```mermaid
-sequenceDiagram
-    actor User
-    participant CF as CloudFront
-    participant BE as Backend Lambda
-    participant S3 as S3 images
-    participant TC as Temporal Cloud
-    participant W as Lambda worker
-    participant DDB as DynamoDB
-    participant AI as Anthropic API
-
-    Note over S3: Curated samples pre-uploaded under samples/
-
-    User->>CF: POST /api/workflows/start
-    CF->>BE: via API Gateway
-    BE->>TC: StartWorkflow(LaunchPipelines)
-    BE-->>User: { pipelineId, workflowIds }
-
-    TC->>W: AssumeRole + Invoke(ProcessImage)
-    W->>S3: Get original (samples/...)
-    W->>S3: Put resized × 3
-    W->>AI: Describe
-    W->>S3: Put watermarked × 3
-    W->>DDB: PutItem manifest
-    W-->>TC: complete
-
-    User->>CF: GET /api/pipelines/{id}
-    CF->>BE: via API Gateway
-    BE->>DDB: Query
-    BE-->>User: manifest
-```
+CloudFront dispatches by path across three origins:
+`/api/*` to API Gateway, `/images/*` to the S3 images
+bucket via OAC (a CloudFront Function strips the
+`/images/` prefix before the origin sees the key), and
+everything else to the S3 frontend bucket. The
+client-rendered Nuxt routes such as `/pipelines/{id}`
+are rewritten to `200.html` by a second CloudFront
+Function attached to the default cache behavior only,
+so 404s from `/api/*` and 403s from `/images/*` still
+reach the browser unchanged. The `/healthz` probes on
+the backend (`:8000`) and the worker (`:8001`) sit at
+the root and are not reachable through CloudFront.
 
 The Temporal-Cloud-assumes-AWS-role flow for the Lambda
 runtime is wired by two Tofu variables:
@@ -489,10 +497,11 @@ ECS worker autoscaling is opt-in. Provide
 it unset to keep a fixed single-task worker (no ADOT
 collector, no CloudWatch alarms, no scaling policies).
 
-The ECS Fargate runtime auto-scales from 1 to 5 tasks
-based on the actual Temporal task queue backlog,
-following the canonical CREMA / KEDA pattern — but
-with zero custom code. An ADOT (AWS Distro for
+The ECS Fargate runtime auto-scales from 1 to
+`WORKER_ECS_MAX_INSTANCES` (default 5) tasks based on the
+actual Temporal task queue backlog, following the
+canonical CREMA / KEDA pattern — but with zero custom
+code. An ADOT (AWS Distro for
 OpenTelemetry) Collector runs as its own single-task
 Fargate service, scrapes Temporal Cloud's OpenMetrics
 endpoint (`https://metrics.temporal.io/v1/metrics`)

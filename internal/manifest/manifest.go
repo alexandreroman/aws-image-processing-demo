@@ -48,8 +48,8 @@ type ProcessImageInput struct {
 	Original   S3Ref  `json:"original"`
 }
 
-// LaunchPipelineImage is one image to be processed by a child ProcessImage
-// workflow scheduled by LaunchPipelines.
+// LaunchPipelineImage is one image to be processed by a top-level
+// ProcessImage workflow scheduled by LaunchPipelines.
 type LaunchPipelineImage struct {
 	ImageID  string `json:"imageId"`
 	Original S3Ref  `json:"original"`
@@ -65,6 +65,11 @@ type LaunchPipelinesInput struct {
 // iterate this slice (Go map iteration is non-deterministic and would break
 // replay).
 var SizeNames = []string{"small", "medium", "large"}
+
+// DescribeSizeName is the size handed to the Claude vision call: big enough
+// for the model to work with, small enough to keep the request cheap. It must
+// be one of SizeNames.
+const DescribeSizeName = "medium"
 
 // SizeWidths maps each size name to its target width in pixels. Only the
 // values are read by name — never iterate the map directly in workflow code.
