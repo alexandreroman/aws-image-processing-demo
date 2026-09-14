@@ -51,8 +51,8 @@ https://github.com/user-attachments/assets/f57f4f0d-9b3b-49a9-9379-89299062c6d5
 
 ## Prerequisites
 
-- **Go** 1.26 or newer
-- **Node.js** 24 LTS (or newer) and **pnpm** 9 (or newer)
+- **Go** 1.27 or newer
+- **Node.js** 24 LTS (or newer) and **pnpm** 12 (or newer)
 - **Docker** and **Docker Compose** (for development)
 - **OpenTofu** 1.8 or newer (for AWS deployment)
 - **AWS CLI v2** (for AWS deployment)

@@ -1,0 +1,8 @@
+# pnpm 12 requires every dependency build script to be approved here:
+# without this list, `pnpm install` fails with ERR_PNPM_IGNORED_BUILDS.
+# All three packages compile or fetch a native binary at install time,
+# and esbuild's platform binary is required for the Nuxt build to run.
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  unrs-resolver: true

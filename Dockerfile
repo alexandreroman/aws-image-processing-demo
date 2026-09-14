@@ -11,7 +11,7 @@
 # dynamic linker dependency — neither libc nor ld-linux is invoked
 # at runtime, so the build libc never matters.
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 
 # Module cache layer.
@@ -36,7 +36,7 @@ FROM gcr.io/distroless/static-debian12:nonroot AS worker
 COPY --from=build /out/worker /worker
 # Bring in a static wget binary so docker-compose / ECS can run an
 # HTTP healthcheck. Distroless static ships no shell or userland.
-COPY --from=busybox:1.37-musl /bin/wget /usr/bin/wget
+COPY --from=busybox:1.38-musl /bin/wget /usr/bin/wget
 USER nonroot:nonroot
 EXPOSE 8001
 ENTRYPOINT ["/worker"]
@@ -46,7 +46,7 @@ FROM gcr.io/distroless/static-debian12:nonroot AS backend
 COPY --from=build /out/backend /backend
 # Bring in a static wget binary so docker-compose / ECS can run an
 # HTTP healthcheck. Distroless static ships no shell or userland.
-COPY --from=busybox:1.37-musl /bin/wget /usr/bin/wget
+COPY --from=busybox:1.38-musl /bin/wget /usr/bin/wget
 USER nonroot:nonroot
 EXPOSE 8000
 ENTRYPOINT ["/backend"]
