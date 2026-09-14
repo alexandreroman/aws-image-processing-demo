@@ -19,6 +19,15 @@ export
 endif
 endif
 
+# Keep corepack's first-use download of the pinned pnpm non-interactive. The
+# prompt default depends on the entry point, not the version: the `corepack`
+# CLI seeds this to 0, the bare `pnpm` shim from `corepack enable` seeds it
+# to 1. The recipes below use the CLI, so the pin is belt-and-braces. `?=`
+# lets a deliberate =1 (download auditing) win; the `export` is explicit
+# because the bare `export` above runs only when .env exists.
+COREPACK_ENABLE_DOWNLOAD_PROMPT ?= 0
+export COREPACK_ENABLE_DOWNLOAD_PROMPT
+
 # Casper / cmux worktree port isolation. compose.override.yaml (auto-merged
 # by docker compose, gitignored) may remap the published host ports so
 # parallel workspaces don't collide. When present it is the source of truth:
@@ -31,10 +40,11 @@ TEMPORAL_GRPC_PORT := $(shell sed -nE 's/.*"([0-9]+):7233".*/\1/p' compose.overr
 TEMPORAL_UI_PORT   := $(shell sed -nE 's/.*"([0-9]+):8233".*/\1/p' compose.override.yaml | head -n1)
 BACKEND_PORT       := $(shell sed -nE 's/.*"([0-9]+):8000".*/\1/p' compose.override.yaml | head -n1)
 MOTO_PORT          := $(shell sed -nE 's/.*"([0-9]+):5000".*/\1/p' compose.override.yaml | head -n1)
-# Point the host-side dev flow at the remapped Temporal gRPC port, overriding
-# the fixed value from .env.local.
+# Point the host-side dev flow at the remapped Temporal gRPC and Moto ports,
+# overriding the fixed values from .env.local.
 TEMPORAL_ADDRESS   := localhost:$(TEMPORAL_GRPC_PORT)
-export TEMPORAL_ADDRESS
+AWS_ENDPOINT_URL   := http://localhost:$(MOTO_PORT)
+export TEMPORAL_ADDRESS AWS_ENDPOINT_URL
 else
 FRONTEND_PORT      := 3000
 TEMPORAL_GRPC_PORT := 7233
