@@ -29,3 +29,4 @@ in this directory.
 - [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via the `@tailwindcss/vite` plugin; theme in `@theme` in `main.css`, no `tailwind.config` file
 - [pnpm invocations go through corepack](references/pnpm_corepack_invocation.md) — bare `pnpm` is a different major than the `pnpm@12.4.1` pin and writes a lockfile the image build rejects
 - [pnpm minimumReleaseAge exemptions](references/pnpm_minimum_release_age.md) — pnpm 12 blocks deps published <24h; exempt by name via `minimumReleaseAgeExclude`, never globally
+- [Dev-only Vue warnings from a stale Vite module cache](references/dev_vue_warnings_stale_vite_cache.md) — resolveComponent / hoisted-ref / RouterLink hydration warnings in `nuxt dev` mean two cached Vue copies; hard-reload first
