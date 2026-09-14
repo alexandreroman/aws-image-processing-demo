@@ -34,6 +34,7 @@ in this directory.
 - [Determinism tests assert every run against manifest.SizeNames](references/workflow_determinism_test_repeats.md) — ~10 runs, expected sequence
 - [Dev-only Vue warnings from a stale Vite cache](references/dev_vue_warnings_stale_vite_cache.md) — hydration warnings mean two cached Vue copies
 - [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via `@tailwindcss/vite`; theme in `@theme` in `main.css`, no config file
+- [Inspecting the rendered compose config safely](references/compose_config_secret_safety.md) — plain `docker-compose config` prints the live API key
 - [Keep WORKER_MAX_CONCURRENT_ACTIVITIES env knob](references/worker_max_concurrent_activities.md) — deliberate burst demo dial; not dead config
 - [Local AWS emulator: Moto Server](references/local_aws_emulator.md) — `motoserver/moto` on default internal port 5000, host port 4566
 - [No per-image notifications](references/no_per_image_notifications.md) — at most one end-of-burst toast, never one per image; errors may toast
