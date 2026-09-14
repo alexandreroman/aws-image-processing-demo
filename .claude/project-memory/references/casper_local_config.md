@@ -8,7 +8,7 @@ type: reference
 
 `.casper.json` (committed) configures Casper workspaces:
 
-- `copyPatterns` seeds each new workspace with `.env`,
+- `copyFiles` seeds each new workspace with `.env`,
   `.env.local`, `ca.pem`, `ca.key`.
 - Scripts: `setup=make worktree-ports`, `run=make app-up`,
   `dev=make dev`, `stop`/`teardown=make app-down`.
@@ -24,11 +24,24 @@ header comment differs. Keep the two fan-outs byte-compatible.
 The Makefile parses `compose.override.yaml` back (via `sed -nE`)
 after the `.env`/`.env.local` includes, so it is the source of
 truth for the endpoint banner (`show_urls` macro) and for host-side
-`make dev`: `TEMPORAL_ADDRESS` is force-exported to the remapped
-gRPC port (overriding `.env.local`), `PORT` is set per-recipe
+`make dev`: `TEMPORAL_ADDRESS` and `AWS_ENDPOINT_URL` are
+force-exported to the remapped gRPC and Moto ports (overriding the
+fixed values in `.env.local`), `PORT` is set per-recipe
 (`backend`=base+3, `frontend`=base), and Nuxt dev-proxy targets
 come from `NUXT_DEV_API_TARGET` / `NUXT_DEV_IMAGES_TARGET`. No
 override present → conventional defaults (3000/7233/8233/8000/4566).
+
+Every host-mode consumer of a remapped port needs its own
+force-export; parsing the ports alone does not reach the Go
+binaries, which read `AWS_ENDPOINT_URL` and `TEMPORAL_ADDRESS` from
+the environment.
+
+Both force-exports are unconditional rather than gated on
+`DEV_TARGETS`, and the deploy targets stay safe one layer down:
+`load_env` in `scripts/lib/env.sh` unsets `AWS_ENDPOINT_URL`
+(alongside the other dev-overlay vars) and re-sources `.env`, so
+`deploy`, `frontend-deploy` and `teardown` reach real AWS and
+Temporal Cloud even from a port-remapped worktree.
 
 Backend listen port derives from `PORT` (default `:8000`) in
 `cmd/backend/main.go`. Worker `:8001` health port is out of scope
