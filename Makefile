@@ -88,7 +88,7 @@ dev: frontend/node_modules infra-up ## Start infra, then run backend + worker + 
 	$(show_urls)
 	@$(MAKE) -j backend worker frontend
 
-frontend/node_modules: frontend/package.json
+frontend/node_modules: frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml
 	pnpm -C frontend install
 
 ##@ Stack
