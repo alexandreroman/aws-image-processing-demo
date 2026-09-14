@@ -1,15 +1,22 @@
+import tailwindcss from '@tailwindcss/vite';
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
 
   modules: [
-    '@nuxtjs/tailwindcss',
     '@vueuse/nuxt',
     '@nuxt/eslint',
   ],
 
   css: ['~/assets/css/main.css'],
+
+  // Tailwind v4 is wired through its first-party Vite plugin rather than a
+  // Nuxt module; the theme lives in `app/assets/css/main.css`.
+  vite: {
+    plugins: [tailwindcss()],
+  },
 
   app: {
     head: {

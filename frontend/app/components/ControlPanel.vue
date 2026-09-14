@@ -139,7 +139,7 @@ async function startBurst() {
         <span
           v-if="awsAvailable"
           aria-hidden="true"
-          class="pointer-events-none absolute top-1 bottom-1 left-1 rounded
+          class="pointer-events-none absolute top-1 bottom-1 left-1 rounded-sm
             bg-primary shadow-glow transition-transform duration-200 ease-out
             motion-reduce:transition-none"
           :style="{
@@ -154,8 +154,8 @@ async function startBurst() {
           role="radio"
           :aria-checked="awsAvailable && selectedRuntime === r"
           :tabindex="awsAvailable && selectedRuntime === r ? 0 : -1"
-          class="relative z-10 text-xs font-medium py-1.5 rounded
-            transition-colors focus-visible:outline-none focus-visible:ring-2
+          class="relative z-10 text-xs font-medium py-1.5 rounded-sm
+            transition-colors focus-visible:outline-hidden focus-visible:ring-2
             focus-visible:ring-primary/60 disabled:opacity-50 disabled:cursor-not-allowed"
           :class="awsAvailable && selectedRuntime === r
             ? 'text-bg'
