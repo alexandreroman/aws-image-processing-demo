@@ -79,7 +79,9 @@ module "worker_ecs" {
   temporal_tls_cert_secret_arn = local.temporal_tls_enabled ? aws_secretsmanager_secret.demo["temporal-tls-cert"].arn : ""
   temporal_tls_key_secret_arn  = local.temporal_tls_enabled ? aws_secretsmanager_secret.demo["temporal-tls-key"].arn : ""
 
-  autoscaling_enabled      = var.temporal_metrics_api_key != ""
+  # The flag is deliberately unmarked (see `secrets.tf`): the module feeds it to
+  # a CloudWatch alarm `for_each`, and OpenTofu rejects sensitive instance keys.
+  autoscaling_enabled      = local.temporal_metrics_enabled
   autoscaling_max_capacity = var.worker_ecs_max_instances
 
   subnet_ids = aws_subnet.public[*].id
@@ -87,7 +89,7 @@ module "worker_ecs" {
 }
 
 module "worker_otel_collector" {
-  count  = var.temporal_metrics_api_key != "" ? 1 : 0
+  count  = local.temporal_metrics_enabled ? 1 : 0
   source = "./worker-otel-collector"
 
   name_prefix         = local.name_prefix

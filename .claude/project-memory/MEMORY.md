@@ -39,6 +39,7 @@ in this directory.
 - [Local AWS emulator: Moto Server](references/local_aws_emulator.md) — `motoserver/moto` on default internal port 5000, host port 4566
 - [No per-image notifications](references/no_per_image_notifications.md) — at most one end-of-burst toast, never one per image; errors may toast
 - [No workflow.GetVersion in ProcessImage workflows](references/workflow_no_versioning.md) — short-lived workflows ship code without version gates
+- [OpenTofu for_each rejects sensitive values](references/tofu_sensitive_for_each.md) — split the map; `count` is fine; unmark presence booleans
 - [Operating Temporal Worker Deployments from the CLI](references/temporal_worker_deployment_ops.md) — `--unversioned` first; namespace rate limit
 - [Per-worktree compose port isolation](references/worktree_compose_port_isolation.md) — one generator, `CASPER_PORT` and `CMUX_PORT` entry points
 - [pnpm dependency build approvals](references/pnpm_build_approvals.md) — approve builds via `allowBuilds` in `frontend/pnpm-workspace.yaml`
