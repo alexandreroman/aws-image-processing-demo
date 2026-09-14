@@ -323,8 +323,8 @@ const summaryRows = computed(() => [
             <div
               class="h-full rounded-full transition-all duration-300 ease-out"
               :class="row.key === 'Queued'
-                ? 'bg-gradient-to-r from-ink-500 to-ink-400'
-                : 'bg-gradient-to-r from-primary to-iris'"
+                ? 'bg-linear-to-r from-ink-500 to-ink-400'
+                : 'bg-linear-to-r from-primary to-iris'"
               :style="{ width: barWidthPct(row.count) }"
               aria-hidden="true"
             />

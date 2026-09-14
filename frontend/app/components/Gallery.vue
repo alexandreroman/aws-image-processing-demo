@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
           v-if="slot.kind === 'tile' && slot.tile.status === 'completed' && slot.tile.image"
           type="button"
           class="group block animate-fade-in text-left
-            focus-visible:outline-none focus-visible:ring-2
+            focus-visible:outline-hidden focus-visible:ring-2
             focus-visible:ring-primary/60 focus-visible:ring-offset-2
             focus-visible:ring-offset-bg rounded-md"
           :aria-label="`Open ${slot.tile.title}`"
@@ -300,7 +300,7 @@ onBeforeUnmount(() => {
                 group-hover:scale-105"
             >
             <div
-              class="absolute inset-0 bg-gradient-to-t from-bg/60 to-transparent
+              class="absolute inset-0 bg-linear-to-t from-bg/60 to-transparent
                 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
               aria-hidden="true"
             />
@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
           class="animate-fade-in"
         >
           <div
-            class="aspect-square rounded-md bg-gradient-to-br from-primary/10
+            class="aspect-square rounded-md bg-linear-to-br from-primary/10
               to-iris/10 border border-primary/30 flex items-center
               justify-center animate-pulse-glow"
           >
@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         >
           <div
-            class="aspect-square rounded-md bg-gradient-to-br from-primary/10
+            class="aspect-square rounded-md bg-linear-to-br from-primary/10
               to-iris/10 border border-primary/30 animate-pulse-glow"
           />
         </div>
@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
                   border-2 border-surface-border text-ink-200
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
-                  text-2xl leading-none focus-visible:outline-none
+                  text-2xl leading-none focus-visible:outline-hidden
                   focus-visible:ring-2 focus-visible:ring-primary/60"
                 aria-label="Close"
                 @click="closeModal"
@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
                   border-2 border-surface-border text-ink-200
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
-                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:outline-hidden focus-visible:ring-2
                   focus-visible:ring-primary/60"
                 aria-label="Previous image"
                 @click="prev"
@@ -454,7 +454,7 @@ onBeforeUnmount(() => {
                   border-2 border-surface-border text-ink-200
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
-                  focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:outline-hidden focus-visible:ring-2
                   focus-visible:ring-primary/60"
                 aria-label="Next image"
                 @click="next"

@@ -6,3 +6,10 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   unrs-resolver: true
+
+# Targeted exemption to pnpm 12's minimumReleaseAge policy.
+# enhanced-resolve is pulled in transitively by @tailwindcss/node, and
+# pnpm rejects it for being published too recently, not for anything in
+# its contents. Drop this entry once the version is past the 24h window.
+minimumReleaseAgeExclude:
+  - enhanced-resolve

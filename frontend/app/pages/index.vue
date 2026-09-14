@@ -50,7 +50,7 @@ const reasons = [
         >
           Image-processing burst on
           <span
-            class="bg-gradient-to-r from-primary via-primary-300 to-iris
+            class="bg-linear-to-r from-primary via-primary-300 to-iris
               bg-clip-text text-transparent"
           >Temporal Cloud</span>
           +

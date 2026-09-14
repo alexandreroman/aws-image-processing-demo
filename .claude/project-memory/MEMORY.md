@@ -26,4 +26,6 @@ in this directory.
 - [Lambda runtime breaks when worker deployment registration drifts](references/lambda_runtime_registration_drift.md) — infra-only Lambda redeploys leave Temporal Cloud pointing at a stale version; symptom is HTTP 500 on /api/pipelines/{id}, empty gallery, 0 pollers on image-processing-lambda
 - [temporal CLI delete-version has no --yes (set-current-version does)](references/temporal_cli_deployment_flag_asymmetry.md) — rebind must bound delete-version with --command-timeout and fail loud when stranded --unversioned; never reorder the --unversioned step
 - [pnpm dependency build approvals](references/pnpm_build_approvals.md) — build scripts are approved via `allowBuilds` in `frontend/pnpm-workspace.yaml`; the `pnpm` field in `package.json` is inert
-- [Frontend Tailwind stays on the v3 LTS line](references/tailwind_v3_pin.md) — `tailwindcss` holds the `^3.4.x` line; `@nuxtjs/tailwindcss` hard-pins `~3.4.17`, so v4 is out
+- [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via the `@tailwindcss/vite` plugin; theme in `@theme` in `main.css`, no `tailwind.config` file
+- [pnpm invocations go through corepack](references/pnpm_corepack_invocation.md) — bare `pnpm` is a different major than the `pnpm@12.4.1` pin and writes a lockfile the image build rejects
+- [pnpm minimumReleaseAge exemptions](references/pnpm_minimum_release_age.md) — pnpm 12 blocks deps published <24h; exempt by name via `minimumReleaseAgeExclude`, never globally

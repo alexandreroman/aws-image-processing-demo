@@ -1,6 +1,92 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Brand: Temporal cyan-blue — bright variant chosen for legibility on dark. */
+  --color-primary: #2EB5F5;
+  --color-primary-50: #E6F6FE;
+  --color-primary-100: #C2E9FC;
+  --color-primary-200: #8FD6F9;
+  --color-primary-300: #5CC3F7;
+  --color-primary-400: #2EB5F5;
+  --color-primary-500: #0EA5E9;
+  --color-primary-600: #0284C7;
+  --color-primary-700: #0369A1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0C4A6E;
+
+  /* AWS orange — secondary accent. */
+  --color-accent: #FF9900;
+  --color-accent-50: #FFF3E0;
+  --color-accent-100: #FFE0B2;
+  --color-accent-200: #FFCC80;
+  --color-accent-300: #FFB74D;
+  --color-accent-400: #FFA726;
+  --color-accent-500: #FF9900;
+  --color-accent-600: #FB8C00;
+  --color-accent-700: #F57C00;
+
+  /* Temporal-leaning purple for secondary highlights (running state, etc.). */
+  --color-iris: #A78BFA;
+  --color-iris-50: #F5F3FF;
+  --color-iris-100: #EDE9FE;
+  --color-iris-200: #DDD6FE;
+  --color-iris-300: #C4B5FD;
+  --color-iris-400: #A78BFA;
+  --color-iris-500: #8B5CF6;
+  --color-iris-600: #7C3AED;
+  --color-iris-700: #6D28D9;
+
+  /* Dark surfaces. `bg` is the page; `surface*` are card layers. */
+  --color-bg: #0A0E1A;
+  --color-surface: #111827;
+  --color-surface-elevated: #1A2236;
+  --color-surface-border: #1F2A40;
+  --color-surface-hover: #1E2942;
+
+  /* Cool gray ramp tuned for dark UI (kept name `ink` for class-name
+     compatibility with existing components). */
+  --color-ink-50: #F8FAFC;
+  --color-ink-100: #E5EBF5;
+  --color-ink-200: #CBD5E1;
+  --color-ink-300: #94A3B8;
+  --color-ink-400: #64748B;
+  --color-ink-500: #475569;
+  --color-ink-600: #334155;
+  --color-ink-700: #1E293B;
+  --color-ink-800: #111827;
+  --color-ink-900: #0A0E1A;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-glow: 0 0 0 1px rgb(46 181 245 / 0.4), 0 6px 24px -4px rgb(46 181 245 / 0.35);
+
+  --animate-fade-in: fadeIn 220ms ease-out both;
+  --animate-slide-in-right: slideInRight 220ms ease-out both;
+  --animate-pulse-glow: pulseGlow 1.6s ease-in-out infinite;
+
+  @keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideInRight {
+    0% { opacity: 0; transform: translateX(16px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+}
+
+/* Hero backdrop dot grid. There is no theme namespace for background images,
+   so it ships as a custom utility instead of a theme variable. */
+@utility bg-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.06) 1px, transparent 0);
+}
 
 @layer base {
   html {
@@ -44,12 +130,18 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-md font-medium
       transition-all disabled:opacity-50 disabled:cursor-not-allowed
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60
+      focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60
       focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
   }
 
+  /* `@apply` only accepts utilities, never component classes, so `.btn`'s
+     declarations are repeated here instead of being applied by name. */
   .btn-primary-lg {
-    @apply btn bg-primary text-bg hover:bg-primary-300 px-5 py-2.5 text-sm
+    @apply inline-flex items-center justify-center gap-2 rounded-md font-medium
+      transition-all disabled:opacity-50 disabled:cursor-not-allowed
+      focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/60
+      focus-visible:ring-offset-2 focus-visible:ring-offset-bg
+      bg-primary text-bg hover:bg-primary-300 px-5 py-2.5 text-sm
       font-semibold shadow-glow;
   }
 
