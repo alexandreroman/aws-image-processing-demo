@@ -27,6 +27,6 @@ in this directory.
 - [temporal CLI delete-version has no --yes (set-current-version does)](references/temporal_cli_deployment_flag_asymmetry.md) — rebind must bound delete-version with --command-timeout and fail loud when stranded --unversioned; never reorder the --unversioned step
 - [pnpm dependency build approvals](references/pnpm_build_approvals.md) — build scripts are approved via `allowBuilds` in `frontend/pnpm-workspace.yaml`; the `pnpm` field in `package.json` is inert
 - [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via the `@tailwindcss/vite` plugin; theme in `@theme` in `main.css`, no `tailwind.config` file
-- [pnpm invocations go through corepack](references/pnpm_corepack_invocation.md) — bare `pnpm` is a different major than the `pnpm@12.4.1` pin and writes a lockfile the image build rejects
+- [pnpm invocations run from inside frontend/](references/pnpm_corepack_invocation.md) — `cd frontend && corepack pnpm …`; the launcher reads the pin from its own cwd, so `-C frontend` still picks the wrong major
 - [pnpm minimumReleaseAge exemptions](references/pnpm_minimum_release_age.md) — pnpm 12 blocks deps published <24h; exempt by name via `minimumReleaseAgeExclude`, never globally
 - [Dev-only Vue warnings from a stale Vite module cache](references/dev_vue_warnings_stale_vite_cache.md) — resolveComponent / hoisted-ref / RouterLink hydration warnings in `nuxt dev` mean two cached Vue copies; hard-reload first
