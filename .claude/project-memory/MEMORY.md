@@ -4,29 +4,47 @@ This file indexes memories captured by the **project-memory**
 skill. Each entry below is a one-line pointer to a memory file
 in this directory.
 
+> When a new decision **contradicts** an existing
+> memory note, do NOT silently override it.
+> Instead: surface the conflict, quote the
+> existing memory, explain how the new decision
+> differs, and ask for explicit confirmation
+> before updating. **Do NOT take any action** —
+> no tool calls, no file writes — until confirmed.
+
+> **Note wording** — state permanent facts in the
+> present tense. A note read out of context must
+> not reveal what it replaces or what just
+> happened. Ban narration markers: "now", "no
+> longer", "previously / used to", "reverses /
+> replaces", "kept", "changed to", "reintroduce",
+> "the user asked to". Phrase prohibitions
+> positively ("the API is versioned under /v2"),
+> not as the negation of a former state. Test:
+> remove the note from its context — if a sentence
+> only makes sense knowing the prior state,
+> rewrite it.
+
 <!-- Add entries below as `- [Title](file.md) — one-line hook` -->
 
-- [AWS resource naming (S3 bucket and DynamoDB table)](references/images_bucket_naming.md) — fixed `-local` names in dev; Tofu-generated with prefix `aws-image-processing-demo-` in AWS; neither is a user knob
-- [Commit message convention](references/commit_message_convention.md) — imperative subject, capitalized, no Conventional Commits prefix (no fix:/chore:/refactor:)
-- [Backend run-mode detection](references/backend_run_mode_detection.md) — `cmd/backend` picks HTTP vs Lambda from `AWS_ENDPOINT_URL` presence; do not reintroduce `RUN_MODE`
-- [Dev mode: host processes + Docker infra split](references/dev_mode_split.md) — `make dev` runs Go + Nuxt on host with infra in Docker; `make app-up` brings the full stack up in Docker
-- [Triggering a workflow from the Temporal CLI](references/workflow_cli.md) — launch a single `ProcessImage` workflow via `temporal workflow start` for debug or scripted invocation
-- [IaC provider versions in infra/](references/iac_provider_versions.md) — AWS ~> 6.0 and Cloudflare ~> 5.0; v5 uses `cloudflare_dns_record` with `content` and FQDN `name`
-- [Local AWS emulator: Moto Server](references/local_aws_emulator.md) — uses `motoserver/moto` (LocalStack 2026 is Pro-licensed); host 4566 → container 5000
-- [Moto: keep the default listening port](references/feedback_moto_default_port.md) — never change moto's internal port; keep it at the default (5000)
-- [No per-image notifications](references/no_per_image_notifications.md) — never emit a toast per processed image; at most one end-of-burst toast; errors may still toast individually
-- [No workflow.GetVersion in ProcessImage workflows](references/workflow_no_versioning.md) — workflows are short-lived; rollouts ship code directly without versioning gates
-- [Worktree env symlinks](references/worktree_env_symlinks.md) — new git worktrees need both `.env` and `.env.local` symlinked from the main worktree, otherwise `make dev` is broken
-- [cmux per-workspace compose port isolation](references/cmux_compose_port_isolation.md) — `.cmux/post-create.sh` writes a gitignored `compose.override.yaml` remapping host ports off `CMUX_PORT` (`!override` tag) so parallel worktrees don't collide on `make app-up`
-- [Casper local-config support](references/casper_local_config.md) — `.casper.json` + `make worktree-ports` mirror the cmux fan-out (from `CASPER_PORT`); Makefile parses the override back for the banner and host `make dev`; keep both fan-outs byte-compatible
-- [Cleanup recipe for orphan Temporal Worker Deployments](references/temporal_worker_deployment_cleanup.md) — `set-current-version --unversioned` first, then `delete-version --skip-drainage`, then `delete`
-- [Temporal WorkflowExecutionStatus.String() pitfall](references/temporal_status_enum_string.md) — `.String()` returns CamelCase ("Running"), not the SCREAMING_SNAKE constant; keep the explicit `statusName` switch
-- [Keep WORKER_MAX_CONCURRENT_ACTIVITIES env knob](references/worker_max_concurrent_activities.md) — deliberate demo dial for burst/autoscaling/backpressure; do not prune as dead config
-- [Temporal Cloud metric task_type dimension casing](references/temporal_metric_task_type_casing.md) — ADOT-republished `task_type` values are capitalized (`Workflow`/`Activity`); lowercase breaks backlog alarms silently
-- [Lambda runtime breaks when worker deployment registration drifts](references/lambda_runtime_registration_drift.md) — infra-only Lambda redeploys leave Temporal Cloud pointing at a stale version; symptom is HTTP 500 on /api/pipelines/{id}, empty gallery, 0 pollers on image-processing-lambda
-- [temporal CLI delete-version has no --yes (set-current-version does)](references/temporal_cli_deployment_flag_asymmetry.md) — rebind must bound delete-version with --command-timeout and fail loud when stranded --unversioned; never reorder the --unversioned step
-- [pnpm dependency build approvals](references/pnpm_build_approvals.md) — build scripts are approved via `allowBuilds` in `frontend/pnpm-workspace.yaml`; the `pnpm` field in `package.json` is inert
-- [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via the `@tailwindcss/vite` plugin; theme in `@theme` in `main.css`, no `tailwind.config` file
-- [pnpm invocations run from inside frontend/](references/pnpm_corepack_invocation.md) — `cd frontend && corepack pnpm …`; the launcher reads the pin from its own cwd, so `-C frontend` still picks the wrong major
-- [pnpm minimumReleaseAge exemptions](references/pnpm_minimum_release_age.md) — pnpm 12 blocks deps published <24h; exempt by name via `minimumReleaseAgeExclude`, never globally
-- [Dev-only Vue warnings from a stale Vite module cache](references/dev_vue_warnings_stale_vite_cache.md) — resolveComponent / hoisted-ref / RouterLink hydration warnings in `nuxt dev` mean two cached Vue copies; hard-reload first
+- [AWS resource naming (S3 bucket and DynamoDB table)](references/images_bucket_naming.md) — fixed `-local` dev names, Tofu-generated in AWS
+- [Backend run-mode detection](references/backend_run_mode_detection.md) — HTTP vs Lambda chosen by `AWS_ENDPOINT_URL` presence; no `RUN_MODE`
+- [Cloudflare provider v5 breaking changes](references/iac_provider_versions.md) — `cloudflare_dns_record`, `content` not `value`, FQDN `name`
+- [Commit message convention](references/commit_message_convention.md) — imperative capitalized subject, no Conventional Commits prefix
+- [Determinism tests assert every run against manifest.SizeNames](references/workflow_determinism_test_repeats.md) — ~10 runs, expected sequence
+- [Dev-only Vue warnings from a stale Vite cache](references/dev_vue_warnings_stale_vite_cache.md) — hydration warnings mean two cached Vue copies
+- [Frontend Tailwind setup](references/tailwind_setup.md) — v4 via `@tailwindcss/vite`; theme in `@theme` in `main.css`, no config file
+- [Keep WORKER_MAX_CONCURRENT_ACTIVITIES env knob](references/worker_max_concurrent_activities.md) — deliberate burst demo dial; not dead config
+- [Local AWS emulator: Moto Server](references/local_aws_emulator.md) — `motoserver/moto` on default internal port 5000, host port 4566
+- [No per-image notifications](references/no_per_image_notifications.md) — at most one end-of-burst toast, never one per image; errors may toast
+- [No workflow.GetVersion in ProcessImage workflows](references/workflow_no_versioning.md) — short-lived workflows ship code without version gates
+- [Operating Temporal Worker Deployments from the CLI](references/temporal_worker_deployment_ops.md) — `--unversioned` first; namespace rate limit
+- [Per-worktree compose port isolation](references/worktree_compose_port_isolation.md) — one generator, `CASPER_PORT` and `CMUX_PORT` entry points
+- [pnpm dependency build approvals](references/pnpm_build_approvals.md) — approve builds via `allowBuilds` in `frontend/pnpm-workspace.yaml`
+- [pnpm invocations run from inside frontend/](references/pnpm_corepack_invocation.md) — `cd frontend && corepack pnpm …`; the pin is read from cwd
+- [pnpm minimumReleaseAge exemptions](references/pnpm_minimum_release_age.md) — exempt deps published <24h by name, never globally
+- [Recording activity schedule order in Temporal Go tests](references/temporal_test_schedule_order_interceptor.md) — interceptor on ExecuteActivity
+- [Recursive Make helper variables need unexport](references/makefile_unexport_helpers.md) — bare `export` expands them per recipe with empty args
+- [Temporal metric task_type casing](references/temporal_metric_task_type_casing.md) — values are capitalized; lowercase breaks alarms silently
+- [WorkflowExecutionStatus.String() pitfall](references/temporal_status_enum_string.md) — returns CamelCase ("Running"), not SCREAMING_SNAKE
+- [Worktree env symlinks](references/worktree_env_symlinks.md) — cmux worktrees need `.env`/`.env.local` symlinked; Casper copies

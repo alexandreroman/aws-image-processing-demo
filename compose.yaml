@@ -24,7 +24,6 @@ services:
       resources:
         limits:
           memory: 512M
-    restart: unless-stopped
 
   moto:
     # `motoserver/moto` is a free, community AWS emulator.
@@ -45,7 +44,6 @@ services:
       resources:
         limits:
           memory: 512M
-    restart: unless-stopped
 
   init:
     image: amazon/aws-cli:latest
@@ -56,7 +54,7 @@ services:
       IMAGES_BUCKET: aws-image-processing-demo-images-local
       IMAGES_TABLE: aws-image-processing-demo-images-local
     volumes:
-      - ./frontend/public/sample-images:/samples:ro
+      - ./samples:/samples:ro
     depends_on:
       moto:
         condition: service_healthy
@@ -151,7 +149,7 @@ services:
       resources:
         limits:
           memory: 256M
-    restart: unless-stopped
+    restart: on-failure
 
   backend:
     build:
@@ -168,7 +166,6 @@ services:
       AWS_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
-      IMAGES_BUCKET: aws-image-processing-demo-images-local
       IMAGES_TABLE: aws-image-processing-demo-images-local
     ports:
       - "8000:8000"  # HTTP API
@@ -191,7 +188,7 @@ services:
       resources:
         limits:
           memory: 128M
-    restart: unless-stopped
+    restart: on-failure
 
   frontend:
     # Caddy serves the Nuxt SSG bundle on :3000 and reverse-proxies
@@ -201,6 +198,14 @@ services:
       context: ./frontend
     ports:
       - "3000:3000"
+    # Caddy has no dedicated probe endpoint; fetching the site root
+    # exercises both the listener and the static file server.
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       backend:
         condition: service_healthy
@@ -208,4 +213,4 @@ services:
       resources:
         limits:
           memory: 128M
-    restart: unless-stopped
+    restart: on-failure

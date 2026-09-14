@@ -65,25 +65,22 @@ func build(ctx context.Context, logger *slog.Logger) (http.Handler, client.Clien
 		return nil, nil, err
 	}
 
-	bucket := os.Getenv("IMAGES_BUCKET")
 	table := os.Getenv("IMAGES_TABLE")
-	if bucket == "" || table == "" {
-		return nil, nil, errors.New("backend: IMAGES_BUCKET and IMAGES_TABLE are required")
+	if table == "" {
+		return nil, nil, errors.New("backend: IMAGES_TABLE is required")
 	}
 
 	runtimes := buildRuntimes()
 	h := api.New(api.Dependencies{
-		Temporal:     tc,
-		Dynamo:       ddb,
-		ImagesBucket: bucket,
-		ImagesTable:  table,
-		Runtimes:     runtimes,
-		Namespace:    namespace,
-		Logger:       logger,
+		Temporal:    tc,
+		Dynamo:      ddb,
+		ImagesTable: table,
+		Runtimes:    runtimes,
+		Namespace:   namespace,
+		Logger:      logger,
 	})
 
 	logger.Info("backend ready",
-		"bucket", bucket,
 		"table", table,
 		"runtimes", runtimes,
 	)

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	historypb "go.temporal.io/api/history/v1"
 	enumspb "go.temporal.io/api/enums/v1"
+	historypb "go.temporal.io/api/history/v1"
 	"go.temporal.io/sdk/client"
 )
 
@@ -80,10 +80,7 @@ func TestCollectWorkerIdentities_CountsDistinct(t *testing.T) {
 	}}
 	h := New(Dependencies{Temporal: temporal})
 
-	got, err := h.collectWorkerIdentities(t.Context(), []string{"wf-a", "wf-b"})
-	if err != nil {
-		t.Fatalf("collectWorkerIdentities: %v", err)
-	}
+	got := h.collectWorkerIdentities(t.Context(), []string{"wf-a", "wf-b"})
 	if len(got) != 3 {
 		t.Fatalf("count: got %d, want 3 (identities=%v)", len(got), got)
 	}
@@ -103,10 +100,7 @@ func TestCollectWorkerIdentities_PerWorkflowErrorIsSwallowed(t *testing.T) {
 	}
 	h := New(Dependencies{Temporal: temporal})
 
-	got, err := h.collectWorkerIdentities(t.Context(), []string{"wf-ok", "wf-bad"})
-	if err != nil {
-		t.Fatalf("collectWorkerIdentities: %v", err)
-	}
+	got := h.collectWorkerIdentities(t.Context(), []string{"wf-ok", "wf-bad"})
 	if len(got) != 2 {
 		t.Fatalf("count: got %d, want 2 (identities=%v)", len(got), got)
 	}

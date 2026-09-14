@@ -20,15 +20,8 @@ import (
 // for its validation paths.
 func newTestHandler() *Handler {
 	return New(Dependencies{
-		ImagesBucket: "test-bucket",
-		Runtimes:     []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
+		Runtimes: []Runtime{{Name: "ecs", TaskQueue: "image-processing-ecs"}},
 	})
-}
-
-// newTestHandlerWithoutRuntimes mirrors newTestHandler but leaves Runtimes
-// empty so the local-dev fallback path can be exercised.
-func newTestHandlerWithoutRuntimes() *Handler {
-	return New(Dependencies{ImagesBucket: "test-bucket"})
 }
 
 // postJSON drives the handler with a JSON body and decodes the {"error": ...}
@@ -172,7 +165,7 @@ func TestHandleRuntimes(t *testing.T) {
 	t.Run("unconfigured returns empty array", func(t *testing.T) {
 		t.Parallel()
 
-		h := newTestHandlerWithoutRuntimes()
+		h := New(Dependencies{})
 		req := httptest.NewRequest(http.MethodGet, "/api/runtimes", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -184,41 +177,6 @@ func TestHandleRuntimes(t *testing.T) {
 		// so a null body would crash it.
 		if got := strings.TrimSpace(rec.Body.String()); got != "[]" {
 			t.Fatalf("body: got %q, want %q", got, "[]")
-		}
-	})
-}
-
-// TestHandleStart_LocalDevPath exercises the local-dev path where Runtimes
-// is empty and the handler falls back to the built-in defaultTaskQueue
-// constant. We only assert the validation rejections that fire BEFORE the
-// Temporal call — the happy path would NPE on the nil client.
-func TestHandleStart_LocalDevPath(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty images still rejected", func(t *testing.T) {
-		t.Parallel()
-
-		h := newTestHandlerWithoutRuntimes()
-		status, gotErr := postJSON(t, h, "/api/workflows/start", `{"images":[]}`)
-		if status != http.StatusBadRequest {
-			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
-		}
-		if !strings.Contains(gotErr, "images must not be empty") {
-			t.Fatalf("error %q does not contain %q", gotErr, "images must not be empty")
-		}
-	})
-
-	t.Run("bad key still rejected", func(t *testing.T) {
-		t.Parallel()
-
-		h := newTestHandlerWithoutRuntimes()
-		body := `{"images":[{"key":"pipelines/foo.jpg"}]}`
-		status, gotErr := postJSON(t, h, "/api/workflows/start", body)
-		if status != http.StatusBadRequest {
-			t.Fatalf("status: got %d, want %d (err=%q)", status, http.StatusBadRequest, gotErr)
-		}
-		if !strings.Contains(gotErr, "must start with samples/") {
-			t.Fatalf("error %q does not mention the key prefix", gotErr)
 		}
 	})
 }
@@ -278,9 +236,8 @@ func TestHandlePipelineWorkers_UnknownPipelineReturns404(t *testing.T) {
 func TestPipelineTiming_AllCompleted(t *testing.T) {
 	created := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
 	latest := created.Add(3500 * time.Millisecond)
-	now := created.Add(time.Hour)
 
-	completedAt, durationMs := pipelineTiming(created, latest, 0, 4, now)
+	completedAt, durationMs := pipelineTiming(&created, latest, 0, 4)
 	if completedAt == nil {
 		t.Fatal("completedAt: got nil, want non-nil")
 	}
@@ -294,13 +251,12 @@ func TestPipelineTiming_AllCompleted(t *testing.T) {
 
 func TestPipelineTiming_SomeRunning(t *testing.T) {
 	created := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
-	now := created.Add(1200 * time.Millisecond)
 
-	completedAt, durationMs := pipelineTiming(created, time.Time{}, 2, 4, now)
+	completedAt, durationMs := pipelineTiming(&created, time.Time{}, 2, 4)
 	if completedAt != nil {
 		t.Fatalf("completedAt: got %s, want nil", completedAt)
 	}
-	if durationMs == nil || *durationMs != 1200 {
-		t.Fatalf("durationMs: got %v, want 1200", durationMs)
+	if durationMs != nil {
+		t.Fatalf("durationMs: got %d, want nil", *durationMs)
 	}
 }

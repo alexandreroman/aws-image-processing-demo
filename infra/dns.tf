@@ -1,14 +1,14 @@
 # Custom domain (ACM cert + Cloudflare DNS).
 #
-# Gated on var.enable_custom_domain so the project can also ship on the
-# default *.cloudfront.net hostname. ACM cert lives in us-east-1 — non-
-# negotiable AWS constraint for CloudFront.
+# Gated on var.domain_name so the project can also ship on the default
+# *.cloudfront.net hostname: leave it empty and none of this is created.
+# ACM cert lives in us-east-1 — non-negotiable AWS constraint for CloudFront.
 #
 # Cloudflare proxy MUST stay OFF (DNS only).
 # Two CDNs in cascade break HTTPS validation and add no value.
 
 locals {
-  use_custom_domain = var.enable_custom_domain && var.domain_name != ""
+  use_custom_domain = var.domain_name != ""
   cert_fqdn         = local.use_custom_domain ? "${var.subdomain}.${var.domain_name}" : ""
 }
 

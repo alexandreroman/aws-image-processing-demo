@@ -1,6 +1,8 @@
 package anthropicclient
 
 import (
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -58,7 +60,7 @@ func TestParseResponse(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error, got desc=%q labels=%v", desc, labels)
 				}
-				if tc.wantErrText != "" && !contains(err.Error(), tc.wantErrText) {
+				if tc.wantErrText != "" && !strings.Contains(err.Error(), tc.wantErrText) {
 					t.Fatalf("error %q does not contain %q", err.Error(), tc.wantErrText)
 				}
 				return
@@ -69,30 +71,9 @@ func TestParseResponse(t *testing.T) {
 			if desc != tc.wantDesc {
 				t.Errorf("desc: got %q, want %q", desc, tc.wantDesc)
 			}
-			if !equalStringSlice(labels, tc.wantLabels) {
+			if !slices.Equal(labels, tc.wantLabels) {
 				t.Errorf("labels: got %v, want %v", labels, tc.wantLabels)
 			}
 		})
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func equalStringSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

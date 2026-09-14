@@ -9,12 +9,8 @@ output "cloudfront_distribution_id" {
 }
 
 output "demo_url" {
-  description = "Public URL of the demo: custom domain if enabled, CloudFront hostname otherwise."
-  value = var.enable_custom_domain && var.domain_name != "" ? (
-    "https://${var.subdomain}.${var.domain_name}"
-    ) : (
-    "https://${aws_cloudfront_distribution.demo.domain_name}"
-  )
+  description = "Public URL of the demo: custom domain if configured, CloudFront hostname otherwise."
+  value       = local.demo_url
 }
 
 output "images_bucket" {

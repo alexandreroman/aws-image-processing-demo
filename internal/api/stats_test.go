@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestHandleStats_IssuesExpectedQueries(t *testing.T) {
 	}
 	seen := rec.queries()
 	for _, q := range want {
-		if !containsString(seen, q) {
+		if !slices.Contains(seen, q) {
 			t.Errorf("missing query %q in %v", q, seen)
 		}
 	}
@@ -135,15 +136,6 @@ func (r *recordingTemporal) queries() []string {
 	out := make([]string, len(r.seen))
 	copy(out, r.seen)
 	return out
-}
-
-func containsString(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func TestHandleStats_PartialFailureReturns200WithSentinel(t *testing.T) {

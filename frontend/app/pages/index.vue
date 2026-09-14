@@ -1,8 +1,4 @@
 <script setup lang="ts">
-useHead({
-  title: 'AWS Image Processing Demo — Image Processing Burst',
-});
-
 const reasons = [
   {
     title: 'Durable execution',

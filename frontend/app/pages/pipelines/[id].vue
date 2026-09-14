@@ -1,32 +1,25 @@
 <script setup lang="ts">
-definePageMeta({
-  // SPA fallback: rendered client-side only so the dynamic [id] can be
-  // read at runtime. See `routeRules` in nuxt.config.ts.
-  ssr: false,
-});
+// This route is client-rendered only; SSR is switched off by
+// `nitro.routeRules['/pipelines/**']` in nuxt.config.ts.
 
 const route = useRoute();
 
 const pipelineId = computed(() => String(route.params.id ?? ''));
 
-const { summary, workflows, durationMs, loaded, error, refresh } = usePipeline(pipelineId);
+const { summary, workflows, durationMs, isDone, loaded, error, refresh } = usePipeline(pipelineId);
 
-function formatSeconds(ms: number | null): string {
-  return ms === null ? '…' : `${(ms / 1000).toFixed(1)}s`;
-}
+const { workerCount } = usePipelineWorkers(pipelineId, isDone);
 
-const done = computed(() => summary.value.total > 0 && summary.value.running === 0);
-
-const { workerCount } = usePipelineWorkers(pipelineId, done);
-
-const navExpectedCount = computed<number>(() => {
-  const id = pipelineId.value;
-  if (!id) return 0;
-  return useState<number | null>(`pipeline:expectedCount:${id}`, () => null).value ?? 0;
-});
+// Slot count seeded by the control panel just before it navigated here, so the
+// gallery can reserve space before the first poll lands. `useState` needs a
+// setup context, hence the single read here rather than inside a computed.
+const navExpectedCount = useState<number | null>(
+  `pipeline:expectedCount:${pipelineId.value}`,
+  () => null,
+);
 
 const expectedCount = computed<number>(() =>
-  Math.max(navExpectedCount.value, summary.value.total, workflows.value.length),
+  Math.max(navExpectedCount.value ?? 0, summary.value.total),
 );
 
 useHead(() => ({
@@ -60,7 +53,12 @@ useHead(() => ({
       </div>
 
       <aside
-        class="lg:col-span-4 space-y-4 lg:fixed lg:top-[4.5rem] lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))] lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20 lg:[scrollbar-gutter:stable]"
+        class="lg:col-span-4 space-y-4
+          lg:fixed lg:top-[4.5rem]
+          lg:right-[max(2rem,calc((100vw-80rem)/2+2rem))]
+          lg:w-[calc((min(80rem,100vw)-15rem)/3+3rem)]
+          lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:z-20
+          lg:[scrollbar-gutter:stable]"
       >
         <div class="grid grid-cols-2 gap-4">
           <article class="card p-4 animate-fade-in">
@@ -88,13 +86,13 @@ useHead(() => ({
                   Duration
                 </h2>
                 <p class="mt-1 font-mono font-semibold tabular-nums text-3xl text-ink-100 leading-9">
-                  {{ formatSeconds(durationMs) }}
+                  {{ (durationMs / 1000).toFixed(1) }}s
                 </p>
               </div>
               <div
                 v-else-if="loaded"
                 key="running"
-                class="absolute inset-0 flex items-center justify-center gap-2 pr-5"
+                class="absolute inset-0 flex items-center justify-center gap-2"
                 role="status"
                 aria-label="Pipeline running, duration pending"
               >

@@ -34,4 +34,5 @@ frontend `Dockerfile` needs no `cd`: its `WORKDIR` already is the
 frontend directory. After any dependency change, confirm
 `sed -n '1,14p' frontend/pnpm-lock.yaml` still shows
 `packageManagerDependencies` with pnpm 12.4.1. See
-[[pnpm_build_approvals]] and [[pnpm_minimum_release_age]].
+[pnpm dependency build approvals](pnpm_build_approvals.md) and
+[pnpm minimumReleaseAge exemptions](pnpm_minimum_release_age.md).

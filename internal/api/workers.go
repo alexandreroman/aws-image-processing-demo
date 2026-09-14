@@ -55,14 +55,7 @@ func (h *Handler) handlePipelineWorkers(w http.ResponseWriter, r *http.Request) 
 	allIDs = append(allIDs, launcherID)
 	allIDs = append(allIDs, childIDs...)
 
-	identities, err := h.collectWorkerIdentities(r.Context(), allIDs)
-	if err != nil {
-		h.deps.Logger.Error("collect worker identities failed",
-			"pipelineId", pipelineID, "err", err)
-		writeError(w, http.StatusInternalServerError,
-			"failed to read pipeline workers: "+err.Error())
-		return
-	}
+	identities := h.collectWorkerIdentities(r.Context(), allIDs)
 
 	// Short cache: the value only drifts as new activities start, so a 2 s
 	// browser cache is harmless and shields the backend from accidental
@@ -80,10 +73,10 @@ func (h *Handler) handlePipelineWorkers(w http.ResponseWriter, r *http.Request) 
 // skipped so a single bad history can't return 0 for the whole pipeline.
 func (h *Handler) collectWorkerIdentities(
 	ctx context.Context, workflowIDs []string,
-) (map[string]struct{}, error) {
+) map[string]struct{} {
 	identities := make(map[string]struct{})
 	if len(workflowIDs) == 0 {
-		return identities, nil
+		return identities
 	}
 
 	var (
@@ -92,19 +85,14 @@ func (h *Handler) collectWorkerIdentities(
 		sem = make(chan struct{}, maxConcurrentHistoryFetches)
 	)
 	for _, id := range workflowIDs {
-		wg.Add(1)
 		sem <- struct{}{}
-		go func(workflowID string) {
-			defer wg.Done()
+		wg.Go(func() {
 			defer func() { <-sem }()
 
-			seen, err := h.workflowWorkerIdentities(ctx, workflowID)
+			seen, err := h.workflowWorkerIdentities(ctx, id)
 			if err != nil {
 				h.deps.Logger.Warn("read workflow history failed",
-					"workflowId", workflowID, "err", err)
-				return
-			}
-			if len(seen) == 0 {
+					"workflowId", id, "err", err)
 				return
 			}
 			mu.Lock()
@@ -112,11 +100,11 @@ func (h *Handler) collectWorkerIdentities(
 				identities[identity] = struct{}{}
 			}
 			mu.Unlock()
-		}(id)
+		})
 	}
 	wg.Wait()
 
-	return identities, nil
+	return identities
 }
 
 // workflowWorkerIdentities walks one workflow's history and returns the

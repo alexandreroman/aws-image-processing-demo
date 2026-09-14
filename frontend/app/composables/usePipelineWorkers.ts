@@ -9,20 +9,13 @@ import { useIntervalFn } from '@vueuse/core';
 const POLL_MS = 3_000;
 const POST_DONE_REFRESH_DELAY_MS = 5_000;
 
-export interface UsePipelineWorkersReturn {
-  workerCount: Readonly<Ref<number | null>>;
-  error: Ref<Error | null>;
-  refresh: () => Promise<void>;
-}
-
 export function usePipelineWorkers(
   pipelineId: MaybeRefOrGetter<string>,
   done: MaybeRefOrGetter<boolean>,
-): UsePipelineWorkersReturn {
+): { workerCount: Readonly<Ref<number | null>> } {
   const api = useApi();
 
   const count = ref<number | null>(null);
-  const error = ref<Error | null>(null);
 
   // Drop out-of-order responses: pause/resume + manual refresh can otherwise
   // let a slow earlier reply clobber a fresher value.
@@ -35,14 +28,14 @@ export function usePipelineWorkers(
     const seq = ++nextSeq;
     try {
       const result = await api.getPipelineWorkers(id);
+      // The page component is reused across /pipelines/A -> /pipelines/B, so a
+      // reply for the pipeline we just left must not land on the new one.
+      if (id !== toValue(pipelineId)) return;
       if (seq <= lastAppliedSeq) return;
       lastAppliedSeq = seq;
       count.value = result.workerCount;
-      error.value = null;
-    } catch (err) {
-      if (seq <= lastAppliedSeq) return;
-      lastAppliedSeq = seq;
-      error.value = err instanceof Error ? err : new Error(String(err));
+    } catch {
+      // Cosmetic counter: keep the last known value and let the next poll retry.
     }
   }
 
@@ -66,8 +59,6 @@ export function usePipelineWorkers(
       clearPostDoneTimer();
       if (!id) return;
       count.value = null;
-      lastAppliedSeq = 0;
-      nextSeq = 0;
       void refresh();
       if (!toValue(done)) resume();
     },
@@ -98,9 +89,5 @@ export function usePipelineWorkers(
     clearPostDoneTimer();
   });
 
-  return {
-    workerCount: count,
-    error,
-    refresh,
-  };
+  return { workerCount: count };
 }

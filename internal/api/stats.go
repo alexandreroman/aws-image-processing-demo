@@ -12,9 +12,8 @@ import (
 // it lets the frontend caption counter values honestly.
 const statsWindowDays = 30
 
-// Visibility queries powering the counters. Kept as package vars so
-// tests can compare against the exact strings the handler issues.
-var (
+// Visibility queries powering the counters.
+const (
 	queryImagesProcessed = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Completed"`
 	queryBurstsLaunched  = `WorkflowType = "LaunchPipelines" AND ExecutionStatus = "Completed"`
 	queryImagesFailed    = `WorkflowType = "ProcessImage" AND ExecutionStatus = "Failed"`
@@ -39,9 +38,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	var counts [3]int64
 	var wg sync.WaitGroup
 	for i, q := range queries {
-		wg.Add(1)
-		go func(i int, q string) {
-			defer wg.Done()
+		wg.Go(func() {
 			n, err := h.countWorkflows(ctx, q)
 			if err != nil {
 				h.deps.Logger.Warn("stats count failed", "query", q, "err", err)
@@ -49,7 +46,7 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			counts[i] = n
-		}(i, q)
+		})
 	}
 	wg.Wait()
 
@@ -68,8 +65,6 @@ func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// countWorkflows wraps client.CountWorkflow with the demo's
-// namespace and returns just the count value.
 func (h *Handler) countWorkflows(ctx context.Context, query string) (int64, error) {
 	resp, err := h.deps.Temporal.CountWorkflow(ctx, &workflowservice.CountWorkflowExecutionsRequest{
 		Namespace: h.deps.Namespace,

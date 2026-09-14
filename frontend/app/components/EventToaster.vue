@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { ToastKind } from '~/composables/useToast';
+
 const { toasts, dismiss } = useToast();
 
-function colorFor(kind: 'success' | 'error'): string {
-  return kind === 'success'
-    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
-    : 'border-rose-500/40 bg-rose-500/10 text-rose-100';
-}
+const TOAST_COLORS: Record<ToastKind, string> = {
+  success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
+  error: 'border-rose-500/40 bg-rose-500/10 text-rose-100',
+};
 </script>
 
 <template>
@@ -14,7 +15,6 @@ function colorFor(kind: 'success' | 'error'): string {
       class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full
         pointer-events-none"
       aria-live="polite"
-      aria-atomic="false"
     >
       <div
         v-for="t in toasts"
@@ -22,9 +22,8 @@ function colorFor(kind: 'success' | 'error'): string {
         :class="[
           'pointer-events-auto rounded-lg border backdrop-blur-md',
           'shadow-card px-4 py-3 animate-slide-in-right bg-surface/80',
-          colorFor(t.kind),
+          TOAST_COLORS[t.kind],
         ]"
-        role="status"
       >
         <div class="flex items-start gap-3">
           <div class="flex-1 min-w-0">

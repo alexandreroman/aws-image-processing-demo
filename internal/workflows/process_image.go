@@ -7,6 +7,7 @@
 package workflows
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -21,39 +22,22 @@ const ManifestQueryName = "manifest"
 
 // ProcessImage is the 8-activity image-processing workflow.
 //
-// Fan-out: 3 resize + 3 watermark activities run in parallel. Fan-in is
-// done by iterating manifest.SizeNames (NEVER the map) so collection order
-// is deterministic across replays.
+// Fan-out: 3 resize + 3 watermark activities run in parallel.
 func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest.Manifest, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("ProcessImage start", "pipelineId", in.PipelineID, "imageId", in.ImageID)
 
 	cpuOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
-		HeartbeatTimeout:    10 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    3,
-		},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
 	}
 	describeOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 60 * time.Second,
-		HeartbeatTimeout:    20 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:        time.Second,
-			BackoffCoefficient:     2.0,
-			MaximumAttempts:        4,
-			NonRetryableErrorTypes: []string{activities.ClaudeInvalidInputErrorType},
-		},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 4},
 	}
 	storeOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 15 * time.Second,
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			BackoffCoefficient: 2.0,
-			MaximumAttempts:    5,
-		},
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 5},
 	}
 
 	// Track the manifest as it grows so the API can surface in-flight state
@@ -73,19 +57,20 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	}
 
 	// 1) Fan-out resize: one future per size, indexed positionally alongside
-	//    manifest.SizeNames so we never iterate a map in workflow code.
+	//    manifest.SizeNames.
 	resizeFutures := make([]workflow.Future, len(manifest.SizeNames))
 	resizeCtx := workflow.WithActivityOptions(ctx, cpuOpts)
 	for i, sizeName := range manifest.SizeNames {
-		resizeFutures[i] = workflow.ExecuteActivity(resizeCtx, (*activities.Activities).ResizeAndUpload, activities.ResizeInput{
-			PipelineID: in.PipelineID,
-			ImageID:    in.ImageID,
-			SizeName:   sizeName,
-			Original:   in.Original,
-		})
+		resizeFutures[i] = workflow.ExecuteActivity(resizeCtx, (*activities.Activities).ResizeAndUpload,
+			activities.ResizeInput{
+				PipelineID: in.PipelineID,
+				ImageID:    in.ImageID,
+				SizeName:   sizeName,
+				Original:   in.Original,
+			})
 	}
 
-	// 2) Fan-in resize. Iterate the canonical slice for deterministic order.
+	// 2) Fan-in resize.
 	sizes := make(map[string]manifest.Size, len(manifest.SizeNames))
 	for i, sizeName := range manifest.SizeNames {
 		var sz manifest.Size
@@ -96,11 +81,14 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	}
 	state.Sizes = sizes
 
-	// 3) Describe on the medium size.
+	// 3) Describe the size picked for the vision call.
+	describeSize, ok := sizes[manifest.DescribeSizeName]
+	if !ok {
+		return manifest.Manifest{}, fmt.Errorf("no %q size was produced", manifest.DescribeSizeName)
+	}
 	describeCtx := workflow.WithActivityOptions(ctx, describeOpts)
 	var description activities.DescribeResult
-	mediumRef := sizes["medium"].S3Ref
-	if err := workflow.ExecuteActivity(describeCtx, (*activities.Activities).GenerateDescription, mediumRef).
+	if err := workflow.ExecuteActivity(describeCtx, (*activities.Activities).GenerateDescription, describeSize.S3Ref).
 		Get(ctx, &description); err != nil {
 		return manifest.Manifest{}, err
 	}
@@ -112,12 +100,13 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	watermarkFutures := make([]workflow.Future, len(manifest.SizeNames))
 	watermarkCtx := workflow.WithActivityOptions(ctx, cpuOpts)
 	for i, sizeName := range manifest.SizeNames {
-		watermarkFutures[i] = workflow.ExecuteActivity(watermarkCtx, (*activities.Activities).ApplyWatermark, activities.WatermarkInput{
-			PipelineID: in.PipelineID,
-			ImageID:    in.ImageID,
-			SizeName:   sizeName,
-			Source:     sizes[sizeName].S3Ref,
-		})
+		watermarkFutures[i] = workflow.ExecuteActivity(watermarkCtx, (*activities.Activities).ApplyWatermark,
+			activities.WatermarkInput{
+				PipelineID: in.PipelineID,
+				ImageID:    in.ImageID,
+				SizeName:   sizeName,
+				Source:     sizes[sizeName].S3Ref,
+			})
 	}
 
 	// 5) Fan-in watermark.
@@ -132,8 +121,8 @@ func ProcessImage(ctx workflow.Context, in manifest.ProcessImageInput) (manifest
 	state.Watermarked = watermarked
 
 	// 6) Persist.
-	storeWFCtx := workflow.WithActivityOptions(ctx, storeOpts)
-	if err := workflow.ExecuteActivity(storeWFCtx, (*activities.Activities).StoreManifest, state).
+	storeCtx := workflow.WithActivityOptions(ctx, storeOpts)
+	if err := workflow.ExecuteActivity(storeCtx, (*activities.Activities).StoreManifest, state).
 		Get(ctx, nil); err != nil {
 		return manifest.Manifest{}, err
 	}

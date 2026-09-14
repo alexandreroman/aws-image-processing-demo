@@ -50,10 +50,9 @@ const defaultTaskQueue = "image-processing"
 // Dependencies holds the runtime collaborators of the API. The struct is
 // the seam used both by main (production) and tests.
 type Dependencies struct {
-	Temporal     client.Client
-	Dynamo       *dynamodb.Client
-	ImagesBucket string
-	ImagesTable  string
+	Temporal    client.Client
+	Dynamo      *dynamodb.Client
+	ImagesTable string
 	// Runtimes lists available worker deployments in display order. The first
 	// entry is the default when /api/workflows/start omits the runtime field.
 	// When empty (local dev / compose), the handler falls back to
@@ -166,6 +165,10 @@ type startResponse struct {
 // the frontend can hide the selector.
 func (h *Handler) handleStart(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
+	// 1 MiB is far above any legitimate burst (maxBurst S3 refs) and well
+	// under the API Gateway payload cap, so an oversized body is rejected
+	// before it is buffered in memory.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body: "+err.Error())
 		return
@@ -294,7 +297,7 @@ type pipelineSummary struct {
 
 type pipelineResponse struct {
 	PipelineID  string             `json:"pipelineId"`
-	CreatedAt   time.Time          `json:"createdAt,omitempty"`
+	CreatedAt   *time.Time         `json:"createdAt,omitempty"`
 	CompletedAt *time.Time         `json:"completedAt,omitempty"`
 	DurationMs  *int64             `json:"durationMs,omitempty"`
 	ImageCount  int                `json:"imageCount"`
@@ -360,8 +363,8 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 		if t := exec.GetStartTime(); t != nil {
 			started := t.AsTime()
 			wf.StartedAt = &started
-			if resp.CreatedAt.IsZero() || started.Before(resp.CreatedAt) {
-				resp.CreatedAt = started
+			if resp.CreatedAt == nil || started.Before(*resp.CreatedAt) {
+				resp.CreatedAt = &started
 			}
 		}
 		if t := exec.GetCloseTime(); t != nil {
@@ -429,28 +432,27 @@ func (h *Handler) handlePipeline(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.Summary.Total = len(workflowIDs)
 	resp.CompletedAt, resp.DurationMs = pipelineTiming(
-		resp.CreatedAt, latestClose, resp.Summary.Running, len(resp.Workflows), time.Now(),
+		resp.CreatedAt, latestClose, resp.Summary.Running, len(resp.Workflows),
 	)
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// pipelineTiming returns the pipeline-level completedAt and duration.
-// completedAt is set only when every child workflow has reached a terminal
-// status (running == 0) and at least one workflow exists.
+// pipelineTiming returns the pipeline-level completedAt and duration, both
+// set only once every child workflow has reached a terminal status
+// (running == 0) and at least one workflow exists. There is deliberately no
+// in-flight duration: createdAt comes from the Temporal server clock, so
+// subtracting it from the backend's wall clock could go negative or jump
+// backwards under clock skew.
 func pipelineTiming(
-	createdAt, latestClose time.Time, running, total int, now time.Time,
+	createdAt *time.Time, latestClose time.Time, running, total int,
 ) (*time.Time, *int64) {
-	if createdAt.IsZero() {
+	if createdAt == nil || total == 0 || running > 0 || latestClose.IsZero() {
 		return nil, nil
 	}
-	if total > 0 && running == 0 && !latestClose.IsZero() {
-		closed := latestClose
-		d := closed.Sub(createdAt).Milliseconds()
-		return &closed, &d
-	}
-	d := now.Sub(createdAt).Milliseconds()
-	return nil, &d
+	completedAt := latestClose
+	durationMs := completedAt.Sub(*createdAt).Milliseconds()
+	return &completedAt, &durationMs
 }
 
 // fetchPipelineWorkflowIDs returns the canonical list of per-image workflow

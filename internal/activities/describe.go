@@ -23,14 +23,12 @@ type DescribeResult struct {
 func (a *Activities) GenerateDescription(ctx context.Context, ref manifest.S3Ref) (DescribeResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("describe start", "key", ref.Key)
-	activity.RecordHeartbeat(ctx, "download")
 
 	raw, err := a.download(ctx, ref)
 	if err != nil {
 		return DescribeResult{}, fmt.Errorf("describe: download: %w", err)
 	}
 
-	activity.RecordHeartbeat(ctx, "anthropic")
 	desc, labels, err := a.Anthropic.Describe(ctx, raw, "image/jpeg")
 	if err != nil {
 		if errors.Is(err, anthropicclient.ErrClaudeInvalidInput) {

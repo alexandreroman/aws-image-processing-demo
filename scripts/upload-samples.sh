@@ -7,15 +7,15 @@
 # was added or modified locally.
 #
 # Local vs. AWS detection:
-#   - If AWS_ENDPOINT_URL is set, target
-#     LocalStack and use IMAGES_BUCKET (default:
-#     aws-image-processing-demo-images-local).
+#   - If AWS_ENDPOINT_URL is set, target the local
+#     emulator (Moto) and use IMAGES_BUCKET
+#     (default: aws-image-processing-demo-images-local).
 #   - Otherwise, read images_bucket from Tofu.
 
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-samples_dir="${repo_root}/frontend/public/sample-images"
+samples_dir="${repo_root}/samples"
 infra_dir="${repo_root}/infra"
 
 if [[ ! -d "${samples_dir}" ]]; then
@@ -36,7 +36,7 @@ aws_args=()
 if [[ -n "${AWS_ENDPOINT_URL:-}" ]]; then
   bucket="${IMAGES_BUCKET:-aws-image-processing-demo-images-local}"
   aws_args+=(--endpoint-url "${AWS_ENDPOINT_URL}")
-  echo "Target: LocalStack (${AWS_ENDPOINT_URL})"
+  echo "Target: local emulator (${AWS_ENDPOINT_URL})"
 else
   bucket="$(tofu -chdir="${infra_dir}" output -raw images_bucket)"
   echo "Target: AWS"

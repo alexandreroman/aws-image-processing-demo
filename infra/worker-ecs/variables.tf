@@ -38,18 +38,8 @@ variable "worker_max_concurrent_activities" {
   type        = number
 }
 
-variable "images_bucket_arn" {
-  description = "ARN of the S3 images bucket — used to scope task-role permissions."
-  type        = string
-}
-
 variable "images_bucket_name" {
   description = "Name of the S3 images bucket — surfaced to the worker as IMAGES_BUCKET."
-  type        = string
-}
-
-variable "images_table_arn" {
-  description = "ARN of the DynamoDB images table — used to scope task-role permissions."
   type        = string
 }
 
@@ -93,38 +83,22 @@ variable "autoscaling_enabled" {
   default     = false
 }
 
-variable "autoscaling_min_capacity" {
-  description = "Minimum desired_count for the ECS worker service (warm capacity, never zero by design)."
-  type        = number
-  default     = 1
-}
-
 variable "autoscaling_max_capacity" {
   description = "Maximum desired_count for the ECS worker service."
   type        = number
   default     = 5
 }
 
-variable "scale_out_threshold" {
-  description = "Total backlog (workflow + activity) above which the scale-out alarm fires (first step boundary)."
-  type        = number
-  default     = 10
+variable "task_policy_json" {
+  description = <<-EOT
+    Rendered IAM policy document granting the worker its access to the images
+    bucket and table. Owned by the root module so the ECS and Lambda runtimes,
+    which run the same binary, cannot drift apart.
+  EOT
+  type        = string
 }
 
-variable "scale_out_step_2_lower" {
-  description = "Total backlog (workflow + activity) at which the scale-out step jumps to +2 tasks."
+variable "log_retention_days" {
+  description = "CloudWatch retention for the worker log group."
   type        = number
-  default     = 30
-}
-
-variable "scale_out_step_3_lower" {
-  description = "Total backlog (workflow + activity) at which the scale-out step jumps to +3 tasks."
-  type        = number
-  default     = 60
-}
-
-variable "scale_in_threshold" {
-  description = "Total backlog (workflow + activity) below which the scale-in alarm fires (sustained for 5 datapoints)."
-  type        = number
-  default     = 5
 }

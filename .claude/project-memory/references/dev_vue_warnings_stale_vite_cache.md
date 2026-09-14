@@ -41,4 +41,4 @@ hash proves the duplication; the stale entries report
 the browser has not visited. This is a dev-server artefact only: the
 production build bundles a single Vue chunk and both `/` and
 `/pipelines/{id}` are clean in `.output`. Related:
-[[pnpm_corepack_invocation]].
+[pnpm invocations run from inside frontend/](pnpm_corepack_invocation.md).

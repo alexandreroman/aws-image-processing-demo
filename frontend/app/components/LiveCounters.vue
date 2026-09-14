@@ -3,41 +3,48 @@ import type { Stats } from '~/composables/useApi';
 
 const api = useApi();
 
+// Point-in-time snapshot: the counters are fetched once on mount and never
+// refreshed afterwards.
 const stats = ref<Stats | null>(null);
 
-async function refresh() {
+onMounted(async () => {
   try {
     stats.value = await api.getStats();
   } catch {
-    // Cosmetic counters: swallow the error and keep the last value.
-    // First-load failures leave stats null → the template renders dashes.
+    // Cosmetic counters: a failure just leaves `stats` null and the tiles
+    // render dashes.
   }
-}
-
-onMounted(refresh);
+});
 
 const DASH = '—';
+const ACTIVITIES_PER_IMAGE = 8;
+
+// The backend reports `-1` for a counter it could not read; treat that and a
+// missing value alike as "unknown".
+function known(value: number | undefined): number | null {
+  return value === undefined || value === -1 ? null : value;
+}
 
 function formatCount(value: number | undefined): string {
-  if (value === undefined || value === -1) return DASH;
-  return value.toLocaleString('en-US');
+  const count = known(value);
+  return count === null ? DASH : count.toLocaleString('en-US');
 }
 
 function formatActivities(processed: number | undefined): string {
-  if (processed === undefined || processed === -1) return DASH;
-  return (processed * 8).toLocaleString('en-US');
+  const count = known(processed);
+  return count === null ? DASH : (count * ACTIVITIES_PER_IMAGE).toLocaleString('en-US');
 }
 
 function formatSuccessRate(
   processed: number | undefined,
   failed: number | undefined,
 ): string {
-  if (processed === undefined || processed === -1) return DASH;
-  if (failed === undefined || failed === -1) return DASH;
-  const total = processed + failed;
+  const ok = known(processed);
+  const ko = known(failed);
+  if (ok === null || ko === null) return DASH;
+  const total = ok + ko;
   if (total === 0) return DASH;
-  const pct = (processed / total) * 100;
-  return `${pct.toFixed(1)}%`;
+  return `${((ok / total) * 100).toFixed(1)}%`;
 }
 
 const tiles = computed(() => [

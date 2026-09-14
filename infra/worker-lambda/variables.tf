@@ -34,18 +34,8 @@ variable "worker_lambda_max_instances" {
   default     = 10
 }
 
-variable "images_bucket_arn" {
-  description = "ARN of the S3 images bucket — used to scope task-role permissions."
-  type        = string
-}
-
 variable "images_bucket_name" {
   description = "Name of the S3 images bucket — surfaced to the worker as IMAGES_BUCKET."
-  type        = string
-}
-
-variable "images_table_arn" {
-  description = "ARN of the DynamoDB images table — used to scope task-role permissions."
   type        = string
 }
 
@@ -101,4 +91,19 @@ variable "deployment_name_suffix" {
   description = "Optional suffix appended to the Temporal Worker Deployment name (…-worker-lambda-<suffix>). Use to roll onto a fresh deployment name when the existing one is wedged on the Temporal Cloud side. Empty = no suffix."
   type        = string
   default     = ""
+}
+
+variable "task_policy_json" {
+  description = <<-EOT
+    Rendered IAM policy document granting the worker its access to the images
+    bucket and table. Owned by the root module so the ECS and Lambda runtimes,
+    which run the same binary, cannot drift apart. Merged here with the
+    Secrets Manager grant this runtime additionally needs.
+  EOT
+  type        = string
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch retention for the worker log group."
+  type        = number
 }

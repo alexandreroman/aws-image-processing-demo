@@ -3,6 +3,7 @@ package workflows_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/alexandreroman/aws-image-processing-demo/internal/activities"
@@ -28,14 +29,20 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	}
 	env.RegisterActivity(acts)
 
-	started := make([]string, 0, len(imageIDs))
-	env.OnActivity(acts.StartProcessImage, mock.Anything,
-		mock.MatchedBy(func(in activities.StartProcessImageInput) bool { return true }),
-	).Return(func(_ context.Context, in activities.StartProcessImageInput) (string, error) {
-		id := manifest.ProcessImageWorkflowID(in.PipelineID, in.Image.ImageID)
-		started = append(started, id)
-		return id, nil
-	})
+	// The fan-out activities run on their own goroutines, so the recording
+	// slice needs a lock.
+	var (
+		mu      sync.Mutex
+		started []string
+	)
+	env.OnActivity(acts.StartProcessImage, mock.Anything, mock.Anything).
+		Return(func(_ context.Context, in activities.StartProcessImageInput) (string, error) {
+			id := manifest.ProcessImageWorkflowID(in.PipelineID, in.Image.ImageID)
+			mu.Lock()
+			defer mu.Unlock()
+			started = append(started, id)
+			return id, nil
+		})
 
 	images := make([]manifest.LaunchPipelineImage, len(imageIDs))
 	for i, id := range imageIDs {
@@ -56,6 +63,8 @@ func TestLaunchPipelines_StartsProcessImageWorkflows(t *testing.T) {
 	for i, id := range imageIDs {
 		want[i] = manifest.ProcessImageWorkflowID(pipelineID, id)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	require.ElementsMatch(t, want, started)
 }
 
@@ -79,6 +88,8 @@ func TestLaunchPipelines_PropagatesActivityError(t *testing.T) {
 		},
 	})
 
+	// The workflow must fail with the activity's own error, not with a
+	// timeout: the starter activity's retries are capped.
 	require.True(t, env.IsWorkflowCompleted())
-	require.Error(t, env.GetWorkflowError())
+	require.ErrorContains(t, env.GetWorkflowError(), "boom")
 }

@@ -36,7 +36,7 @@ resource "aws_security_group" "collector" {
 
 resource "aws_cloudwatch_log_group" "collector" {
   name              = "/ecs/${var.name_prefix}-otel-collector"
-  retention_in_days = 14
+  retention_in_days = var.log_retention_days
 }
 
 # --- Inline ADOT YAML config (read by the container via SSM) --------------

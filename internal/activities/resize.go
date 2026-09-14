@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
-	_ "image/gif"  // decoder registration
+	_ "image/gif" // decoder registration
 	"image/jpeg"
 	_ "image/png" // decoder registration
 	"io"
@@ -32,7 +32,7 @@ const jpegQuality = 85
 
 // maxImageBytes caps the size of objects pulled from S3. With a 1 GiB worker
 // task and Go's image decoder allocating several times the raw size,
-// anything past ~25 MiB risks OOM. Enforced via Content-Length on GetObject.
+// anything past ~25 MiB risks OOM. Enforced by bounding the read itself.
 const maxImageBytes = 25 * 1024 * 1024
 
 // ResizeAndUpload downloads the original image, scales it to the target
@@ -46,20 +46,17 @@ func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manif
 
 	logger := activity.GetLogger(ctx)
 	logger.Info("resize start", "imageId", in.ImageID, "size", in.SizeName, "width", width)
-	activity.RecordHeartbeat(ctx, "download")
 
 	raw, err := a.download(ctx, in.Original)
 	if err != nil {
 		return manifest.Size{}, fmt.Errorf("resize: download: %w", err)
 	}
 
-	activity.RecordHeartbeat(ctx, "decode")
 	src, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return manifest.Size{}, fmt.Errorf("resize: decode: %w", err)
 	}
 
-	activity.RecordHeartbeat(ctx, "resize")
 	// Resize width while preserving aspect ratio (height=0 => auto).
 	dst := imaging.Resize(src, width, 0, imaging.Lanczos)
 
@@ -69,7 +66,6 @@ func (a *Activities) ResizeAndUpload(ctx context.Context, in ResizeInput) (manif
 	}
 
 	key := resizedKey(in.PipelineID, in.ImageID, in.SizeName)
-	activity.RecordHeartbeat(ctx, "upload")
 	if err := a.upload(ctx, key, buf.Bytes(), "image/jpeg"); err != nil {
 		return manifest.Size{}, fmt.Errorf("resize: upload: %w", err)
 	}
@@ -93,14 +89,20 @@ func (a *Activities) download(ctx context.Context, ref manifest.S3Ref) ([]byte, 
 	}
 	defer out.Body.Close()
 
-	if out.ContentLength != nil && *out.ContentLength > maxImageBytes {
+	// Read one byte past the cap rather than trusting Content-Length, which
+	// S3 omits on chunked responses: an extra byte means the object is over
+	// the limit.
+	raw, err := io.ReadAll(io.LimitReader(out.Body, maxImageBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxImageBytes {
 		return nil, temporal.NewNonRetryableApplicationError(
-			fmt.Sprintf("image too large: %d bytes (max %d)", *out.ContentLength, maxImageBytes),
+			fmt.Sprintf("image too large: over %d bytes", maxImageBytes),
 			"ImageTooLarge", nil,
 		)
 	}
-
-	return io.ReadAll(out.Body)
+	return raw, nil
 }
 
 func (a *Activities) upload(ctx context.Context, key string, body []byte, contentType string) error {

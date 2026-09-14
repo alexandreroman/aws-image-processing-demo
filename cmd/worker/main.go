@@ -136,7 +136,6 @@ func runLongRunning(logger *slog.Logger) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	// worker.InterruptCh closes on SIGINT/SIGTERM.
 	<-worker.InterruptCh()
 	logger.Info("worker stopping", "taskQueue", taskQueue)
 	w.Stop()
@@ -146,7 +145,7 @@ func runLongRunning(logger *slog.Logger) error {
 func runLambda(logger *slog.Logger) error {
 	// The lambdaworker manages its own per-invocation Temporal connection for
 	// the worker itself. The Activities struct still needs an independent,
-	// process-scoped client so StartProcessImage can schedule top-level child
+	// process-scoped client so StartProcessImage can schedule top-level
 	// workflows from inside an activity. The Lambda execution environment is
 	// process-stable across warm invocations, so this client is reused.
 	acts, tc, namespace, taskQueue, err := setup(logger)

@@ -25,16 +25,11 @@ resource "aws_security_group" "worker" {
 
 resource "aws_ecs_cluster" "worker" {
   name = "${var.name_prefix}-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "disabled"
-  }
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${var.name_prefix}-worker"
-  retention_in_days = 14
+  retention_in_days = var.log_retention_days
 }
 
 # --- IAM: task execution role (ECS agent pulls image + reads secrets) -----
@@ -86,45 +81,10 @@ resource "aws_iam_role" "worker_task" {
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
-data "aws_iam_policy_document" "worker_task" {
-  # Reads: visitor uploads, the preloaded sample pool, and read-back of
-  # derived artifacts (GenerateDescription + ApplyWatermark both fetch
-  # the resized variant before processing it).
-  statement {
-    sid     = "ImagesBucketRead"
-    actions = ["s3:GetObject"]
-    resources = [
-      "${var.images_bucket_arn}/uploads/*",
-      "${var.images_bucket_arn}/samples/*",
-      "${var.images_bucket_arn}/pipelines/*",
-    ]
-  }
-
-  # Writes: derived artifacts only — resized and watermarked variants.
-  # Originals under `uploads/` and `samples/` are read-only for the worker.
-  # Deletes are handled by S3 lifecycle rules; the worker never deletes.
-  statement {
-    sid     = "ImagesBucketWritePipelines"
-    actions = ["s3:PutObject"]
-    resources = [
-      "${var.images_bucket_arn}/pipelines/*",
-    ]
-  }
-
-  statement {
-    sid = "ImagesTableRW"
-    actions = [
-      "dynamodb:PutItem",
-      "dynamodb:Query",
-    ]
-    resources = [var.images_table_arn]
-  }
-}
-
 resource "aws_iam_role_policy" "worker_task" {
   name   = "worker-task"
   role   = aws_iam_role.worker_task.id
-  policy = data.aws_iam_policy_document.worker_task.json
+  policy = var.task_policy_json
 }
 
 # --- Task definition ------------------------------------------------------
@@ -137,7 +97,6 @@ locals {
     { name = "AWS_REGION", value = var.aws_region },
     { name = "IMAGES_BUCKET", value = var.images_bucket_name },
     { name = "IMAGES_TABLE", value = var.images_table_name },
-    { name = "WORKER_DEPLOYMENT_NAME", value = "${var.name_prefix}-worker-ecs" },
     { name = "WORKER_MAX_CONCURRENT_ACTIVITIES", value = tostring(var.worker_max_concurrent_activities) },
   ]
 
@@ -234,11 +193,6 @@ resource "aws_ecs_service" "worker" {
     rollback = true
   }
 
-  # Worker tasks expose a /healthz liveness probe (see the container
-  # healthCheck above); ECS will replace tasks that fail it. Graceful
-  # shutdown still goes through SIGTERM and the stopTimeout above.
-  enable_execute_command = false
-
   # The autoscaling target below manages desired_count at runtime;
   # ignoring it here stops Tofu from snapping the count back to 1 on
   # every apply.
@@ -262,58 +216,92 @@ resource "aws_ecs_service" "worker" {
 # reaction time. Meaningful for sustained or repeated load, not single
 # short bursts.
 
+locals {
+  # Autoscaling tuning. Deliberately locals rather than module variables:
+  # the root module never overrides them, and WORKER_ECS_MAX_INSTANCES
+  # (var.autoscaling_max_capacity) is the one knob meant to be turned.
+  autoscaling_min_capacity = 1  # warm capacity, never zero by design
+  scale_out_threshold      = 10 # total backlog that fires scale-out (first step boundary)
+  scale_out_step_2_lower   = 30 # total backlog at which the step jumps to +2 tasks
+  scale_out_step_3_lower   = 60 # total backlog at which the step jumps to +3 tasks
+  scale_in_threshold       = 5  # total backlog below which scale-in fires
+
+  # Metric-query id → `task_type` dimension value. The capitalisation is NOT
+  # cosmetic: ADOT republishes Temporal Cloud's task_type label capitalised,
+  # so a lowercase dimension here matches no datapoint and both alarms sit
+  # in INSUFFICIENT_DATA forever — silently, with no scaling at all.
+  backlog_task_types = {
+    workflow = "Workflow"
+    activity = "Activity"
+  }
+
+  # The two alarms watch the very same metric math and differ only in the
+  # threshold, the comparison, how long the condition must hold, and which
+  # scaling policy they trigger.
+  backlog_alarms = {
+    high = {
+      name_suffix         = "backlog-high"
+      description         = "Triggers scale-out when the Temporal task queue backlog exceeds the threshold."
+      threshold           = local.scale_out_threshold
+      comparison_operator = "GreaterThanThreshold"
+      evaluation_periods  = 1
+      policy_arn          = one(aws_appautoscaling_policy.scale_out[*].arn)
+    }
+    low = {
+      name_suffix         = "backlog-low"
+      description         = "Triggers scale-in when the backlog stays below the threshold for the configured window."
+      threshold           = local.scale_in_threshold
+      comparison_operator = "LessThanThreshold"
+      evaluation_periods  = 5
+      policy_arn          = one(aws_appautoscaling_policy.scale_in[*].arn)
+    }
+  }
+}
+
 resource "aws_appautoscaling_target" "worker" {
   count = var.autoscaling_enabled ? 1 : 0
 
   service_namespace  = "ecs"
   resource_id        = "service/${aws_ecs_cluster.worker.name}/${aws_ecs_service.worker.name}"
   scalable_dimension = "ecs:service:DesiredCount"
-  min_capacity       = var.autoscaling_min_capacity
+  min_capacity       = local.autoscaling_min_capacity
   max_capacity       = var.autoscaling_max_capacity
 }
 
-resource "aws_cloudwatch_metric_alarm" "backlog_high" {
-  count = var.autoscaling_enabled ? 1 : 0
+resource "aws_cloudwatch_metric_alarm" "backlog" {
+  for_each = var.autoscaling_enabled ? local.backlog_alarms : {}
 
-  alarm_name        = "${var.name_prefix}-worker-backlog-high"
-  alarm_description = "Triggers scale-out when the Temporal task queue backlog exceeds the threshold."
+  alarm_name        = "${var.name_prefix}-worker-${each.value.name_suffix}"
+  alarm_description = each.value.description
 
-  evaluation_periods  = 1
-  datapoints_to_alarm = 1
-  threshold           = var.scale_out_threshold
-  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = each.value.evaluation_periods
+  datapoints_to_alarm = each.value.evaluation_periods
+  threshold           = each.value.threshold
+  comparison_operator = each.value.comparison_operator
   # Missing data is treated as "not breaching" so a scrape outage does not
-  # spuriously scale out. Pairs with the scale-in alarm's same setting.
+  # spuriously scale the service in either direction.
   treat_missing_data = "notBreaching"
 
-  metric_query {
-    id          = "workflow"
-    return_data = false
-    metric {
-      namespace   = "TemporalDemo/Worker"
-      metric_name = "temporal_cloud_v1_approximate_backlog_count"
-      period      = 60
-      stat        = "Maximum"
-      dimensions = {
-        temporal_task_queue = var.temporal_task_queue
-        task_type           = "Workflow"
+  dynamic "metric_query" {
+    for_each = local.backlog_task_types
+
+    content {
+      id          = metric_query.key
+      return_data = false
+
+      metric {
+        namespace   = "TemporalDemo/Worker"
+        metric_name = "temporal_cloud_v1_approximate_backlog_count"
+        period      = 60
+        stat        = "Maximum"
+        dimensions = {
+          temporal_task_queue = var.temporal_task_queue
+          task_type           = metric_query.value
+        }
       }
     }
   }
-  metric_query {
-    id          = "activity"
-    return_data = false
-    metric {
-      namespace   = "TemporalDemo/Worker"
-      metric_name = "temporal_cloud_v1_approximate_backlog_count"
-      period      = 60
-      stat        = "Maximum"
-      dimensions = {
-        temporal_task_queue = var.temporal_task_queue
-        task_type           = "Activity"
-      }
-    }
-  }
+
   metric_query {
     id          = "total"
     expression  = "workflow + activity"
@@ -321,57 +309,7 @@ resource "aws_cloudwatch_metric_alarm" "backlog_high" {
     return_data = true
   }
 
-  alarm_actions = [aws_appautoscaling_policy.scale_out[0].arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "backlog_low" {
-  count = var.autoscaling_enabled ? 1 : 0
-
-  alarm_name        = "${var.name_prefix}-worker-backlog-low"
-  alarm_description = "Triggers scale-in when the backlog stays below the threshold for the configured window."
-
-  evaluation_periods  = 5
-  datapoints_to_alarm = 5
-  threshold           = var.scale_in_threshold
-  comparison_operator = "LessThanThreshold"
-  treat_missing_data  = "notBreaching"
-
-  metric_query {
-    id          = "workflow"
-    return_data = false
-    metric {
-      namespace   = "TemporalDemo/Worker"
-      metric_name = "temporal_cloud_v1_approximate_backlog_count"
-      period      = 60
-      stat        = "Maximum"
-      dimensions = {
-        temporal_task_queue = var.temporal_task_queue
-        task_type           = "Workflow"
-      }
-    }
-  }
-  metric_query {
-    id          = "activity"
-    return_data = false
-    metric {
-      namespace   = "TemporalDemo/Worker"
-      metric_name = "temporal_cloud_v1_approximate_backlog_count"
-      period      = 60
-      stat        = "Maximum"
-      dimensions = {
-        temporal_task_queue = var.temporal_task_queue
-        task_type           = "Activity"
-      }
-    }
-  }
-  metric_query {
-    id          = "total"
-    expression  = "workflow + activity"
-    label       = "Total backlog"
-    return_data = true
-  }
-
-  alarm_actions = [aws_appautoscaling_policy.scale_in[0].arn]
+  alarm_actions = [each.value.policy_arn]
 }
 
 resource "aws_appautoscaling_policy" "scale_out" {
@@ -392,16 +330,16 @@ resource "aws_appautoscaling_policy" "scale_out" {
     # E.g. with threshold=10: 10..30 → +1, 30..60 → +2, ≥60 → +3.
     step_adjustment {
       metric_interval_lower_bound = 0
-      metric_interval_upper_bound = var.scale_out_step_2_lower - var.scale_out_threshold
+      metric_interval_upper_bound = local.scale_out_step_2_lower - local.scale_out_threshold
       scaling_adjustment          = 1
     }
     step_adjustment {
-      metric_interval_lower_bound = var.scale_out_step_2_lower - var.scale_out_threshold
-      metric_interval_upper_bound = var.scale_out_step_3_lower - var.scale_out_threshold
+      metric_interval_lower_bound = local.scale_out_step_2_lower - local.scale_out_threshold
+      metric_interval_upper_bound = local.scale_out_step_3_lower - local.scale_out_threshold
       scaling_adjustment          = 2
     }
     step_adjustment {
-      metric_interval_lower_bound = var.scale_out_step_3_lower - var.scale_out_threshold
+      metric_interval_lower_bound = local.scale_out_step_3_lower - local.scale_out_threshold
       scaling_adjustment          = 3
     }
   }
@@ -426,4 +364,18 @@ resource "aws_appautoscaling_policy" "scale_in" {
       scaling_adjustment          = -1
     }
   }
+}
+
+# Transitional: the two backlog alarms used to be separate resources. Without
+# these the next apply would upsert the new alarm and then delete it again
+# under its old address, silently leaving the service unscaled. Safe to
+# delete once every deployment has applied this change.
+moved {
+  from = aws_cloudwatch_metric_alarm.backlog_high[0]
+  to   = aws_cloudwatch_metric_alarm.backlog["high"]
+}
+
+moved {
+  from = aws_cloudwatch_metric_alarm.backlog_low[0]
+  to   = aws_cloudwatch_metric_alarm.backlog["low"]
 }
