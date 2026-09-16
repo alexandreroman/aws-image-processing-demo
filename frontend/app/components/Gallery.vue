@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
         <button
           v-if="slot.kind === 'tile' && slot.tile.status === 'completed' && slot.tile.image"
           type="button"
-          class="group block animate-fade-in text-left
+          class="group block animate-fade-in text-left cursor-pointer
             focus-visible:outline-hidden focus-visible:ring-2
             focus-visible:ring-primary/60 focus-visible:ring-offset-2
             focus-visible:ring-offset-bg rounded-md"
@@ -413,7 +413,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="absolute top-2 right-2 z-10 inline-flex h-9 w-9
                   items-center justify-center rounded-full bg-surface/80
-                  border-2 border-surface-border text-ink-200
+                  border-2 border-surface-border text-ink-200 cursor-pointer
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
                   text-2xl leading-none focus-visible:outline-hidden
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="absolute left-2 top-1/2 -translate-y-1/2 z-10 inline-flex
                   h-10 w-10 items-center justify-center rounded-full bg-surface/80
-                  border-2 border-surface-border text-ink-200
+                  border-2 border-surface-border text-ink-200 cursor-pointer
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
                   focus-visible:outline-hidden focus-visible:ring-2
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="absolute right-2 top-1/2 -translate-y-1/2 z-10 inline-flex
                   h-10 w-10 items-center justify-center rounded-full bg-surface/80
-                  border-2 border-surface-border text-ink-200
+                  border-2 border-surface-border text-ink-200 cursor-pointer
                   hover:border-primary hover:ring-2 hover:ring-primary/60
                   hover:shadow-glow hover:text-primary transition-colors
                   focus-visible:outline-hidden focus-visible:ring-2
