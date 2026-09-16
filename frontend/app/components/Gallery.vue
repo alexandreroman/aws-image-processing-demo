@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
         <button
           v-if="slot.kind === 'tile' && slot.tile.status === 'completed' && slot.tile.image"
           type="button"
-          class="group block animate-fade-in text-left
+          class="group block animate-fade-in text-left cursor-pointer
             focus-visible:outline-hidden focus-visible:ring-2
             focus-visible:ring-primary/60 focus-visible:ring-offset-2
             focus-visible:ring-offset-bg rounded-md"
